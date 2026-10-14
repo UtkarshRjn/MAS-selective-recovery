@@ -23,6 +23,11 @@ from .llm import LLM, MockLLM, ServerLLM
 from .provenance import Provenance
 from .recovery import coarse_lineage, coarse_taint, full_restart
 from .tasks import Catalog, make_task
+from .a2a import cmd_download as cmd_a2a_download
+from .a2a import cmd_summary as cmd_a2a_summary
+from .tamas import cmd_download as cmd_tamas_download
+from .tamas import cmd_summary as cmd_tamas_summary
+from .who_when import cmd_attribute, cmd_download, cmd_summary
 from .workflow import RunContext, TravelWorkflow
 from .world import World
 
@@ -190,6 +195,40 @@ def main() -> None:
     e.add_argument("--faults", default="all", help="'all' or comma-separated, e.g. timeout@research_flights")
     e.add_argument("--methods", default="all", help=f"'all' or comma-separated subset of {METHODS}")
     e.set_defaults(fn=cmd_experiment)
+
+    w = sub.add_parser("who-when", help="Who&When failure-attribution logs")
+    w.add_argument("--data", default="data/who-and-when")
+    wsub = w.add_subparsers(dest="ww_cmd", required=True)
+    dl = wsub.add_parser("download", help="fetch the official JSON logs from Hugging Face")
+    dl.add_argument("--subset", choices=("algorithm", "handcrafted", "both"), default="both")
+    dl.set_defaults(fn=cmd_download)
+    sm = wsub.add_parser("summary", help="decisive-step position and coarse-lineage suffix")
+    sm.add_argument("--subset", choices=("algorithm", "handcrafted", "both"), default="both")
+    sm.set_defaults(fn=cmd_summary)
+    at = wsub.add_parser("attribute", help="run an attribution prompt from Zhang et al. 2025")
+    at.add_argument("--method", choices=("all_at_once", "step_by_step", "binary_search"), default="all_at_once")
+    at.add_argument("--subset", choices=("algorithm", "handcrafted", "both"), default="algorithm")
+    at.add_argument("--limit", type=int, default=3)
+    at.add_argument("--ids", nargs="*", default=None, help="file ids to run, e.g. 1 12")
+    at.add_argument("--answer", action=argparse.BooleanOptionalAction, default=True,
+                    help="put the dataset answer in the prompt (the paper's with-ground-truth setting)")
+    at.set_defaults(fn=cmd_attribute)
+
+    t = sub.add_parser("tamas", help="TAMAS adversarial multi-agent scenarios")
+    t.add_argument("--data", default="data/tamas-upstream")
+    tsub = t.add_subparsers(dest="tamas_cmd", required=True)
+    td = tsub.add_parser("download")
+    td.set_defaults(fn=cmd_tamas_download)
+    ts = tsub.add_parser("summary")
+    ts.set_defaults(fn=cmd_tamas_summary)
+
+    a = sub.add_parser("a2a", help="A2ASecBench protocol-security cases")
+    a.add_argument("--data", default="data/a2asec-upstream")
+    asub = a.add_subparsers(dest="a2a_cmd", required=True)
+    ad = asub.add_parser("download")
+    ad.set_defaults(fn=cmd_a2a_download)
+    asm = asub.add_parser("summary")
+    asm.set_defaults(fn=cmd_a2a_summary)
 
     args = p.parse_args()
     args.fn(args)

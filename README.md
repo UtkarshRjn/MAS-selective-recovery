@@ -90,6 +90,36 @@ condition, so irreversible damage can be counted separately from the end state.
 A fault counts as `fault_used` only if it changed the observable outcome compared with the
 clean run of the same task.
 
+## TAMAS and A2ASecBench
+
+[TAMAS](https://github.com/microsoft/TAMAS) is 300 adversarial tasks across six attack types and five domains. [A2ASecBench](https://github.com/SaFo-Lab/A2ASecBench) is a protocol-security suite: AgentCard spoofing, capability cloaking, and four executable Agent2Agent attacks with matched controls.
+
+Neither release includes a rollback method. This harness loads the cases and records where the attack enters, using the same provenance graph as the booking workflow. It does not rerun Autogen, CrewAI, or the A2A protocol lab, so it does not reproduce their official scores.
+
+```bash
+uv run agentrec tamas download
+uv run agentrec tamas summary
+uv run agentrec a2a download
+uv run agentrec a2a summary
+```
+
+TAMAS puts Byzantine, colluding, and contradicting instructions in an agent description, and direct-injection and impersonation instructions in the user task. Every agent reads that text, so coarse lineage taints the whole roster. The released IPI files contain the benign task only. The upstream runner attaches malicious tools outside the JSON.
+
+A2ASecBench marks controls separately from attacks. An attack's untrusted peer message taints the coordinator step. A control does not.
+
+## Who&When
+
+[Who&When](https://huggingface.co/datasets/Kevin355/Who_and_When) (Zhang et al., ICML 2025) is 184 failed multi-agent logs, each labeled with the agent and step whose correction would have saved the task. The logs are from CaptainAgent and Magentic-One. Those tools are not replayable here, so the booking recovery methods are not rerun on them. The logs are instead loaded into the same provenance graph: each turn reads the previous turn, and the annotated decisive step is the known fault.
+
+```bash
+uv run agentrec who-when download
+uv run agentrec who-when summary
+uv run agentrec --llm mock who-when attribute --method all_at_once --limit 2   # plumbing only
+uv run agentrec who-when attribute --method all_at_once --subset algorithm --limit 5
+```
+
+`summary` reports, for each subset, how long the logs are and what fraction of steps sit at or after the decisive error. That suffix is what coarse lineage would recompute. `--answer` / `--no-answer` matches the paper's with-ground-truth and without-ground-truth settings. Attribution numbers from `--llm mock` are not results.
+
 ## Layout
 
 ```
@@ -104,6 +134,9 @@ src/agentrec/
   checker.py     deterministic outcome checks
   recovery.py    restart and coarse lineage
   runner.py      CLI
+  who_when.py    Who&When loader, lineage span, attribution prompts
+  tamas.py       TAMAS scenario loader and attack-carrier lineage
+  a2a.py         A2ASecBench case loader and control/attack lineage
 analysis/summarize.py
 tests/
 ```

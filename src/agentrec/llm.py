@@ -76,14 +76,15 @@ class ServerLLM:
     def model_info(self) -> dict[str, Any]:
         return self.client.get("/models").json()
 
-    def chat(self, agent: str, messages: Messages) -> dict[str, Any]:
-        body = {
+    def complete(self, messages: Messages, *, json_mode: bool = False, max_tokens: int | None = None) -> str:
+        body: dict[str, Any] = {
             "messages": messages,
             "temperature": self.temperature,
             "seed": self.seed,
-            "max_tokens": self.max_tokens,
-            "response_format": {"type": "json_object"},
+            "max_tokens": self.max_tokens if max_tokens is None else max_tokens,
         }
+        if json_mode:
+            body["response_format"] = {"type": "json_object"}
         t0 = time.perf_counter()
         resp = self.client.post("/chat/completions", json=body)
         resp.raise_for_status()
@@ -93,7 +94,10 @@ class ServerLLM:
         self.usage.prompt_tokens += usage.get("prompt_tokens", 0)
         self.usage.completion_tokens += usage.get("completion_tokens", 0)
         self.usage.latency_s += time.perf_counter() - t0
-        return parse_json_object(data["choices"][0]["message"]["content"])
+        return data["choices"][0]["message"]["content"]
+
+    def chat(self, agent: str, messages: Messages) -> dict[str, Any]:
+        return parse_json_object(self.complete(messages, json_mode=True))
 
 
 EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
@@ -109,6 +113,19 @@ class MockLLM:
 
     def __init__(self) -> None:
         self.usage = Usage()
+
+    def complete(self, messages: Messages, *, json_mode: bool = False, max_tokens: int | None = None) -> str:
+        """Plumbing-only text completion. Not a failure-attribution baseline."""
+        prompt = messages[-1]["content"]
+        if "upper half" in prompt and "lower half" in prompt:
+            text = "upper half"
+        elif "1. Yes/No" in prompt:
+            text = "1. No.\n2. Reason: plumbing check"
+        else:
+            text = "Agent Name: mock\nStep Number: 0\nReason for Mistake: plumbing check"
+        self.usage.calls += 1
+        self.usage.completion_tokens += len(text) // 4
+        return text
 
     def chat(self, agent: str, messages: Messages) -> dict[str, Any]:
         out = getattr(self, f"_{agent}")(messages)
