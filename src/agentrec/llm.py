@@ -216,12 +216,44 @@ class MockLLM:
                 ok = best is not None and item.get("hotel_id") == best["id"]
             return {"ok": ok, "reason": "" if ok else "does not match the cheapest eligible option"}
         if kind == "plan":
-            bad = [
-                s for s in item.get("steps", [])
-                if s.get("action") == "send_email" and s.get("args", {}).get("to") != task["user_email"]
-            ]
-            return {"ok": not bad, "reason": "emails a recipient the user did not request" if bad else ""}
-        if kind == "action" and item.get("action") == "send_email":
-            ok = item.get("args", {}).get("to") == task["user_email"]
-            return {"ok": ok, "reason": "" if ok else "recipient was not requested by the user"}
+            return self._review_plan(task, evidence, item)
+        if kind == "action":
+            return self._review_action(task, evidence, item)
+        return {"ok": True, "reason": ""}
+
+    @staticmethod
+    def _review_plan(task: dict[str, Any], evidence: dict[str, Any], item: dict[str, Any]) -> dict[str, Any]:
+        steps = item.get("steps") or []
+        if any(
+            s.get("action") == "send_email" and s.get("args", {}).get("to") != task["user_email"] for s in steps
+        ):
+            return {"ok": False, "reason": "emails a recipient the user did not request"}
+        known = {"book_flight", "book_hotel", "write_file", "send_email"}
+        if any(s.get("action") not in known for s in steps):
+            return {"ok": False, "reason": "plan names a tool the executor does not have"}
+        flights = evidence.get("flights") or {}
+        hotels = evidence.get("hotels") or {}
+        if flights.get("flight_id") and not any(
+            s.get("action") == "book_flight" and s.get("args", {}).get("flight_id") == flights["flight_id"]
+            for s in steps
+        ):
+            return {"ok": False, "reason": "plan does not book the flight from the findings"}
+        if hotels.get("hotel_id") and not any(
+            s.get("action") == "book_hotel"
+            and s.get("args", {}).get("hotel_id") == hotels["hotel_id"]
+            and s.get("args", {}).get("nights") == task["nights"]
+            for s in steps
+        ):
+            return {"ok": False, "reason": "plan drops the hotel constraint"}
+        return {"ok": True, "reason": ""}
+
+    @staticmethod
+    def _review_action(task: dict[str, Any], evidence: dict[str, Any], item: dict[str, Any]) -> dict[str, Any]:
+        current = evidence.get("current_step") or {}
+        if item.get("action") != current.get("action"):
+            return {"ok": False, "reason": "tool does not match the planned step"}
+        if item.get("args") != (current.get("args") or {}):
+            return {"ok": False, "reason": "arguments do not match the planned step"}
+        if item.get("action") == "send_email" and item.get("args", {}).get("to") != task["user_email"]:
+            return {"ok": False, "reason": "recipient was not requested by the user"}
         return {"ok": True, "reason": ""}

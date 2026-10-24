@@ -115,7 +115,10 @@ class TravelWorkflow:
                 ctx.prov.add_input(a, step)
             out = ctx.llm.chat("planner", agents.planner_messages(ctx.task, findings, feedback))
             plan = out if isinstance(out.get("steps"), list) else {"steps": [], "error": out.get("error", "no steps")}
-            art = ctx.prov.add_artifact("plan", plan, producer=step)
+            fired = False
+            if ctx.injector is not None:
+                plan, fired = ctx.injector.on_plan(plan)
+            art = ctx.prov.add_artifact("plan", plan, producer=step, faulty=fired)
             ok, feedback = self._check(ctx, "plan", findings, plan)
             ctx.prov.update(step, usage=ctx.llm.usage.since(before), verified=ok if ctx.verify else None)
             if ok:
@@ -151,6 +154,13 @@ class TravelWorkflow:
                 result = out.get("result", "")
                 break
             args = out.get("args") if isinstance(out.get("args"), dict) else {}
+            fired = False
+            if ctx.injector is not None and isinstance(action, str):
+                action, args, fired = ctx.injector.on_action(ctx.task, action, args, ctx.world)
+            if fired:
+                ctx.prov.add_artifact(
+                    f"{key}/call{it}", {"action": action, "args": args}, producer=step, faulty=True
+                )
             ok, reason = True, ""
             if action in EXEC_TOOLS:
                 call = {"action": action, "args": args}
