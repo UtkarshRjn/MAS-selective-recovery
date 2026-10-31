@@ -6,6 +6,8 @@ so recovery quality is measured independently of fault detection.
   full_restart    undo every effect, then rerun the whole workflow
   coarse_lineage  undo only effects downstream of the fault, reuse untainted steps,
                   and rerun the rest; dependencies are everything in a step's context
+  monitor         same restart set as coarse lineage, plus a fault note on redone steps
+                  (see `monitor.monitor_recover`)
 
 The always-verify baseline is not a recovery method: it runs the workflow forward with a
 verifier call on every intermediate result (see `RunContext.verify`).
@@ -76,9 +78,10 @@ def _rerun(
     tainted: list[str],
     counts: dict[str, int],
     reuse: dict[str, dict[str, Any]] | None = None,
+    fault_note: dict[str, Any] | None = None,
 ) -> tuple[RecoveryReport, RunContext]:
     before, t0 = llm.usage.copy(), time.perf_counter()
-    ctx = RunContext(task, world, llm, reuse=reuse or {})
+    ctx = RunContext(task, world, llm, reuse=reuse or {}, fault_note=fault_note)
     TravelWorkflow().run(ctx)
     steps = ctx.prov.of_kind("step")
     reused = sum(1 for s in steps if s.data.get("reused"))
@@ -115,7 +118,19 @@ def coarse_taint(prov: Provenance) -> set[str]:
     return taint
 
 
-def coarse_lineage(task: dict[str, Any], world: World, llm: LLM, prov: Provenance) -> RecoveryReport:
+def selective_recover(
+    method: str,
+    task: dict[str, Any],
+    world: World,
+    llm: LLM,
+    prov: Provenance,
+    fault_note: dict[str, Any] | None = None,
+) -> RecoveryReport:
+    """Undo tainted effects, reuse the rest, and rerun the tainted steps.
+
+    `fault_note` is appended only to prompts of steps that are redone. Reused steps
+    are replayed from the log and make no LLM call.
+    """
     taint = coarse_taint(prov)
     steps = prov.of_kind("step")
     tainted = [s.key for s in steps if s.id in taint]
@@ -133,10 +148,14 @@ def coarse_lineage(task: dict[str, Any], world: World, llm: LLM, prov: Provenanc
             "effect_ids": effect_ids,
         }
 
-    report, ctx = _rerun("coarse", task, world, llm, tainted, counts, reuse)
+    report, ctx = _rerun(method, task, world, llm, tainted, counts, reuse, fault_note)
 
     # A kept step whose plan item changed was not reused, so its old effects are now stale.
     orphaned = [e for key, r in reuse.items() if key not in ctx.consumed for e in r["effect_ids"]]
     for k, v in undo_effects(world, prov, orphaned).items():
         setattr(report, k, getattr(report, k) + v)
     return report
+
+
+def coarse_lineage(task: dict[str, Any], world: World, llm: LLM, prov: Provenance) -> RecoveryReport:
+    return selective_recover("coarse", task, world, llm, prov)

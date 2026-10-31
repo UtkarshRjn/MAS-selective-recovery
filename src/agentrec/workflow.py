@@ -40,6 +40,16 @@ class RunContext:
     # step key -> {"fingerprint", "artifacts": [(key, value)], "effects": [...]} from a prior run
     reuse: dict[str, dict[str, Any]] = field(default_factory=dict)
     consumed: set[str] = field(default_factory=set)
+    # set on a recovery rerun; included only in prompts for steps that are actually redone
+    fault_note: dict[str, Any] | None = None
+
+
+def _fault_kwargs(ctx: RunContext, fired: bool) -> dict[str, Any]:
+    """Record the injector's fault name on the artifact the fault rewrote."""
+    if not fired:
+        return {"faulty": False}
+    spec = ctx.injector.spec if ctx.injector is not None else None
+    return {"faulty": True, "fault": None if spec is None else spec.name}
 
 
 def _turn(out: dict[str, Any], obs: Any) -> list[dict[str, str]]:
@@ -72,7 +82,7 @@ class TravelWorkflow:
             before = ctx.llm.usage.copy()
             step = ctx.prov.add_step(key, "researcher", attempt=attempt)
             ctx.prov.add_input(task_art, step)
-            messages = agents.researcher_messages(ctx.task, key, feedback)
+            messages = agents.researcher_messages(ctx.task, key, feedback, ctx.fault_note)
             observations: list[Any] = []
             findings: Any = None
             for it in range(MAX_RESEARCH_ITERS):
@@ -84,7 +94,7 @@ class TravelWorkflow:
                 fired = False
                 if ctx.injector is not None:
                     obs, fired = ctx.injector.on_observation(key, out.get("action"), ctx.task, obs)
-                obs_id = ctx.prov.add_artifact(f"{key}/obs{it}", obs, producer=step, faulty=fired)
+                obs_id = ctx.prov.add_artifact(f"{key}/obs{it}", obs, producer=step, **_fault_kwargs(ctx, fired))
                 ctx.prov.add_input(obs_id, step)
                 observations.append(obs)
                 messages += _turn(out, obs)
@@ -93,7 +103,7 @@ class TravelWorkflow:
             fired = False
             if ctx.injector is not None:
                 findings, fired = ctx.injector.on_output(key, ctx.task, findings, observations)
-            art = ctx.prov.add_artifact(key, findings, producer=step, faulty=fired)
+            art = ctx.prov.add_artifact(key, findings, producer=step, **_fault_kwargs(ctx, fired))
             ok, feedback = self._check(ctx, "findings", {"observations": observations}, findings)
             ctx.prov.update(step, usage=ctx.llm.usage.since(before), verified=ok if ctx.verify else None)
             if ok:
@@ -113,12 +123,12 @@ class TravelWorkflow:
             step = ctx.prov.add_step("plan", "planner", attempt=attempt)
             for a in (task_art, *finding_ids):
                 ctx.prov.add_input(a, step)
-            out = ctx.llm.chat("planner", agents.planner_messages(ctx.task, findings, feedback))
+            out = ctx.llm.chat("planner", agents.planner_messages(ctx.task, findings, feedback, ctx.fault_note))
             plan = out if isinstance(out.get("steps"), list) else {"steps": [], "error": out.get("error", "no steps")}
             fired = False
             if ctx.injector is not None:
                 plan, fired = ctx.injector.on_plan(plan)
-            art = ctx.prov.add_artifact("plan", plan, producer=step, faulty=fired)
+            art = ctx.prov.add_artifact("plan", plan, producer=step, **_fault_kwargs(ctx, fired))
             ok, feedback = self._check(ctx, "plan", findings, plan)
             ctx.prov.update(step, usage=ctx.llm.usage.since(before), verified=ok if ctx.verify else None)
             if ok:
@@ -144,7 +154,7 @@ class TravelWorkflow:
         step = ctx.prov.add_step(key, "executor", fingerprint=fingerprint)
         ctx.prov.add_input(task_art, step)
         ctx.prov.add_input(plan_id, step)
-        messages = agents.executor_messages(ctx.task, plan, index, item)
+        messages = agents.executor_messages(ctx.task, plan, index, item, ctx.fault_note)
         result = None
         blocked = 0
         for it in range(MAX_EXEC_ITERS):
@@ -159,7 +169,7 @@ class TravelWorkflow:
                 action, args, fired = ctx.injector.on_action(ctx.task, action, args, ctx.world)
             if fired:
                 ctx.prov.add_artifact(
-                    f"{key}/call{it}", {"action": action, "args": args}, producer=step, faulty=True
+                    f"{key}/call{it}", {"action": action, "args": args}, producer=step, **_fault_kwargs(ctx, True)
                 )
             ok, reason = True, ""
             if action in EXEC_TOOLS:

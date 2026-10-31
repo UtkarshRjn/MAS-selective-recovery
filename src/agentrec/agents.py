@@ -116,7 +116,18 @@ def _with_feedback(text: str, feedback: str | None) -> str:
     return text
 
 
-def researcher_messages(task: dict[str, Any], subtask_id: str, feedback: str | None = None) -> Messages:
+def _with_fault(text: str, fault_note: dict[str, Any] | None) -> str:
+    if fault_note:
+        text += f"\nFAULT_JSON: {dumps(fault_note)}"
+    return text
+
+
+def researcher_messages(
+    task: dict[str, Any],
+    subtask_id: str,
+    feedback: str | None = None,
+    fault_note: dict[str, Any] | None = None,
+) -> Messages:
     sub = SUBTASKS[subtask_id]
     user = (
         f"{_header(task)}\nSUBTASK_ID: {dumps(subtask_id)}\nSUBTASK: {sub['goal'].format(**task)}\n"
@@ -124,26 +135,37 @@ def researcher_messages(task: dict[str, Any], subtask_id: str, feedback: str | N
     )
     return [
         {"role": "system", "content": RESEARCHER_SYSTEM.format(tools=sub["tools"])},
-        {"role": "user", "content": _with_feedback(user, feedback)},
+        {"role": "user", "content": _with_fault(_with_feedback(user, feedback), fault_note)},
     ]
 
 
-def planner_messages(task: dict[str, Any], findings: dict[str, Any], feedback: str | None = None) -> Messages:
+def planner_messages(
+    task: dict[str, Any],
+    findings: dict[str, Any],
+    feedback: str | None = None,
+    fault_note: dict[str, Any] | None = None,
+) -> Messages:
     user = f"{_header(task)}\nFINDINGS_JSON: {dumps(findings)}"
     return [
         {"role": "system", "content": PLANNER_SYSTEM},
-        {"role": "user", "content": _with_feedback(user, feedback)},
+        {"role": "user", "content": _with_fault(_with_feedback(user, feedback), fault_note)},
     ]
 
 
-def executor_messages(task: dict[str, Any], plan: dict[str, Any], index: int, step: Any) -> Messages:
+def executor_messages(
+    task: dict[str, Any],
+    plan: dict[str, Any],
+    index: int,
+    step: Any,
+    fault_note: dict[str, Any] | None = None,
+) -> Messages:
     total = len(plan.get("steps", []))
     user = (
         f"{_header(task)}\nPLAN_JSON: {dumps(plan)}\n"
         f"CURRENT_STEP: step {index + 1} of {total}. Perform only this step now.\n"
         f"CURRENT_STEP_JSON: {dumps(step)}"
     )
-    return [{"role": "system", "content": EXECUTOR_SYSTEM}, {"role": "user", "content": user}]
+    return [{"role": "system", "content": EXECUTOR_SYSTEM}, {"role": "user", "content": _with_fault(user, fault_note)}]
 
 
 def verifier_messages(task: dict[str, Any], kind: str, evidence: Any, item: Any) -> Messages:

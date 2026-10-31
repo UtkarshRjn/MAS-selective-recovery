@@ -20,6 +20,7 @@ from . import agents
 from .checker import check, outcome_signature
 from .faults import DEFAULT_FAULTS, FAULTS_BY_NAME, FaultSpec, Injector
 from .llm import LLM, MockLLM, ServerLLM
+from .monitor import monitor_recover
 from .provenance import Provenance
 from .recovery import coarse_lineage, coarse_taint, full_restart
 from .tasks import Catalog, make_task
@@ -31,7 +32,8 @@ from .who_when import cmd_attribute, cmd_download, cmd_summary
 from .workflow import RunContext, TravelWorkflow
 from .world import World
 
-METHODS = ("restart", "coarse", "verify")
+METHODS = ("restart", "coarse", "monitor", "verify")
+RECOVER = {"restart": full_restart, "coarse": coarse_lineage, "monitor": monitor_recover}
 
 
 def make_llm(args: argparse.Namespace) -> LLM:
@@ -161,8 +163,7 @@ def cmd_experiment(args: argparse.Namespace) -> None:
                     rec.trace(f"{seed}_{spec.name}_verify", prov_v, world_v)
                 else:
                     world_r, prov_r = copy.deepcopy(world_f), copy.deepcopy(prov_f)
-                    recover = full_restart if method == "restart" else coarse_lineage
-                    report = recover(task, world_r, llm, prov_r)
+                    report = RECOVER[method](task, world_r, llm, prov_r)
                     result = check(world_r, truth)
                     total = {k: stats_f["usage"][k] + report.usage[k] for k in report.usage}
                     rec.row(**base, method=method, **result, **report.row(), total_usage=total)
