@@ -81,6 +81,9 @@ node's identity, so detection is not part of the comparison.
 - **restart**: undo or compensate every effect, then rerun everything.
 - **coarse**: taint everything downstream of the step that produced the faulty artifact,
   undo only tainted effects, reuse untainted steps, and rerun the rest.
+- **monitor**: the same restart set as coarse. It reads the provenance log only after a
+  fault is reported and appends `FAULT_JSON` — the faulty artifact and the fault name
+  stored on that artifact — to agents that are redone. Replayed steps are not called again.
 - **verify**: a forward run with a verifier LLM call on every finding, plan, and tool call.
   The step is retried once on rejection, and rejected tool calls are blocked.
 
@@ -137,6 +140,7 @@ src/agentrec/
   workflow.py    orchestrator
   checker.py     deterministic outcome checks
   recovery.py    restart and coarse lineage
+  monitor.py     fault note on the coarse restart set
   runner.py      CLI
   who_when.py    Who&When loader, lineage span, attribution prompts
   tamas.py       TAMAS scenario loader and attack-carrier lineage
