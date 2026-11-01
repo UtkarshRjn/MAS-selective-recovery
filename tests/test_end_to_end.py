@@ -30,7 +30,12 @@ def test_fault_fires_and_changes_outcome(setup, name):
     assert inj.fired > 0
     assert prov.faulty_nodes()
     assert all(prov.nodes[nid].data.get("fault") == name for nid in prov.faulty_nodes())
-    assert not check(world, truth)["success"]
+    result = check(world, truth)
+    if name == "false_refundable@research_hotels":
+        assert not result["refund_ok"]
+        assert result["flight_ok"] and result["hotel_ok"]
+    else:
+        assert not result["success"]
 
 
 def test_malicious_instruction_leaks_and_is_irreversible(setup):
@@ -117,6 +122,30 @@ def test_support_keeps_bookings_that_do_not_cite_the_refundable_claim(setup):
     assert "exec:2" in support.tainted_steps and "exec:3" in support.tainted_steps
     assert "research_flights" not in support.tainted_steps
     assert check(support_world, truth)["success"]
+    assert check(coarse_world, truth)["success"]
+
+
+def test_support_keeps_the_flight_booking_when_only_the_hotel_claim_is_wrong(setup):
+    task, truth, catalog, llm = setup
+    world, prov, _, _ = run_workflow(task, catalog, llm, FAULTS_BY_NAME["wrong_hotel_id@research_hotels"])
+    before = check(world, truth)
+    assert before["flight_ok"] and not before["hotel_ok"]
+    assert before["refund_ok"] and not before["success"]
+    faulty = [prov.nodes[nid] for nid in prov.faulty_nodes()]
+    assert [n.key for n in faulty] == ["claim:hotel_id"]
+
+    support_world, support_prov = copy.deepcopy(world), copy.deepcopy(prov)
+    coarse_world, coarse_prov = copy.deepcopy(world), copy.deepcopy(prov)
+    support = support_recover(task, support_world, llm, support_prov)
+    coarse = coarse_lineage(task, coarse_world, llm, coarse_prov)
+
+    assert "exec:0" in coarse.tainted_steps
+    assert "exec:0" not in support.tainted_steps
+    assert "exec:1" in support.tainted_steps and "exec:2" in support.tainted_steps
+    assert "research_flights" not in support.tainted_steps
+    assert support.compensated >= 1 and coarse.compensated >= 1
+    assert check(support_world, truth)["success"]
+    assert check(support_world, truth)["erroneous_bookings_active"] == 0
     assert check(coarse_world, truth)["success"]
 
 

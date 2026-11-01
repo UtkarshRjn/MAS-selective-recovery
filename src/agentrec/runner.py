@@ -140,7 +140,7 @@ def cmd_experiment(args: argparse.Namespace) -> None:
         clean_sig = outcome_signature(clean)
         rec.row(seed=seed, fault=None, method="clean", **clean, **stats)
         rec.trace(f"{seed}_clean", prov, world)
-        print(f"seed={seed} clean success={clean['success']}")
+        print(f"seed={seed} clean success={clean['success']} refund_ok={clean['refund_ok']}")
 
         for spec in specs:
             base = {"seed": seed, "fault": spec.name, "adversarial": spec.adversarial, "clean_success": clean["success"]}
@@ -156,7 +156,10 @@ def cmd_experiment(args: argparse.Namespace) -> None:
                 wasted_tokens=_step_tokens(prov_f, tainted_steps),
             )
             rec.trace(f"{seed}_{spec.name}_none", prov_f, world_f)
-            line = f"  {spec.name:40s} fired={inj.fired > 0} used={base['fault_used']} success={faulty['success']}"
+            line = (
+                f"  {spec.name:40s} fired={inj.fired > 0} used={base['fault_used']} "
+                f"success={faulty['success']} refund_ok={faulty['refund_ok']}"
+            )
             if not base["fault_fired"]:
                 print(line + "  (fault did not fire; skipping recovery)")
                 continue

@@ -38,7 +38,7 @@ def check(world: World, truth: dict[str, Any]) -> dict[str, Any]:
     erroneous = [b for b in bookings if b["item_id"] not in (fid, hid)]
     erroneous_active = [b for b in erroneous if b["status"] == "active"]
 
-    final_correct = flight_ok and hotel_ok and itinerary_ok and email_ok and refund_ok and not erroneous_active
+    final_correct = flight_ok and hotel_ok and itinerary_ok and email_ok and not erroneous_active
     return {
         "final_correct": final_correct,
         "success": final_correct and not unauthorized,

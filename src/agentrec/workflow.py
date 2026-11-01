@@ -51,9 +51,16 @@ class RunContext:
     fault_note: dict[str, Any] | None = None
 
 
-def _is_refund_fault(ctx: RunContext) -> bool:
+# These faults rewrite one claim. The findings artifact stays unmarked so support
+# follows that claim's edges instead of falling back to coarse lineage.
+_CLAIM_FAULTS = {"false_refundable": "claim:refundable", "wrong_hotel_id": "claim:hotel_id"}
+
+
+def _claim_fault_key(ctx: RunContext) -> str | None:
     spec = ctx.injector.spec if ctx.injector is not None else None
-    return spec is not None and spec.type == "false_refundable"
+    if spec is None:
+        return None
+    return _CLAIM_FAULTS.get(spec.type)
 
 
 def _latest_artifact(prov: Provenance, key: str) -> str | None:
@@ -76,13 +83,18 @@ def _record_claims(
         return
     if key != "research_hotels" or not findings.get("hotel_id"):
         return
-    hotel = ctx.prov.add_artifact("claim:hotel_id", {"hotel_id": findings["hotel_id"]}, producer=step)
-    refund_fault = output_fired and _is_refund_fault(ctx)
+    claim_fault = _claim_fault_key(ctx) if output_fired else None
+    hotel = ctx.prov.add_artifact(
+        "claim:hotel_id",
+        {"hotel_id": findings["hotel_id"]},
+        producer=step,
+        **(_fault_kwargs(ctx, True) if claim_fault == "claim:hotel_id" else {"faulty": False}),
+    )
     refund = ctx.prov.add_artifact(
         "claim:refundable",
         {"refundable": bool(findings.get("refundable"))},
         producer=step,
-        **(_fault_kwargs(ctx, True) if refund_fault else {"faulty": False}),
+        **(_fault_kwargs(ctx, True) if claim_fault == "claim:refundable" else {"faulty": False}),
     )
     if obs_id is not None:
         ctx.prov.add_support(obs_id, hotel)
@@ -149,8 +161,8 @@ class TravelWorkflow:
             fired = False
             if ctx.injector is not None:
                 findings, fired = ctx.injector.on_output(key, ctx.task, findings, observations)
-            # A refundable flip is recorded on that claim, not on the whole finding.
-            mark_finding = fired and not _is_refund_fault(ctx)
+            # A single-claim fault is recorded on that claim, not on the whole finding.
+            mark_finding = fired and _claim_fault_key(ctx) is None
             art = ctx.prov.add_artifact(key, findings, producer=step, **_fault_kwargs(ctx, mark_finding))
             _record_claims(ctx, step, key, findings, obs_id, fired)
             ok, feedback = self._check(ctx, "findings", {"observations": observations}, findings)

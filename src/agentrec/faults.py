@@ -17,7 +17,7 @@ from typing import Any
 from .world import World
 
 OBSERVATION_FAULTS = {"malicious_instruction", "timeout", "stale_output"}
-OUTPUT_FAULTS = {"incorrect_result", "fabrication", "false_refundable"}
+OUTPUT_FAULTS = {"incorrect_result", "fabrication", "false_refundable", "wrong_hotel_id"}
 PLAN_FAULTS = {"dropped_constraint", "inexecutable_plan"}
 ACTION_FAULTS = {"tool_selection_error", "bad_argument"}
 ADVERSARIAL_FAULTS = {"malicious_instruction"}
@@ -54,6 +54,7 @@ DEFAULT_FAULTS = [
     FaultSpec("timeout", "research_flights", persistent=True),
     FaultSpec("fabrication", "research_hotels", persistent=False),
     FaultSpec("false_refundable", "research_hotels", persistent=False),
+    FaultSpec("wrong_hotel_id", "research_hotels", persistent=False),
     FaultSpec("malicious_instruction", "research_hotels", persistent=True),
     FaultSpec("tool_selection_error", "write_file", persistent=False),
     FaultSpec("bad_argument", "book_flight", persistent=False),
@@ -120,6 +121,28 @@ def _false_refundable(findings: dict[str, Any]) -> dict[str, Any] | None:
     if not findings.get("hotel_id"):
         return None
     return {**findings, "refundable": True}
+
+
+def _wrong_hotel_id(
+    task: dict[str, Any], findings: dict[str, Any], observations: list[Any]
+) -> dict[str, Any] | None:
+    """Replace the chosen hotel with another eligible hotel. Only that claim is marked faulty."""
+    chosen = findings.get("hotel_id")
+    if not chosen:
+        return None
+    lists = [o for o in observations if isinstance(o, list)]
+    if not lists:
+        return None
+    others = [h for h in _eligible_hotels(task, lists[-1]) if h["id"] != chosen]
+    if not others:
+        return None
+    other = max(others, key=lambda h: h["nightly_price"])
+    return {
+        **findings,
+        "hotel_id": other["id"],
+        "nightly_price": other["nightly_price"],
+        "rating": other["rating"],
+    }
 
 
 def _dropped_constraint(plan: dict[str, Any]) -> dict[str, Any] | None:
@@ -205,6 +228,8 @@ class Injector:
             new = _incorrect(task, findings, observations)
         elif self.spec.type == "false_refundable":
             new = _false_refundable(findings)
+        elif self.spec.type == "wrong_hotel_id":
+            new = _wrong_hotel_id(task, findings, observations)
         else:
             new = _fabricate(findings)
         if new is None:
