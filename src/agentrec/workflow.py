@@ -56,6 +56,21 @@ class RunContext:
 _CLAIM_FAULTS = {"false_refundable": "claim:refundable", "wrong_hotel_id": "claim:hotel_id"}
 
 
+def run_agents(ctx: RunContext) -> None:
+    """Travel booking, a coding team, or one of the graph templates."""
+    kind = ctx.task.get("kind")
+    if kind == "coding":
+        from .coding import CodingWorkflow
+
+        CodingWorkflow().run(ctx)
+    elif kind == "graph":
+        from .graphs import GraphWorkflow
+
+        GraphWorkflow().run(ctx)
+    else:
+        TravelWorkflow().run(ctx)
+
+
 def _claim_fault_key(ctx: RunContext) -> str | None:
     spec = ctx.injector.spec if ctx.injector is not None else None
     if spec is None:

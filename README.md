@@ -27,6 +27,8 @@ uv run agentrec clean --tasks 20                       # clean-run success rate
 uv run agentrec determinism --repeats 10               # run-to-run variation at temperature 0
 uv run agentrec experiment --tasks 5                   # all faults x all methods
 uv run agentrec experiment --tasks 5 --faults timeout@research_flights --methods restart,coarse
+uv run agentrec graphs                                   # Qwen sweep: chain, diamond, join, back-edge, coding
+uv run agentrec --llm mock graphs                        # structural table, no model
 
 uv run python analysis/summarize.py results/<run-dir>/rows.jsonl
 ```
@@ -47,6 +49,35 @@ Tasks come from `make_task(seed)`. The search tools apply the date, rating, and 
 themselves, so the researcher only has to pick the cheapest result. In early runs Qwen2.5-7B
 often got this filtering wrong, and clean runs have to succeed reliably before fault results
 mean anything. Each executor step makes one tool call, and retries only if the call fails.
+
+## Coding team
+
+A task with `"kind": "coding"` runs a second workflow: spec writer, coder, tester,
+reviewer. The first review asks for a revision, so those four run a second lap.
+The log stores each visit on its own (`spec`, `coder`, …, `spec:2`, `coder:2`, …).
+A docs step sits between the laps and reads only the first spec.
+
+Two faults are recorded on that graph and are not part of the travel sweep:
+
+| Fault | What breaks | Suffix | Coarse |
+|---|---|---|---|
+| `bad_patch@coder` | both coder visits write `return x` | redoes docs, which is later in the log | keeps docs, which never read the patch |
+| `thin_spec@spec:2` | the revised contract tells the coder to return the input | keeps docs and the first lap | keeps docs and the first lap |
+
+The travel experiment is unchanged. `run_agents` picks the workflow from the task.
+
+## Graph templates
+
+`uv run agentrec graphs` runs these shapes and the coding team on the same model as the booking experiment. A `corrupt` fault replaces one step's output. With `--llm mock` the command prints the tainted sets only. These faults are not in the travel sweep. One return visit is a second log entry (`a:2`); the run does not keep handing work back.
+
+| Template | Call order | Who reads what |
+|---|---|---|
+| chain | `a b c d` | each step reads the previous one |
+| diamond | `a b c d` | `b` and `c` read `a`; `d` reads both |
+| join | `p q r join` | `p`, `q`, and `r` read only the task; `join` reads all three |
+| backedge | `a b c a:2 side` | `a:2` reads `c`; `side` reads only `a` |
+
+Suffix and coarse name the same steps on a chain. They split when a later step never read the fault: `c` on a diamond fault at `b`, `q` and `r` on a join fault at `p`, and `side` on a back-edge fault at `b` or `a:2`. Support follows one evidence hop, so on a longer path it leaves a downstream file stale. Restart, suffix, and coarse restore every file.
 
 ## Side effects
 

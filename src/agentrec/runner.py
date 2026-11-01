@@ -28,8 +28,9 @@ from .a2a import cmd_download as cmd_a2a_download
 from .a2a import cmd_summary as cmd_a2a_summary
 from .tamas import cmd_download as cmd_tamas_download
 from .tamas import cmd_summary as cmd_tamas_summary
+from .graphs import evaluate_graphs, format_table, sweep_topologies
 from .who_when import cmd_attribute, cmd_download, cmd_summary
-from .workflow import RunContext, TravelWorkflow
+from .workflow import RunContext, run_agents
 from .world import World
 
 METHODS = ("restart", "suffix", "coarse", "support", "monitor", "support_monitor", "verify")
@@ -56,7 +57,7 @@ def run_workflow(
     injector = Injector(spec)
     ctx = RunContext(task, world, llm, injector=injector, verify=verify)
     before, t0 = llm.usage.copy(), time.perf_counter()
-    TravelWorkflow().run(ctx)
+    run_agents(ctx)
     stats = {"usage": llm.usage.since(before), "wall_s": round(time.perf_counter() - t0, 3)}
     return world, ctx.prov, injector, stats
 
@@ -183,6 +184,21 @@ def cmd_experiment(args: argparse.Namespace) -> None:
     print(f"done -> {rec.out_dir}")
 
 
+def cmd_graphs(args: argparse.Namespace) -> None:
+    if args.llm == "mock":
+        print(format_table(evaluate_graphs()))
+        return
+    llm = make_llm(args)
+    rows = sweep_topologies(llm)
+    out = Path(args.out) / f"topology-{args.llm}-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+    out.mkdir(parents=True, exist_ok=True)
+    path = out / "rows.jsonl"
+    with path.open("w") as fh:
+        for row in rows:
+            fh.write(json.dumps(row) + "\n")
+    print(f"done -> {out}")
+
+
 def main() -> None:
     p = argparse.ArgumentParser(prog="agentrec")
     p.add_argument("--llm", choices=("server", "mock"), default="server")
@@ -206,6 +222,9 @@ def main() -> None:
     e.add_argument("--faults", default="all", help="'all' or comma-separated, e.g. timeout@research_flights")
     e.add_argument("--methods", default="all", help=f"'all' or comma-separated subset of {METHODS}")
     e.set_defaults(fn=cmd_experiment)
+
+    g = sub.add_parser("graphs", help="chain, diamond, join, and back-edge recovery cases")
+    g.set_defaults(fn=cmd_graphs)
 
     w = sub.add_parser("who-when", help="Who&When failure-attribution logs")
     w.add_argument("--data", default="data/who-and-when")

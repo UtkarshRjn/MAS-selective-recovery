@@ -21,7 +21,7 @@ from typing import Any
 
 from .llm import LLM
 from .provenance import Provenance
-from .workflow import RunContext, TravelWorkflow
+from .workflow import RunContext, run_agents
 from .world import World
 
 
@@ -82,7 +82,7 @@ def _rerun(
 ) -> tuple[RecoveryReport, RunContext]:
     before, t0 = llm.usage.copy(), time.perf_counter()
     ctx = RunContext(task, world, llm, reuse=reuse or {}, fault_note=fault_note)
-    TravelWorkflow().run(ctx)
+    run_agents(ctx)
     steps = ctx.prov.of_kind("step")
     reused = sum(1 for s in steps if s.data.get("reused"))
     report = RecoveryReport(
