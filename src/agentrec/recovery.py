@@ -118,6 +118,45 @@ def coarse_taint(prov: Provenance) -> set[str]:
     return taint
 
 
+def suffix_taint(prov: Provenance) -> set[str]:
+    """Every node from the earliest faulty step onward, in execution order.
+
+    A later step is included even when it never read the faulty artifact.
+    """
+    producers = []
+    for nid in prov.faulty_nodes():
+        node = prov.nodes[nid]
+        producers.append(prov.producer_of(nid) if node.kind == "artifact" else nid)
+    producers = [p for p in producers if p is not None]
+    if not producers:
+        return set()
+    earliest = min(prov.nodes[p].seq for p in producers)
+    return {n.id for n in prov.nodes.values() if n.seq >= earliest}
+
+
+def _has_support_edge(prov: Provenance, nid: str) -> bool:
+    return any(src == nid and etype == "support" for src, _, etype in prov.edges)
+
+
+def support_taint(prov: Provenance) -> set[str]:
+    """Replay the producer of a faulty claim and steps that cite it as evidence.
+
+    A faulty artifact with no support edges falls back to coarse lineage for
+    that artifact. Context alone does not spread the taint.
+    """
+    taint: set[str] = set()
+    for nid in prov.faulty_nodes():
+        node = prov.nodes[nid]
+        if node.kind == "artifact" and _has_support_edge(prov, nid):
+            producer = prov.producer_of(nid)
+            if producer is not None:
+                taint.add(producer)
+            taint |= prov.descendants(nid, {"support"})
+        else:
+            taint |= prov.descendants(prov.producer_of(nid) or nid)
+    return taint
+
+
 def selective_recover(
     method: str,
     task: dict[str, Any],
@@ -125,13 +164,14 @@ def selective_recover(
     llm: LLM,
     prov: Provenance,
     fault_note: dict[str, Any] | None = None,
+    taint_fn: Any = coarse_taint,
 ) -> RecoveryReport:
     """Undo tainted effects, reuse the rest, and rerun the tainted steps.
 
     `fault_note` is appended only to prompts of steps that are redone. Reused steps
     are replayed from the log and make no LLM call.
     """
-    taint = coarse_taint(prov)
+    taint = taint_fn(prov)
     steps = prov.of_kind("step")
     tainted = [s.key for s in steps if s.id in taint]
     counts = undo_effects(world, prov, [n.id for n in prov.of_kind("effect") if n.id in taint])
@@ -159,3 +199,11 @@ def selective_recover(
 
 def coarse_lineage(task: dict[str, Any], world: World, llm: LLM, prov: Provenance) -> RecoveryReport:
     return selective_recover("coarse", task, world, llm, prov)
+
+
+def suffix_recover(task: dict[str, Any], world: World, llm: LLM, prov: Provenance) -> RecoveryReport:
+    return selective_recover("suffix", task, world, llm, prov, taint_fn=suffix_taint)
+
+
+def support_recover(task: dict[str, Any], world: World, llm: LLM, prov: Provenance) -> RecoveryReport:
+    return selective_recover("support", task, world, llm, prov, taint_fn=support_taint)

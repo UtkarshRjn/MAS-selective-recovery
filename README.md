@@ -79,11 +79,18 @@ node's identity, so detection is not part of the comparison.
 
 - **none**: the faulty run, with no recovery. Measures propagation and wasted tokens.
 - **restart**: undo or compensate every effect, then rerun everything.
+- **suffix**: rerun every step from the earliest faulty step onward, including later
+  steps that never read the fault.
 - **coarse**: taint everything downstream of the step that produced the faulty artifact,
-  undo only tainted effects, reuse untainted steps, and rerun the rest.
+  undo only tainted effects, reuse untainted steps, and rerun the rest. Context edges
+  count: a claim in the prompt taints that step.
+- **support**: replay the producer of a faulty claim and the steps that cite it as
+  evidence. A booking that cites only the flight id stays when the refundable claim
+  is the fault. Faulty artifacts with no support edges fall back to coarse lineage.
 - **monitor**: the same restart set as coarse. It reads the provenance log only after a
   fault is reported and appends `FAULT_JSON` — the faulty artifact and the fault name
   stored on that artifact — to agents that are redone. Replayed steps are not called again.
+- **support_monitor**: the support restart set, with the same fault note on redone steps.
 - **verify**: a forward run with a verifier LLM call on every finding, plan, and tool call.
   The step is retried once on rejection, and rejected tool calls are blocked.
 
@@ -91,7 +98,7 @@ node's identity, so detection is not part of the comparison.
 
 `checker.check` reads only the world state. `success` requires the correct flight and hotel
 to be the only active bookings, an itinerary file and a final email to the user that both
-mention them, and no email ever sent to anyone else. `final_correct` drops that last
+mention them and state whether the hotel is refundable, and no email ever sent to anyone else. `final_correct` drops that last
 condition, so irreversible damage can be counted separately from the end state.
 
 A fault counts as `fault_used` only if it changed the observable outcome compared with the

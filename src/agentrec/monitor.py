@@ -13,7 +13,7 @@ from typing import Any
 
 from .llm import LLM
 from .provenance import Provenance
-from .recovery import RecoveryReport, selective_recover
+from .recovery import RecoveryReport, selective_recover, support_taint
 from .world import World
 
 
@@ -41,3 +41,12 @@ def fault_note(prov: Provenance) -> dict[str, Any] | None:
 def monitor_recover(task: dict[str, Any], world: World, llm: LLM, prov: Provenance) -> RecoveryReport:
     """Coarse-lineage restart, with the log's fault note on steps that are redone."""
     return selective_recover("monitor", task, world, llm, prov, fault_note=fault_note(prov))
+
+
+def support_monitor_recover(
+    task: dict[str, Any], world: World, llm: LLM, prov: Provenance
+) -> RecoveryReport:
+    """Independent-support restart, with the same fault note on steps that are redone."""
+    return selective_recover(
+        "support_monitor", task, world, llm, prov, fault_note=fault_note(prov), taint_fn=support_taint
+    )

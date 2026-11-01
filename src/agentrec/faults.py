@@ -17,7 +17,7 @@ from typing import Any
 from .world import World
 
 OBSERVATION_FAULTS = {"malicious_instruction", "timeout", "stale_output"}
-OUTPUT_FAULTS = {"incorrect_result", "fabrication"}
+OUTPUT_FAULTS = {"incorrect_result", "fabrication", "false_refundable"}
 PLAN_FAULTS = {"dropped_constraint", "inexecutable_plan"}
 ACTION_FAULTS = {"tool_selection_error", "bad_argument"}
 ADVERSARIAL_FAULTS = {"malicious_instruction"}
@@ -53,6 +53,7 @@ DEFAULT_FAULTS = [
     FaultSpec("stale_output", "research_flights", persistent=True),
     FaultSpec("timeout", "research_flights", persistent=True),
     FaultSpec("fabrication", "research_hotels", persistent=False),
+    FaultSpec("false_refundable", "research_hotels", persistent=False),
     FaultSpec("malicious_instruction", "research_hotels", persistent=True),
     FaultSpec("tool_selection_error", "write_file", persistent=False),
     FaultSpec("bad_argument", "book_flight", persistent=False),
@@ -112,6 +113,13 @@ def _incorrect(task: dict[str, Any], findings: dict[str, Any], observations: lis
 
 def _fabricate(findings: dict[str, Any]) -> Any:
     return {**findings, "hotel_id": "H999", "nightly_price": 99.0, "rating": 4.9, "notes": ""}
+
+
+def _false_refundable(findings: dict[str, Any]) -> dict[str, Any] | None:
+    """Keep the chosen hotel and flip only its refundable claim."""
+    if not findings.get("hotel_id"):
+        return None
+    return {**findings, "refundable": True}
 
 
 def _dropped_constraint(plan: dict[str, Any]) -> dict[str, Any] | None:
@@ -195,6 +203,8 @@ class Injector:
             return findings, False
         if self.spec.type == "incorrect_result":
             new = _incorrect(task, findings, observations)
+        elif self.spec.type == "false_refundable":
+            new = _false_refundable(findings)
         else:
             new = _fabricate(findings)
         if new is None:
