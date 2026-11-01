@@ -20,9 +20,9 @@ from . import agents
 from .checker import check, outcome_signature
 from .faults import DEFAULT_FAULTS, FAULTS_BY_NAME, FaultSpec, Injector
 from .llm import LLM, MockLLM, ServerLLM
-from .monitor import monitor_recover
+from .monitor import monitor_recover, support_monitor_recover
 from .provenance import Provenance
-from .recovery import coarse_lineage, coarse_taint, full_restart
+from .recovery import coarse_lineage, coarse_taint, full_restart, suffix_recover, support_recover
 from .tasks import Catalog, make_task
 from .a2a import cmd_download as cmd_a2a_download
 from .a2a import cmd_summary as cmd_a2a_summary
@@ -32,8 +32,15 @@ from .who_when import cmd_attribute, cmd_download, cmd_summary
 from .workflow import RunContext, TravelWorkflow
 from .world import World
 
-METHODS = ("restart", "coarse", "monitor", "verify")
-RECOVER = {"restart": full_restart, "coarse": coarse_lineage, "monitor": monitor_recover}
+METHODS = ("restart", "suffix", "coarse", "support", "monitor", "support_monitor", "verify")
+RECOVER = {
+    "restart": full_restart,
+    "suffix": suffix_recover,
+    "coarse": coarse_lineage,
+    "support": support_recover,
+    "monitor": monitor_recover,
+    "support_monitor": support_monitor_recover,
+}
 
 
 def make_llm(args: argparse.Namespace) -> LLM:

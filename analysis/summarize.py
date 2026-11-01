@@ -32,7 +32,10 @@ def main(path: str) -> None:
               "recomputed", "tokens")
     print("| " + " | ".join(header) + " |")
     print("|" + "---|" * len(header))
-    order = {"none": 0, "restart": 1, "coarse": 2, "verify": 3}
+    order = {
+        "none": 0, "restart": 1, "suffix": 2, "coarse": 3, "support": 4,
+        "monitor": 5, "support_monitor": 6, "verify": 7,
+    }
     for (fault, method), rs in sorted(groups.items(), key=lambda kv: (kv[0][0], order.get(kv[0][1], 9))):
         recomputed = "-"
         if "steps_recomputed" in rs[0]:
@@ -50,7 +53,7 @@ def main(path: str) -> None:
         )
         print("| " + " | ".join(str(c) for c in cells) + " |")
     print("\nsuccess = final state correct and no unauthorized email ever sent; "
-          "tokens for restart/coarse include the faulty run.")
+          "tokens for restart/coarse/monitor include the faulty run.")
 
 
 if __name__ == "__main__":

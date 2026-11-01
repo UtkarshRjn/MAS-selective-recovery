@@ -77,5 +77,6 @@ def make_task(seed: int) -> tuple[dict[str, Any], dict[str, Any], Catalog]:
         "hotel_id": best_hotel.id,
         "nights": task["nights"],
         "user_email": USER_EMAIL,
+        "refundable": best_hotel.refundable,
     }
     return task, truth, (flights, hotels)

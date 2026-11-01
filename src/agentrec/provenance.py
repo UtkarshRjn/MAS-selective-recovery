@@ -75,11 +75,26 @@ class Provenance:
     def faulty_nodes(self) -> list[str]:
         return [n.id for n in self.nodes.values() if n.data.get("faulty")]
 
-    def descendants(self, nid: str) -> set[str]:
-        """All nodes reachable from `nid`, including itself."""
+    def add_support(self, evidence_id: str, dependent_id: str) -> None:
+        """Record that `dependent_id` is justified by `evidence_id`.
+
+        Support is separate from context. A step can have a claim in its prompt
+        without that claim being evidence for every output the step produces.
+        """
+        self.edges.append((evidence_id, dependent_id, "support"))
+
+    def descendants(self, nid: str, etypes: set[str] | None = None) -> set[str]:
+        """Nodes reachable from `nid`, including itself.
+
+        The default follows context edges (input, output, effect) and ignores
+        support edges, so coarse lineage stays a prompt-context walk.
+        """
+        if etypes is None:
+            etypes = {"input", "output", "effect"}
         adj: dict[str, list[str]] = defaultdict(list)
-        for s, d, _ in self.edges:
-            adj[s].append(d)
+        for s, d, t in self.edges:
+            if t in etypes:
+                adj[s].append(d)
         seen = {nid}
         queue = deque([nid])
         while queue:

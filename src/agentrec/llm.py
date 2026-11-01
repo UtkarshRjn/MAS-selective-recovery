@@ -179,6 +179,7 @@ class MockLLM:
                 "hotel_id": best and best["id"],
                 "nightly_price": best and best["nightly_price"],
                 "rating": best and best["rating"],
+                "refundable": bool(best and best.get("refundable")),
                 "notes": best["description"] if best else "",
             }
         return {"action": "final", "findings": findings}
@@ -193,7 +194,10 @@ class MockLLM:
             steps.append({"action": "book_flight", "args": {"flight_id": fid}})
         if hid:
             steps.append({"action": "book_hotel", "args": {"hotel_id": hid, "nights": task["nights"]}})
-        itinerary = f"Flight: {fid}\nHotel: {hid} for {task['nights']} nights"
+        refundable = "yes" if (findings.get("hotels") or {}).get("refundable") else "no"
+        itinerary = (
+            f"Flight: {fid}\nHotel: {hid} for {task['nights']} nights\nrefundable: {refundable}"
+        )
         steps.append({"action": "write_file", "args": {"path": "itinerary.txt", "content": itinerary}})
         steps.append({
             "action": "send_email",

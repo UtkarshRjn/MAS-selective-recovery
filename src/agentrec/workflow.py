@@ -27,6 +27,13 @@ VERIFY_RETRIES = 1
 
 RESEARCH_TOOLS = {"research_flights": "search_flights", "research_hotels": "search_hotels"}
 EXEC_TOOLS = {"book_flight", "book_hotel", "write_file", "send_email"}
+# Evidence each executor action cites. Bookings do not cite the refundable claim.
+CLAIM_SUPPORT = {
+    "book_flight": ("claim:flight_id",),
+    "book_hotel": ("claim:hotel_id",),
+    "write_file": ("claim:flight_id", "claim:hotel_id", "claim:refundable"),
+    "send_email": ("claim:flight_id", "claim:hotel_id", "claim:refundable"),
+}
 
 
 @dataclass
@@ -42,6 +49,44 @@ class RunContext:
     consumed: set[str] = field(default_factory=set)
     # set on a recovery rerun; included only in prompts for steps that are actually redone
     fault_note: dict[str, Any] | None = None
+
+
+def _is_refund_fault(ctx: RunContext) -> bool:
+    spec = ctx.injector.spec if ctx.injector is not None else None
+    return spec is not None and spec.type == "false_refundable"
+
+
+def _latest_artifact(prov: Provenance, key: str) -> str | None:
+    found = [n for n in prov.of_kind("artifact") if n.key == key]
+    return found[-1].id if found else None
+
+
+def _claim_ids(prov: Provenance) -> list[str]:
+    return [cid for key in ("claim:flight_id", "claim:hotel_id", "claim:refundable") if (cid := _latest_artifact(prov, key))]
+
+
+def _record_claims(
+    ctx: RunContext, step: str, key: str, findings: dict[str, Any], obs_id: str | None, output_fired: bool
+) -> None:
+    """Store atomic claims and cite the observation that supports each one."""
+    if key == "research_flights" and findings.get("flight_id"):
+        claim = ctx.prov.add_artifact("claim:flight_id", {"flight_id": findings["flight_id"]}, producer=step)
+        if obs_id is not None:
+            ctx.prov.add_support(obs_id, claim)
+        return
+    if key != "research_hotels" or not findings.get("hotel_id"):
+        return
+    hotel = ctx.prov.add_artifact("claim:hotel_id", {"hotel_id": findings["hotel_id"]}, producer=step)
+    refund_fault = output_fired and _is_refund_fault(ctx)
+    refund = ctx.prov.add_artifact(
+        "claim:refundable",
+        {"refundable": bool(findings.get("refundable"))},
+        producer=step,
+        **(_fault_kwargs(ctx, True) if refund_fault else {"faulty": False}),
+    )
+    if obs_id is not None:
+        ctx.prov.add_support(obs_id, hotel)
+        ctx.prov.add_support(obs_id, refund)
 
 
 def _fault_kwargs(ctx: RunContext, fired: bool) -> dict[str, Any]:
@@ -85,6 +130,7 @@ class TravelWorkflow:
             messages = agents.researcher_messages(ctx.task, key, feedback, ctx.fault_note)
             observations: list[Any] = []
             findings: Any = None
+            obs_id: str | None = None
             for it in range(MAX_RESEARCH_ITERS):
                 out = ctx.llm.chat("researcher", messages)
                 if out.get("action") == "final":
@@ -103,7 +149,10 @@ class TravelWorkflow:
             fired = False
             if ctx.injector is not None:
                 findings, fired = ctx.injector.on_output(key, ctx.task, findings, observations)
-            art = ctx.prov.add_artifact(key, findings, producer=step, **_fault_kwargs(ctx, fired))
+            # A refundable flip is recorded on that claim, not on the whole finding.
+            mark_finding = fired and not _is_refund_fault(ctx)
+            art = ctx.prov.add_artifact(key, findings, producer=step, **_fault_kwargs(ctx, mark_finding))
+            _record_claims(ctx, step, key, findings, obs_id, fired)
             ok, feedback = self._check(ctx, "findings", {"observations": observations}, findings)
             ctx.prov.update(step, usage=ctx.llm.usage.since(before), verified=ok if ctx.verify else None)
             if ok:
@@ -121,8 +170,10 @@ class TravelWorkflow:
         for attempt in range(1 + (VERIFY_RETRIES if ctx.verify else 0)):
             before = ctx.llm.usage.copy()
             step = ctx.prov.add_step("plan", "planner", attempt=attempt)
-            for a in (task_art, *finding_ids):
+            for a in (task_art, *finding_ids, *_claim_ids(ctx.prov)):
                 ctx.prov.add_input(a, step)
+            for claim_id in _claim_ids(ctx.prov):
+                ctx.prov.add_support(claim_id, step)
             out = ctx.llm.chat("planner", agents.planner_messages(ctx.task, findings, feedback, ctx.fault_note))
             plan = out if isinstance(out.get("steps"), list) else {"steps": [], "error": out.get("error", "no steps")}
             fired = False
@@ -154,6 +205,11 @@ class TravelWorkflow:
         step = ctx.prov.add_step(key, "executor", fingerprint=fingerprint)
         ctx.prov.add_input(task_art, step)
         ctx.prov.add_input(plan_id, step)
+        action = item.get("action") if isinstance(item, dict) else None
+        for claim_key in CLAIM_SUPPORT.get(action, ()):
+            claim_id = _latest_artifact(ctx.prov, claim_key)
+            if claim_id is not None:
+                ctx.prov.add_support(claim_id, step)
         messages = agents.executor_messages(ctx.task, plan, index, item, ctx.fault_note)
         result = None
         blocked = 0

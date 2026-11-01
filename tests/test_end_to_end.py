@@ -5,8 +5,8 @@ import pytest
 from agentrec.checker import check
 from agentrec.faults import ATTACKER_EMAIL, FAULTS_BY_NAME, MISSING_EXEC_TOOL
 from agentrec.llm import MockLLM
-from agentrec.monitor import monitor_recover
-from agentrec.recovery import coarse_lineage, full_restart
+from agentrec.monitor import monitor_recover, support_monitor_recover
+from agentrec.recovery import coarse_lineage, full_restart, suffix_recover, support_recover
 from agentrec.runner import run_workflow
 from agentrec.tasks import make_task
 
@@ -85,6 +85,53 @@ class _RecordingLLM:
     def chat(self, agent: str, messages):
         self.prompts.append(messages[1]["content"])
         return self.inner.chat(agent, messages)
+
+
+def test_suffix_reruns_later_step_that_did_not_read_the_fault(setup):
+    task, truth, catalog, llm = setup
+    world, prov, _, _ = run_workflow(task, catalog, llm, FAULTS_BY_NAME["incorrect_result@research_flights"])
+    suffix_world, suffix_prov = copy.deepcopy(world), copy.deepcopy(prov)
+    coarse_world, coarse_prov = copy.deepcopy(world), copy.deepcopy(prov)
+    suffix = suffix_recover(task, suffix_world, llm, suffix_prov)
+    coarse = coarse_lineage(task, coarse_world, llm, coarse_prov)
+    assert "research_hotels" in suffix.tainted_steps
+    assert "research_hotels" not in coarse.tainted_steps
+    assert check(suffix_world, truth)["final_correct"]
+    assert check(coarse_world, truth)["final_correct"]
+
+
+def test_support_keeps_bookings_that_do_not_cite_the_refundable_claim(setup):
+    task, truth, catalog, llm = setup
+    world, prov, _, _ = run_workflow(task, catalog, llm, FAULTS_BY_NAME["false_refundable@research_hotels"])
+    assert not check(world, truth)["refund_ok"]
+    faulty = [prov.nodes[nid] for nid in prov.faulty_nodes()]
+    assert [n.key for n in faulty] == ["claim:refundable"]
+
+    support_world, support_prov = copy.deepcopy(world), copy.deepcopy(prov)
+    coarse_world, coarse_prov = copy.deepcopy(world), copy.deepcopy(prov)
+    support = support_recover(task, support_world, llm, support_prov)
+    coarse = coarse_lineage(task, coarse_world, llm, coarse_prov)
+
+    assert "plan" in coarse.tainted_steps and "exec:0" in coarse.tainted_steps
+    assert "exec:0" not in support.tainted_steps and "exec:1" not in support.tainted_steps
+    assert "exec:2" in support.tainted_steps and "exec:3" in support.tainted_steps
+    assert "research_flights" not in support.tainted_steps
+    assert check(support_world, truth)["success"]
+    assert check(coarse_world, truth)["success"]
+
+
+def test_support_monitor_notes_only_the_support_set(setup):
+    task, truth, catalog, llm = setup
+    world, prov, _, _ = run_workflow(task, catalog, llm, FAULTS_BY_NAME["false_refundable@research_hotels"])
+    plain_world, plain_prov = copy.deepcopy(world), copy.deepcopy(prov)
+    noted_world, noted_prov = copy.deepcopy(world), copy.deepcopy(prov)
+    plain = support_recover(task, plain_world, llm, plain_prov)
+    recorded = _RecordingLLM(llm)
+    noted = support_monitor_recover(task, noted_world, recorded, noted_prov)
+    assert noted.tainted_steps == plain.tainted_steps
+    assert recorded.prompts
+    assert all("FAULT_JSON:" in prompt and "false_refundable@research_hotels" in prompt for prompt in recorded.prompts)
+    assert check(noted_world, truth)["success"]
 
 
 def test_monitor_matches_coarse_and_notes_redone_steps(setup):

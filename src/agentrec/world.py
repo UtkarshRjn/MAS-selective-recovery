@@ -32,6 +32,7 @@ class Hotel:
     nightly_price: float
     rating: float
     description: str
+    refundable: bool = False
 
 
 class World:
