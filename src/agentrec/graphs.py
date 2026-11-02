@@ -188,6 +188,7 @@ def sweep_topologies(llm: Any) -> list[dict[str, Any]]:
     """
     from .coding import check_coding, make_coding_task
     from .monitor import monitor_recover, support_monitor_recover
+    from .programs import PROGRAMS
     from .recovery import coarse_lineage, full_restart, suffix_recover, support_recover
     from .runner import run_workflow
 
@@ -206,11 +207,21 @@ def sweep_topologies(llm: Any) -> list[dict[str, Any]]:
         cases.append((template, None, task, ([], []), None, check))
         for fault, _ in TEMPLATES[template]:
             cases.append((template, fault, task, ([], []), FaultSpec("corrupt", fault, persistent=False), check))
-    coding_task, _, catalog = make_coding_task()
-    coding_check = lambda world: check_coding(world, coding_task)["success"]
-    cases.append(("coding", None, coding_task, catalog, None, coding_check))
-    cases.append(("coding", "bad_patch@coder", coding_task, catalog, FaultSpec("bad_patch", "coder", persistent=True), coding_check))
-    cases.append(("coding", "thin_spec@spec:2", coding_task, catalog, FaultSpec("thin_spec", "spec:2", persistent=False), coding_check))
+    for name in PROGRAMS:
+        coding_task, _, catalog = make_coding_task(name)
+        coding_check = lambda world, task=coding_task: check_coding(world, task)["success"]
+        label = f"coding:{name}"
+        cases.append((label, None, coding_task, catalog, None, coding_check))
+        cases.append((
+            label, "drop_requirement@spec", coding_task, catalog,
+            FaultSpec("drop_requirement", "spec", persistent=True), coding_check,
+        ))
+    clamp_task, _, clamp_catalog = make_coding_task("clamp")
+    clamp_check = lambda world, task=clamp_task: check_coding(world, task)["success"]
+    cases.append((
+        "coding:clamp", "bad_patch@coder", clamp_task, clamp_catalog,
+        FaultSpec("bad_patch", "coder", persistent=True), clamp_check,
+    ))
 
     rows: list[dict[str, Any]] = []
     for topology, fault, task, catalog, spec, check in cases:

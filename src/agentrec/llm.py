@@ -270,46 +270,31 @@ class MockLLM:
 
     @staticmethod
     def _spec(messages: Messages) -> dict[str, Any]:
-        user = messages[1]["content"]
-        task, visit = read_field(user, "TASK_JSON"), read_field(user, "VISIT_JSON")
-        text = f"clamp {task['name']} into [lo, hi]"
-        if visit == 2:
-            text += f"\nprecondition: {task['precondition']}"
-        return {"contract": text}
+        from .programs import contract_text
+
+        task = read_field(messages[1]["content"], "TASK_JSON")
+        return {"contract": contract_text(task["name"])}
 
     @staticmethod
     def _coder(messages: Messages) -> dict[str, Any]:
+        from .programs import implement
+
         user = messages[1]["content"]
         task = read_field(user, "TASK_JSON")
         contract = read_field(user, "CONTRACT_JSON") or {}
-        text = str(contract.get("text", ""))
-        if "return the input unchanged" in text:
-            content = "def clamp(x, lo, hi):\n    return x\n"
-        elif task["precondition"] in text:
-            content = "def clamp(x, lo, hi):\n    # lo <= hi\n    return min(max(x, lo), hi)\n"
-        else:
-            content = "def clamp(x, lo, hi):\n    return min(max(x, lo), hi)\n"
-        return {"path": task["path"], "content": content}
-
-    @staticmethod
-    def _tester(messages: Messages) -> dict[str, Any]:
-        src = str((read_field(messages[1]["content"], "FILE_JSON") or {}).get("content", ""))
-        passed = "min(max(x, lo), hi)" in src and "return x\n" not in src
-        return {"passed": passed}
+        return {"content": implement(task["name"], str(contract.get("text", "")))}
 
     @staticmethod
     def _reviewer(messages: Messages) -> dict[str, Any]:
-        user = messages[1]["content"]
-        visit = read_field(user, "VISIT_JSON")
-        report = read_field(user, "REPORT_JSON") or {}
-        if visit == 1:
-            return {"decision": "revise", "note": "require the precondition"}
-        return {"decision": "approve" if report.get("passed") else "revise", "note": ""}
+        report = read_field(messages[1]["content"], "REPORT_JSON") or {}
+        if report.get("passed"):
+            return {"decision": "approve", "note": ""}
+        return {"decision": "revise", "note": "a hidden check failed"}
 
     @staticmethod
     def _docs(messages: Messages) -> dict[str, Any]:
         task = read_field(messages[1]["content"], "TASK_JSON")
-        return {"content": f"{task['name']}\n"}
+        return {"content": f"{task['name']}\n{task['request']}\n"}
 
     @staticmethod
     def _graph(messages: Messages) -> dict[str, Any]:

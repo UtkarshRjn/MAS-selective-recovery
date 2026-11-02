@@ -52,17 +52,14 @@ mean anything. Each executor step makes one tool call, and retries only if the c
 
 ## Coding team
 
-A task with `"kind": "coding"` runs a second workflow: spec writer, coder, tester,
-reviewer. The first review asks for a revision, so those four run a second lap.
-The log stores each visit on its own (`spec`, `coder`, …, `spec:2`, `coder:2`, …).
-A docs step sits between the laps and reads only the first spec.
+A task with `"kind": "coding"` implements one of three programs: `clamp`, `nonzero`, or `clip_text`. The spec agent writes a contract from the request. The first coder writes a draft. A tester tool runs the hidden suite. The reviewer records those failures. The second coder writes the submitted file. Docs sits between the laps and reads only the first spec.
 
-Two faults are recorded on that graph and are not part of the travel sweep:
+The checker loads the submitted file and calls the suite. The prompt does not contain the function body or the tests. These faults are not in the travel sweep.
 
-| Fault | What breaks | Suffix | Coarse |
+| Fault | What the suite sees | Support | Coarse |
 |---|---|---|---|
-| `bad_patch@coder` | both coder visits write `return x` | redoes docs, which is later in the log | keeps docs, which never read the patch |
-| `thin_spec@spec:2` | the revised contract tells the coder to return the input | keeps docs and the first lap | keeps docs and the first lap |
+| `drop_requirement@spec` | the submitted file is missing the dropped sentence's behavior | rewrites the draft and leaves the submitted file failing | rewrites the submitted file and the suite passes |
+| `bad_patch@coder` | both coder visits return `None` | rewrites both coder visits | also rewrites both, and keeps docs |
 
 The travel experiment is unchanged. `run_agents` picks the workflow from the task.
 
