@@ -14,6 +14,9 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
+import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -153,3 +156,24 @@ def cmd_download(args: Any) -> None:
 
 def cmd_summary(args: Any) -> None:
     summarize(load(Path(args.data)))
+
+
+def cmd_trial(args: Any) -> None:
+    root = Path(args.data)
+    matches = sorted((root / "data" / args.attack).glob(f"{args.scenario}_*.json"))
+    if not matches:
+        raise FileNotFoundError(f"No TAMAS file for {args.attack}/{args.scenario} in {root}.")
+    rows = json.loads(matches[0].read_text())
+    try:
+        row = rows[args.index]
+    except IndexError as exc:
+        raise ValueError(f"TAMAS index must be 0..{len(rows) - 1}.") from exc
+    with tempfile.NamedTemporaryFile("w", suffix=".json") as case:
+        json.dump(row, case)
+        case.flush()
+        command = [
+            sys.executable, "autogen_run.py", "--json_data", case.name,
+            "--model", args.model,
+            "--config", args.config,
+        ]
+        subprocess.run(command, cwd=root, check=True)

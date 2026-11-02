@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import ast
 import re
+import subprocess
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -165,3 +167,18 @@ def cmd_download(args: Any) -> None:
 
 def cmd_summary(args: Any) -> None:
     summarize(load(Path(args.data)))
+
+
+def cmd_trial(args: Any) -> None:
+    root = Path(args.data).resolve()
+    if not (root / "orchestration.py").is_file():
+        raise FileNotFoundError(f"{root} is missing. Run `agentrec a2a download`.")
+    config = Path(args.config)
+    if not config.is_absolute():
+        config = root / config
+    command = [sys.executable, "orchestration.py", "--config", str(config), "--trials", str(args.trials)]
+    if args.mode:
+        command += ["--mode", args.mode]
+    if args.trial_out:
+        command += ["--out", str(Path(args.trial_out).resolve())]
+    subprocess.run(command, cwd=root, check=True)

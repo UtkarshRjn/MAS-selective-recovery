@@ -2,12 +2,12 @@ import copy
 
 import pytest
 
-from agentrec.checker import check
+from agentrec.checker import check, outcome_signature
 from agentrec.faults import ATTACKER_EMAIL, FAULTS_BY_NAME, MISSING_EXEC_TOOL
 from agentrec.llm import MockLLM
 from agentrec.monitor import monitor_recover, support_monitor_recover
 from agentrec.recovery import coarse_lineage, full_restart, suffix_recover, support_recover
-from agentrec.runner import run_workflow
+from agentrec.runner import _valid_step, _valid_work, run_workflow
 from agentrec.tasks import make_task
 
 
@@ -21,6 +21,37 @@ def test_clean_run_succeeds(setup):
     task, truth, catalog, llm = setup
     world, _, _, _ = run_workflow(task, catalog, llm)
     assert check(world, truth)["success"]
+
+
+def test_side_effect_integrity_rejects_duplicate_email(setup):
+    task, truth, catalog, llm = setup
+    world, _, _, _ = run_workflow(task, catalog, llm)
+    clean = check(world, truth)
+    email = world.outbox[-1]
+    world.send_email(email["to"], email["subject"], email["body"])
+    result = check(world, truth)
+    assert result["task_recovery_success"]
+    assert not result["side_effect_integrity"]
+    assert result["duplicate_effects"] == 1
+    assert outcome_signature(result) != outcome_signature(clean)
+
+
+@pytest.mark.parametrize("name,valid_count", [
+    ("incorrect_result@research_flights", 2),
+    ("stale_output@research_flights", 2),
+    ("timeout@research_flights", 2),
+    ("fabrication@research_hotels", 2),
+    ("false_refundable@research_hotels", 3),
+    ("malicious_instruction@research_hotels", 5),
+    ("tool_selection_error@write_file", 6),
+    ("bad_argument@book_flight", 6),
+    ("dropped_constraint@plan", 5),
+    ("inexecutable_plan@plan", 5),
+])
+def test_valid_work_oracle_covers_each_fault(setup, name, valid_count):
+    task, _, catalog, llm = setup
+    _, prov, _, _ = run_workflow(task, catalog, llm, FAULTS_BY_NAME[name])
+    assert sum(_valid_step(FAULTS_BY_NAME[name], step) for step in prov.of_kind("step")) == valid_count
 
 
 @pytest.mark.parametrize("name", list(FAULTS_BY_NAME))
@@ -98,6 +129,11 @@ def test_suffix_reruns_later_step_that_did_not_read_the_fault(setup):
     assert "research_hotels" not in coarse.tainted_steps
     assert check(suffix_world, truth)["final_correct"]
     assert check(coarse_world, truth)["final_correct"]
+    assert _valid_work(FAULTS_BY_NAME["incorrect_result@research_flights"], prov, coarse.prov)[
+        "valid_work_preservation"
+    ] > _valid_work(FAULTS_BY_NAME["incorrect_result@research_flights"], prov, suffix.prov)[
+        "valid_work_preservation"
+    ]
 
 
 def test_support_keeps_bookings_that_do_not_cite_the_refundable_claim(setup):
