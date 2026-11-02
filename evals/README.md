@@ -32,7 +32,7 @@ The benchmark defines valid steps from fault semantics. Recovery methods do not 
 
 ## Benchmark set
 
-The external commands run native benchmarks. They do not yet run this project's recovery methods.
+External commands use native benchmark oracles. Add `--recovery agentrec` or `--agentrec` to run project adapters.
 
 ### Booking fault-injection harness
 
@@ -64,20 +64,25 @@ uv run agentrec undobench download
 uv pip install -e data/undobench-upstream
 uv run agentrec undobench smoke
 uv run agentrec undobench trial --suite smoke --recovery naive --dry-run
+uv run agentrec undobench trial --suite smoke --recovery agentrec
 ```
 
-The trial command uses the official UndoBench runner. Use its agent adapter to evaluate this project on the full benchmark.
+The AgentRec trial uses UndoBench's paired runner and state oracle. This adapter only retries known pre-mutation faults and reuses acknowledged identical calls. It does not recover a full trajectory after a committed effect.
 
 ### A2ASecBench
 
 A2ASecBench supplies malicious agent-to-agent protocol cases and benign controls. It tests whether recovery handles untrusted peer messages.
+Lower attack ASR is better. Higher control-pass rate is better.
 
 ```bash
 uv run agentrec a2a download
 uv pip install -e 'data/a2asec-upstream[dev]'
 uv run agentrec a2a summary
 uv run agentrec a2a trial --config configs/offline/asrf_eval.yaml --trials 1
+uv run agentrec a2a trial --config configs/offline/asrf_eval.yaml --trials 1 --agentrec
 ```
+
+For HOTF, `--max-tasks 5` is the declared application policy: one peer response may create at most five tasks to bound fan-out and cost. Choose this quota before evaluation. Report a sensitivity sweep, for example `--max-tasks 1`, `5`, `10`, and `20`, so the result is not tied to one benchmark threshold.
 
 ## Protocol
 
@@ -94,6 +99,6 @@ The current CLI varies task seeds. Repeat orchestration and confidence-interval 
 
 ## Claim boundary
 
-The internal harness reports the five shared recovery metrics. External trial commands report native benchmark metrics.
+The internal harness reports all five shared metrics. External adapters report native correctness and side-effect metrics, not all five cost metrics.
 
-Do not claim an official external recovery score until an adapter runs this recovery system inside that benchmark environment.
+UndoBench currently measures safe pre-mutation call retry and acknowledged-call reuse. A2ASecBench measures provenance-based action blocking, not post-effect rollback.

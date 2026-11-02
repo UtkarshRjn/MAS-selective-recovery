@@ -11,9 +11,11 @@ Code: https://github.com/SaFo-Lab/A2ASecBench
 from __future__ import annotations
 
 import ast
+import json
 import re
 import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -176,9 +178,26 @@ def cmd_trial(args: Any) -> None:
     config = Path(args.config)
     if not config.is_absolute():
         config = root / config
-    command = [sys.executable, "orchestration.py", "--config", str(config), "--trials", str(args.trials)]
-    if args.mode:
-        command += ["--mode", args.mode]
-    if args.trial_out:
-        command += ["--out", str(Path(args.trial_out).resolve())]
-    subprocess.run(command, cwd=root, check=True)
+    def run(config_path: Path) -> None:
+        command = [sys.executable, "orchestration.py", "--config", str(config_path), "--trials", str(args.trials)]
+        if args.mode:
+            command += ["--mode", args.mode]
+        if args.trial_out:
+            command += ["--out", str(Path(args.trial_out).resolve())]
+        subprocess.run(command, cwd=root, check=True)
+
+    if not args.agentrec:
+        run(config)
+        return
+    import yaml
+    payload = yaml.safe_load(config.read_text())
+    if "a2a_security" not in payload.get("sut", {}):
+        raise ValueError("--agentrec supports executable ASRF, ATSI, CO, and HOTF configs only.")
+    payload["sut"] = {
+        "a2a_security": "agentrec.a2a_adapter:AgentRecA2ASUT",
+        "kwargs": {"max_tasks": args.max_tasks},
+    }
+    with tempfile.NamedTemporaryFile("w", suffix=".json") as patched:
+        json.dump(payload, patched)
+        patched.flush()
+        run(Path(patched.name))

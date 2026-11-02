@@ -300,6 +300,8 @@ def main() -> None:
     atr.add_argument("--trials", type=int, default=1)
     atr.add_argument("--mode", choices=("whitebox", "blackbox"))
     atr.add_argument("--trial-out")
+    atr.add_argument("--agentrec", action="store_true", help="run the AgentRec provenance SUT")
+    atr.add_argument("--max-tasks", type=int, default=5, help="maximum peer-created tasks per response")
     atr.set_defaults(fn=cmd_a2a_trial)
 
     u = sub.add_parser("undobench", help="operational recovery benchmark")
@@ -313,6 +315,7 @@ def main() -> None:
     ut = usub.add_parser("trial")
     ut.add_argument("--suite", default="smoke")
     ut.add_argument("--recovery", default="naive")
+    ut.add_argument("--task")
     ut.add_argument("--seeds", default="42")
     ut.add_argument("--model")
     ut.add_argument("--dry-run", action="store_true")

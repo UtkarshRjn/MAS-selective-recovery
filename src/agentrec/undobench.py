@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -32,12 +33,25 @@ def cmd_smoke(args: Any) -> None:
 
 
 def cmd_trial(args: Any) -> None:
+    root = _root(args).resolve()
+    suffix = ["--model", args.model] if args.model else []
+    if args.dry_run:
+        suffix.append("--dry-run")
+    if args.recovery == "agentrec":
+        command = [
+            sys.executable, "-m", "agentrec.undobench_adapter",
+            "--seeds", args.seeds, "--output", str(Path(args.out).resolve()),
+        ]
+        command += ["--task", args.task] if args.task else ["--suite", args.suite]
+        command += suffix
+        env = os.environ.copy()
+        env["PYTHONPATH"] = str(root) + os.pathsep + env.get("PYTHONPATH", "")
+        subprocess.run(command, cwd=root, env=env, check=True)
+        return
+
     command = [
         sys.executable, "-m", "undobench.cli", "run", "--suite", args.suite,
         "--recovery", args.recovery, "--seeds", args.seeds, "--output", str(Path(args.out).resolve()),
     ]
-    if args.model:
-        command += ["--model", args.model]
-    if args.dry_run:
-        command.append("--dry-run")
-    subprocess.run(command, cwd=_root(args), check=True)
+    command += suffix
+    subprocess.run(command, cwd=root, check=True)

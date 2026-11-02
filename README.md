@@ -117,7 +117,11 @@ uv run agentrec tamas download
 uv run agentrec tamas summary
 uv run agentrec a2a download
 uv run agentrec a2a summary
+uv run agentrec a2a trial --config configs/offline/asrf_eval.yaml --agentrec
+uv run agentrec undobench trial --suite smoke --recovery agentrec
 ```
+
+The current UndoBench adapter retries known pre-mutation faults and reuses acknowledged identical calls. It does not perform full-trajectory rollback.
 
 TAMAS puts Byzantine, colluding, and contradicting instructions in an agent description, and direct-injection and impersonation instructions in the user task. Every agent reads that text, so coarse lineage taints the whole roster. The released IPI files contain the benign task only. The upstream runner attaches malicious tools outside the JSON.
 
@@ -154,7 +158,9 @@ src/agentrec/
   who_when.py    Who&When loader, lineage span, attribution prompts
   tamas.py       TAMAS scenario loader and attack-carrier lineage
   a2a.py         A2ASecBench case loader and control/attack lineage
+  a2a_adapter.py AgentRec A2ASecBench executable SUT
   undobench.py   UndoBench native-runner adapter
+  undobench_adapter.py AgentRec UndoBench recovery method
 analysis/summarize.py
 evals/README.md
 tests/
