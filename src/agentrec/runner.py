@@ -141,10 +141,11 @@ def cmd_clean(args: argparse.Namespace) -> None:
         task, truth, catalog = make_task(seed)
         world, prov, _, stats = run_workflow(task, catalog, llm)
         result = check(world, truth)
-        wins += result["success"]
+        success = result["task_recovery_success"] and result["final_effect_integrity"]
+        wins += success
         rec.row(seed=seed, fault=None, method="clean", **result, **stats)
         rec.trace(f"{seed}_clean", prov, world)
-        print(f"seed={seed} success={result['success']} tokens={_tokens(stats['usage']):.0f} wall={stats['wall_s']}s")
+        print(f"seed={seed} success={success} tokens={_tokens(stats['usage']):.0f} wall={stats['wall_s']}s")
     print(f"clean success: {wins}/{args.tasks}  -> {rec.out_dir}")
 
 
@@ -182,10 +183,11 @@ def cmd_experiment(args: argparse.Namespace) -> None:
         clean_sig = outcome_signature(clean)
         rec.row(seed=seed, fault=None, method="clean", **clean, **stats)
         rec.trace(f"{seed}_clean", prov, world)
-        print(f"seed={seed} clean success={clean['success']}")
+        clean_success = clean["task_recovery_success"] and clean["final_effect_integrity"]
+        print(f"seed={seed} clean success={clean_success}")
 
         for spec in specs:
-            base = {"seed": seed, "fault": spec.name, "adversarial": spec.adversarial, "clean_success": clean["success"]}
+            base = {"seed": seed, "fault": spec.name, "adversarial": spec.adversarial, "clean_success": clean_success}
             world_f, prov_f, inj, stats_f = run_workflow(task, catalog, llm, spec)
             faulty = check(world_f, truth)
             taint = coarse_taint(prov_f)
@@ -200,7 +202,7 @@ def cmd_experiment(args: argparse.Namespace) -> None:
             rec.trace(f"{seed}_{spec.name}_none", prov_f, world_f)
             line = (
                 f"  {spec.name:40s} fired={inj.fired > 0} used={base['fault_used']} "
-                f"task={faulty['task_recovery_success']} recovery={faulty['recovery_success']}"
+                f"task={faulty['task_recovery_success']} final_effects={faulty['final_effect_integrity']}"
             )
             if not base["fault_fired"]:
                 print(line + "  (fault did not fire; skipping recovery)")
@@ -216,7 +218,7 @@ def cmd_experiment(args: argparse.Namespace) -> None:
                 else:
                     world_r, prov_r = copy.deepcopy(world_f), copy.deepcopy(prov_f)
                     report = RECOVER[method](task, world_r, llm, prov_r)
-                    result = check(world_r, truth)
+                    result = check(world_r, truth, before=world_f)
                     total = {k: stats_f["usage"][k] + report.usage[k] for k in report.usage}
                     rec.row(
                         **base, method=method, **result, **report.row(),
@@ -225,7 +227,8 @@ def cmd_experiment(args: argparse.Namespace) -> None:
                     )
                     rec.trace(f"{seed}_{spec.name}_{method}", report.prov, world_r)
                 results.append(
-                    f"{method}=task:{result['task_recovery_success']}/recovery:{result['recovery_success']}"
+                    f"{method}=task:{result['task_recovery_success']}/"
+                    f"recovery_effects:{result['recovery_effect_integrity']}"
                 )
             print(line + "  " + " ".join(results))
     print(f"done -> {rec.out_dir}")

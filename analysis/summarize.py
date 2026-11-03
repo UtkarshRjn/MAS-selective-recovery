@@ -20,7 +20,8 @@ def main(path: str) -> None:
     rows = [json.loads(line) for line in open(path)]
     clean = [r for r in rows if r["method"] == "clean"]
     if clean:
-        print(f"clean success: {sum(r['success'] for r in clean)}/{len(clean)}  "
+        clean_ok = sum(r["task_recovery_success"] and r["final_effect_integrity"] for r in clean)
+        print(f"clean success: {clean_ok}/{len(clean)}  "
               f"mean tokens: {mean(tokens(r['usage']) for r in clean):.0f}\n")
 
     groups: dict[tuple[str, str], list[dict]] = defaultdict(list)
@@ -39,7 +40,8 @@ def main(path: str) -> None:
         if r["method"] == "restart" and r.get("fault_fired", True)
     }
     header = (
-        "fault", "method", "n", "task_ok", "effects_ok", "recovery_ok",
+        "fault", "method", "n", "task_ok", "final_effects", "recovery_effects",
+        "irrev", "recovery_irrev", "any_unauth", "recovery_unauth",
         "token/restart", "latency/restart", "valid_work",
     )
     print("| " + " | ".join(header) + " |")
@@ -58,16 +60,32 @@ def main(path: str) -> None:
         valid_work = "-"
         if "valid_work_preservation" in rs[0]:
             valid_work = f"{mean(r['valid_work_preservation'] for r in rs):.0%}"
+        recovery_harms = [
+            r["recovery_irreversible_harm"]
+            for r in rs if r["recovery_irreversible_harm"] is not None
+        ]
+        recovery_effects = [
+            r["recovery_effect_integrity"]
+            for r in rs if r["recovery_effect_integrity"] is not None
+        ]
+        recovery_unauthorized = [
+            r["recovery_unauthorized_emails"] > 0
+            for r in rs if r["recovery_unauthorized_emails"] is not None
+        ]
         cells = (
             fault, method, len(rs),
             f"{mean(r['task_recovery_success'] for r in rs):.0%}",
-            f"{mean(r['side_effect_integrity'] for r in rs):.0%}",
-            f"{mean(r['recovery_success'] for r in rs):.0%}",
+            f"{mean(r['final_effect_integrity'] for r in rs):.0%}",
+            f"{mean(recovery_effects):.0%}" if recovery_effects else "-",
+            f"{mean(r['irreversible_harm'] for r in rs):.0%}",
+            f"{mean(recovery_harms):.0%}" if recovery_harms else "-",
+            f"{mean(r['unauthorized_emails'] > 0 for r in rs):.0%}",
+            f"{mean(recovery_unauthorized):.0%}" if recovery_unauthorized else "-",
             token_ratio, latency_ratio, valid_work,
         )
         print("| " + " | ".join(str(c) for c in cells) + " |")
-    print("\nRatios use recovery-only cost after the shared faulty run. Lower is better. "
-          "Recovery succeeds only when task output and side effects are correct.")
+    print("\nFinal effects cover the whole run; recovery effects cover only recovery-introduced actions. "
+          "Ratios use recovery-only cost after the shared faulty run. Lower is better.")
 
 
 if __name__ == "__main__":

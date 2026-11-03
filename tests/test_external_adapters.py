@@ -10,7 +10,7 @@ from agentrec.a2a_adapter import AgentRecA2ASUT
 from agentrec.undobench_adapter import AgentRecRecoveryMethod
 
 
-def test_undobench_retries_fault_and_reuses_success():
+def test_undobench_retries_fault_without_merging_later_identical_call():
     calls = 0
 
     class InjectedTimeout(TimeoutError):
@@ -27,8 +27,8 @@ def test_undobench_retries_fault_and_reuses_success():
     wrapped = method.wrap_tool("update", tool, SimpleNamespace(task_id="T"))
     assert wrapped(value=1) == {"value": 1}
     assert wrapped(value=1) == {"value": 1}
-    assert calls == 2
-    assert any(step.data.get("reused") for step in method.prov.of_kind("step"))
+    assert calls == 3
+    assert len(method.prov.of_kind("step")) == 2
 
 
 @pytest.mark.parametrize("boundary", ["POST_MUTATION_PRE_ACK", "POST_ACK_PRE_CHECKPOINT"])

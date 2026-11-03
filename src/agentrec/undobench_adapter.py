@@ -13,25 +13,21 @@ from recoverbench.recovery_methods import RECOVERY_METHOD_REGISTRY
 from recoverbench.recovery_methods.base import RecoveryMethod
 
 from .provenance import Provenance
+
+
 class AgentRecRecoveryMethod(RecoveryMethod):
-    """Retry the known failed call and reuse acknowledged calls."""
+    """Retry a known pre-mutation failure once."""
 
     name = "agentrec"
     version = "v1"
-    description = "Known injected-call retry with acknowledged-call reuse and provenance."
+    description = "Known pre-mutation retry with provenance."
 
     def __init__(self) -> None:
         self.reset()
 
     def wrap_tool(self, tool_name: str, tool_fn: Callable[..., Any], task: Any) -> Callable[..., Any]:
         def wrapped(*args: Any, **kwargs: Any) -> Any:
-            fingerprint = json.dumps([tool_name, args, kwargs], sort_keys=True, default=str)
-            if fingerprint in self.cache:
-                step = self.prov.add_step(tool_name, "undobench", fingerprint=fingerprint, reused=True)
-                self.prov.add_artifact(tool_name, self.cache[fingerprint], producer=step, reused=True)
-                return self.cache[fingerprint]
-
-            step = self.prov.add_step(tool_name, "undobench", fingerprint=fingerprint)
+            step = self.prov.add_step(tool_name, "undobench")
             try:
                 result = tool_fn(*args, **kwargs)
             except Exception as error:
@@ -45,7 +41,6 @@ class AgentRecRecoveryMethod(RecoveryMethod):
                     raise
                 result = tool_fn(*args, **kwargs)
             self.prov.add_artifact(tool_name, result, producer=step)
-            self.cache[fingerprint] = result
             return result
 
         return wrapped
@@ -55,7 +50,6 @@ class AgentRecRecoveryMethod(RecoveryMethod):
 
     def reset(self) -> None:
         self.prov = Provenance()
-        self.cache: dict[str, Any] = {}
 
 
 def main() -> None:

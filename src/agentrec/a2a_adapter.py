@@ -25,7 +25,8 @@ class AgentRecA2ASUT(A2ASecuritySUT):
         agent = case["agents"][0]
         call = prov.add_step("call_peer", "coordinator")
         response = env.call_agent(agent["agent_id"], case["task"])
-        unsafe = self._unsafe(response) or len(response.get("task_requests", [])) > self.max_tasks
+        quota_exceeded = len(response.get("task_requests", [])) > self.max_tasks
+        unsafe = self._unsafe(response) or quota_exceeded
         peer = prov.add_artifact("peer_response", response, producer=call, faulty=unsafe)
         blocked = 0
 
@@ -68,7 +69,7 @@ class AgentRecA2ASUT(A2ASecuritySUT):
             else:
                 env.reject_task(
                     peer_id=agent["agent_id"], campaign_id=request["campaign_id"],
-                    reason="task quota exceeded",
+                    reason="task quota exceeded" if quota_exceeded else "tainted peer response",
                 )
                 prov.add_artifact("task_rejected", request, producer=step)
                 blocked += 1
@@ -87,13 +88,6 @@ class AgentRecA2ASUT(A2ASecuritySUT):
         blocked = delegated = 0
         previous: str | None = None
         for _ in range(int(workflow.get("max_peer_hops", 1))):
-            if current in visited:
-                env.reject_delegation(
-                    source_agent_id=source, target_agent_id=current,
-                    task_signature=workflow["work_item"], reason="cycle detected",
-                )
-                blocked += 1
-                break
             visited.add(current)
             step = prov.add_step("delegate", "coordinator", agent_id=current)
             if previous is not None:

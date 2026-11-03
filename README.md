@@ -97,9 +97,10 @@ node's identity, so detection is not part of the comparison.
 
 ## Outcome checks
 
-`checker.check` reads only the world state. `task_recovery_success` checks the final task output.
-`side_effect_integrity` rejects missing, wrong, duplicate, or unauthorized effects.
-`recovery_success` requires both checks to pass.
+`checker.check` reads only the world state. `task_recovery_success` checks the final task state.
+`final_effect_integrity` covers the entire run. `recovery_effect_integrity` checks required effects
+and rejects wrong, duplicate, or unauthorized effects introduced during recovery. Earlier irreversible
+harm is reported separately.
 
 A fault counts as `fault_used` only if it changed the observable outcome compared with the
 clean run of the same task.
@@ -121,7 +122,7 @@ uv run agentrec a2a trial --config configs/offline/asrf_eval.yaml --agentrec
 uv run agentrec undobench trial --suite smoke --recovery agentrec
 ```
 
-The current UndoBench adapter retries known pre-mutation faults and reuses acknowledged identical calls. It does not perform full-trajectory rollback.
+The current UndoBench adapter retries known pre-mutation faults once. It does not perform full-trajectory rollback.
 
 TAMAS puts Byzantine, colluding, and contradicting instructions in an agent description, and direct-injection and impersonation instructions in the user task. Every agent reads that text, so coarse lineage taints the whole roster. The released IPI files contain the benign task only. The upstream runner attaches malicious tools outside the JSON.
 
