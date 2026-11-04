@@ -24,7 +24,7 @@ uv run agentrec mbpp run --provider nrp --model gpt-oss \
   --trial-out results/nrp-10 --execute-model
 
 # Set TRITON_API_KEY for the same experiment on Triton.
-uv run agentrec mbpp run --provider triton --model api-glm-5.3-flash \
+uv run agentrec mbpp run --provider triton --model api-muse-glimmer-30b \
   --limit 10 --include-authorization --workers 5 \
   --trial-out results/triton-10 --execute-model
 ```
@@ -70,7 +70,21 @@ reference code is not verifier ground truth. Later model continuations are indep
 Fixture-stage model calls still occur and are counted. Skipped/ineligible injections
 are recorded and are not successful defenses. Operators are fixed, not adaptive attacks.
 
-Methods: clean, verify-clean, none, verify, and restart/suffix/coarse when injection fires.
+The harness runs one injected fault per condition, not all faults at once. The same
+example is run repeatedly under the following comparisons:
+
+| Method | What it does |
+|---|---|
+| clean | Run the workflow without an injected fault. |
+| verify-clean | Run without faults, with verification enabled, to measure its overhead and errors. |
+| none | Inject the selected fault and finish without recovery. |
+| verify | Check intermediate results during execution, with the selected fault enabled. |
+| restart | After the faulty run, undo supported effects and rerun every stage without injection. |
+| suffix | Rerun the faulty stage and all later stages in execution order. |
+| coarse | Rerun the faulty stage and downstream stages selected by recorded dependencies. |
+
+Recovery methods run only when the corresponding `none` condition actually injected a
+fault. Failed executions without a saved faulty state cannot supply recovery inputs.
 Verification adds five model calls and two feedback executions (12 versus 7 model calls).
 Recovery is given the fault location and disables injection. Restart clears fixtures;
 suffix/coarse can retain unmarked bad code in compound scenarios. Equal per-call limits
@@ -98,10 +112,15 @@ exchanges, artifacts, dependencies, tool effects, and authorization history.
 - Cost/time: model tokens/calls, workflow/recovery time, post-hoc audit time; provenance
   write timing is only part of tracking overhead. Parallel contention affects latency.
 
-Historical reports, old manifests, AWS helper scripts, and raw run artifacts are kept
-locally and ignored. The remote running jobs use their saved pre-cleanup source snapshot;
-this CLI cleanup does not modify those jobs. Completed old pilots are not included in
-this PR. The new two-provider comparison is incomplete; no new outcome is claimed here.
+Report success and execution errors separately, grouped by dataset, fault category,
+stage, and method. For recovery comparisons, use the matching `none` conditions where
+`fault_fired=true`; do not compare their denominator with every verification attempt.
+Keep controlled report scenarios separate from ordinary coding faults. A clean failure
+must remain visible when interpreting the corresponding injected run.
+
+Historical reports, old manifests, AWS helper scripts, and raw run artifacts are ignored.
+This document describes the protocol; it does not claim that the full 50-task matrix has
+been evaluated. Live jobs use their deployed source snapshots.
 
 ## Resume a stopped batch
 

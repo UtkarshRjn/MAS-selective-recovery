@@ -194,7 +194,6 @@ def select_tasks(manifest, limit):
 
 def cmd_run(args):
     """Reuse coding orchestration and recovery; final tests never drive revisions."""
-    import os
     if not args.execute_model:
         raise ValueError('Model calls require --execute-model')
     if args.workers < 1:

@@ -6,6 +6,14 @@ selects 10 coding examples using `--limit 10`.
 
 See [experiment setup, commands, and metrics](evals/README.md).
 
+## Reading order
+
+Start with `evals/README.md` for the experiment and method definitions. Then read
+`src/agentrec/phase1.py` for the condition schedule, `coding.py` for stage execution,
+and `benchmark_faults.py` for the mutations. `authorization.py` contains the three
+travel variants. Dataset loading, Docker execution, and parallel scheduling are in
+`mbpp.py`.
+
 ## Code map
 
 - `mbpp.py`: dataset loading, Docker scoring, parallel task execution, and CLI.
