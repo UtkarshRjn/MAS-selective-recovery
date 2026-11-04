@@ -209,3 +209,57 @@ def test_clean_error_does_not_prevent_fault_experiments(fixture_case, tmp_path, 
     assert rows[0]['method'] == 'clean' and rows[0]['status'] == 'error'
     assert rows[-1]['method'] == 'coarse' and rows[-1]['status'] == 'completed'
     assert all(r['clean_success'] is None for r in rows[1:])
+
+
+def test_resume_preserves_completed_conditions_and_replays_saved_fault_for_pending_recovery(fixture_case, tmp_path, monkeypatch):
+    from agentrec.resume import ResumeRecorder, import_previous
+    from agentrec.conditions import attempt
+    from agentrec import runner
+    source, dest = tmp_path/'source', tmp_path/'continuation'
+    case = fixture_case
+    task, _, catalog = make_coding_task(case['name'])
+    args = SimpleNamespace(llm_seed=0, include_authorization=False)
+    task_dir = source/'tasks'/case['name']
+    rec = Recorder(task_dir)
+    try:
+        run_conditions(case,args,Answers(case),rec,task,catalog,{'success':True},Event())
+    finally:
+        rec.rows.close()
+    rows = [json.loads(s) for s in (task_dir/'rows.jsonl').read_text().splitlines()]
+    target = 'controlled_stale_report@tester:2'
+    # Simulate interruption just before a pending coarse recovery; retain every other score.
+    rows = [r for r in rows if not (r['scenario']==target and r['method']=='coarse')]
+    for row in rows:
+        if row['scenario']=='verify_clean':
+            row.update(status='error',success=False,error_type='TypeError')
+    (task_dir/'rows.jsonl').write_text(''.join(json.dumps(r)+'\n' for r in rows))
+    before = (task_dir/'rows.jsonl').read_bytes()
+    manifest={'cases':[case]}; config={'model':'fake'}
+    (source/'manifest.json').write_text(json.dumps(manifest))
+    (source/'config.json').write_text(json.dumps(config))
+    (source/'run_status.json').write_text(json.dumps({'tasks':{case['name']:{'status':'failed'}}}))
+    dest.mkdir()
+    import_previous(source,dest,config,manifest)
+    resumed = ResumeRecorder(dest/'tasks'/case['name'])
+    source_fault = next(r for r in rows if r['scenario']==target and r['method']=='none')
+    world,prov,inj,stats=resumed.restore(source_fault)
+    assert inj.fired and values(prov)['coder:2']['content'] == 'def '+case['signature']+':\n    return []\n'
+    assert stats['usage']==source_fault['usage']
+    calls=[]
+    original=runner.RECOVER['coarse']
+    def recover(task,world,llm,prov):
+        calls.append(values(prov)['coder:2']['content'])
+        return original(task,world,llm,prov)
+    monkeypatch.setitem(runner.RECOVER,'coarse',recover)
+    try:
+        run_conditions(case,args,Answers(case),resumed,task,catalog,{'success':True},Event())
+    finally:
+        resumed.rows.close()
+    after=[json.loads(s) for s in (dest/'tasks'/case['name']/'rows.jsonl').read_text().splitlines()]
+    assert len(after)==len(rows)+1 and after[:-1]==rows
+    assert len(calls)==1 and after[-1]['method']=='coarse'
+    assert (task_dir/'rows.jsonl').read_bytes()==before
+    assert next(r for r in after if r['scenario']=='verify_clean')['status']=='error'
+    incompatible=tmp_path/'incompatible';incompatible.mkdir()
+    with pytest.raises(ValueError,match='model'):
+        import_previous(source,incompatible,{'model':'different'},manifest)

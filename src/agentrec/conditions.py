@@ -6,6 +6,9 @@ from pathlib import Path
 
 def attempt(rec, fields, llm, operation):
     from .mbpp import TaskCancelled, error_metadata
+    from .resume import key
+    if hasattr(rec, 'previous') and key(fields) in rec.previous:
+        return rec.restore(fields)
     before = llm.usage.copy()
     start = time.perf_counter()
     try:
@@ -24,6 +27,9 @@ def attempt(rec, fields, llm, operation):
 
 
 def skip_recovery(rec, fields, methods):
+    from .resume import key
     for method in methods:
+        if hasattr(rec, 'previous') and key({**fields, 'method': method}) in rec.previous:
+            continue
         rec.row(**fields, method=method, status='skipped', success=None,
                 skip_reason='faulty_execution_unavailable')

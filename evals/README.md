@@ -41,7 +41,7 @@ usage, then continue independent conditions/tasks. A missing faulty execution ca
 its dependent recovery methods to be `skipped` (success unknown), not counted as
 successful or failed recovery. Clean-baseline errors leave `clean_success=null` for
 later conditions. Model/task failures and execution errors must be reported separately.
-No automatic retry/resume or replacement of failed scores. After all work finishes,
+No automatic retry or replacement of failed scores. Explicit resume is supported below. After all work finishes,
 the command exits nonzero if any condition/task errored; explicit cancellation still
 stops scheduling. Provider bodies, exception messages, and credentials are not saved. Provider URL and key environment/file options are in `--help`.
 
@@ -102,3 +102,17 @@ Historical reports, old manifests, AWS helper scripts, and raw run artifacts are
 locally and ignored. The remote running jobs use their saved pre-cleanup source snapshot;
 this CLI cleanup does not modify those jobs. Completed old pilots are not included in
 this PR. The new two-provider comparison is incomplete; no new outcome is claimed here.
+
+## Resume a stopped batch
+
+Use the same provider/model, parameters, task limit, and worker count, with a new
+output directory and `--resume-from results/previous-run`. Completed rows and traces
+are copied unchanged; error/skipped rows are never retried. Missing conditions run
+from their beginning. Pending recovery restores the saved faulty world and provenance.
+The source run remains immutable. Configuration and artifact checks happen before
+inference. A `resume.json` records lineage; copied rows are not new inference cost.
+
+For old runs that recorded only a task-level exception, `--resume-errors FILE` can
+import explicitly audited failed-condition rows. It rejects overwriting any saved
+condition. Unrecorded partial calls from an interrupted condition remain an accounting
+limitation; resuming cannot recover their exact token cost or hidden model state.

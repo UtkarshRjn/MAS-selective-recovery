@@ -226,6 +226,9 @@ def cmd_run(args):
                       effective_fault_types=['bad_patch', 'drop_requirement', 'requirement_hijack',
                                              'semantic_mutation', 'tester_timeout', 'false_test_report', 'stale_report'])
     (out / 'config.json').write_text(json.dumps(config, indent=2))
+    if getattr(args, 'resume_from', None):
+        from .resume import import_previous
+        import_previous(args.resume_from, out, config, manifest, getattr(args, 'resume_errors', None))
     execute_cases(manifest['cases'], args.workers, out,
                   lambda case, task_out, stop: run_case(
                       case, args, connection, task_out, stop))
@@ -283,7 +286,7 @@ def execute_cases(cases, workers, out, worker):
         if case is None or stop.is_set():
             return
         task_out = out / 'tasks' / case['name']
-        task_out.mkdir(parents=True, exist_ok=False)
+        task_out.mkdir(parents=True, exist_ok=True)
         states[case['name']] = {'status': 'running'}
         pending[pool.submit(worker, case, task_out, stop)] = case['name']
 
@@ -349,7 +352,11 @@ def run_case(case, args, connection, out, stop):
                          send_temperature=not getattr(args, 'omit_temperature', False),
                          send_json_mode=not getattr(args, 'no_json_mode', False),
                          token_limit_field=getattr(args, 'token_limit_field', 'max_tokens'))
-    rec = Recorder(out)
+    if getattr(args, 'resume_from', None):
+        from .resume import ResumeRecorder
+        rec = ResumeRecorder(out)
+    else:
+        rec = Recorder(out)
     try:
         task, _, catalog = make_coding_task(case['name'])
         from .conditions import attempt
@@ -393,6 +400,8 @@ def add_cli(sub):
         if action == 'validate':
             a.add_argument('--report', default='results/mbpp-validation.json')
         if action == 'run':
+            a.add_argument('--resume-from', help='Stopped source run; writes a new continuation directory')
+            a.add_argument('--resume-errors', help='Explicit failed-condition rows missing from a legacy source run')
             a.add_argument('--execute-model', action='store_true')
             a.add_argument('--workers', type=int, default=1, help='Concurrent task examples; stages stay sequential')
             a.add_argument('--phase', choices=['clean', 'full'], default='full')

@@ -29,3 +29,9 @@ def test_condition_errors_surface_only_after_all_tasks_finish(tmp_path):
     states = json.loads((tmp_path/'run_status.json').read_text())['tasks']
     assert states['bad']['status'] == 'completed_with_errors'
     assert states['next']['status'] == 'completed'
+
+
+def test_null_model_content_is_explicit_error_not_unhandled_json_typeerror():
+    from agentrec.llm import parse_json_object
+    with pytest.raises(ValueError, match='non-text'):
+        parse_json_object(None)
