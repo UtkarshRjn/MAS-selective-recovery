@@ -12,13 +12,13 @@ from agentrec.llm import Usage, MockLLM
 from agentrec.programs import PROGRAMS, broken
 from agentrec.coding import make_coding_task
 from agentrec.runner import run_workflow, Recorder
-from agentrec.phase1 import audit_coding, extended_case, run_travel
+from agentrec.phase1 import audit_coding, run_conditions
 from agentrec import mbpp
 
 
 @pytest.fixture
 def fixture_case(monkeypatch):
-    case = next(c for c in json.loads(Path('evals/mbpp-pilot.json').read_text())['cases'] if c['task_id'] == 7)
+    case = next(c for c in json.loads(Path('evals/mbpp-50.json').read_text())['cases'] if c['task_id'] == 7)
     monkeypatch.setitem(PROGRAMS, case['name'], {**case, 'benchmark': 'mbpp', 'image': 'unused'})
     def evaluate(source, program, split):
         passed = source == case['reference']
@@ -113,42 +113,6 @@ def test_verifier_rechecks_timeout_and_accounts_extra_calls(fixture_case):
     assert audit_coding(task,w,p)['verification_llm_calls'] == 5
 
 
-def test_complete_extended_schedule_and_fixture_controls(fixture_case, tmp_path):
-    case=fixture_case
-    task,_,catalog=make_coding_task(case['name'])
-    rec=Recorder(tmp_path)
-    try:
-        extended_case(case,SimpleNamespace(llm_seed=0,include_travel=False),Answers(case),rec,
-                      task,catalog,{'success':True},Event())
-    finally:
-        rec.rows.close()
-    rows=[json.loads(s) for s in (tmp_path/'rows.jsonl').read_text().splitlines()]
-    controlled=[r for r in rows if r.get('controlled_fixture')]
-    assert len(controlled)==8  # two scenarios, each control/none/verify/restart
-    for scenario in {r['scenario'] for r in controlled}:
-        group=[r for r in controlled if r['scenario']==scenario]
-        faulty=next(r for r in group if r['method']=='none')
-        assert faulty['fault_fired'] and faulty['compound_scenario']
-        control=next(r for r in group if r['method']=='truthful_control')
-        assert not control['fault_fired']
-    assert all('invalid_code_generation_tokens' in r for r in rows)
-
-
-def test_stateful_unauthorized_effect_survives_restart(tmp_path):
-    rec=Recorder(tmp_path)
-    try:
-        run_travel(MockLLM(),rec,seed=0)
-    finally:
-        rec.rows.close()
-    rows=[json.loads(s) for s in (tmp_path/'rows.jsonl').read_text().splitlines()]
-    malicious=[r for r in rows if r['scenario'].startswith('malicious_instruction')]
-    faulty=next(r for r in malicious if r['method']=='none')
-    restarted=next(r for r in malicious if r['method']=='restart')
-    assert faulty['unauthorized_emails']>0
-    assert restarted['unauthorized_emails']>0 and restarted['irreversible']>0
-    assert not restarted['strict_success']
-
-
 def test_report_fixture_numeric_fallback_uses_only_feedback(fixture_case, monkeypatch):
     from agentrec import phase1
     calls = []
@@ -162,29 +126,12 @@ def test_report_fixture_numeric_fallback_uses_only_feedback(fixture_case, monkey
     assert len(calls) == 3 and all(split == 'feedback' for _, split in calls)
 
 
-def test_travel_does_not_require_unrequested_refund_text(tmp_path, monkeypatch):
-    from agentrec import checker
-    original = checker.check
-    def without_refund_text(world, truth):
-        result = original(world, truth)
-        result['refund_ok'] = False
-        return result
-    monkeypatch.setattr(checker, 'check', without_refund_text)
-    rec = Recorder(tmp_path)
-    try:
-        run_travel(MockLLM(), rec, seed=0)
-    finally:
-        rec.rows.close()
-    clean = json.loads((tmp_path/'rows.jsonl').read_text().splitlines()[0])
-    assert clean['success'] and clean['strict_success'] and not clean['refund_ok']
-
-
 def test_full_schedule_covers_all_fault_families_and_recovery_methods(fixture_case, tmp_path):
     case = fixture_case
     task, _, catalog = make_coding_task(case['name'])
     rec = Recorder(tmp_path)
     try:
-        extended_case(case, SimpleNamespace(phase='full', llm_seed=0, include_travel=False,
+        run_conditions(case, SimpleNamespace(llm_seed=0,
                       include_authorization=False), Answers(case), rec, task, catalog,
                       {'success': True}, Event())
     finally:

@@ -6,7 +6,7 @@ import time
 from .benchmark_faults import fingerprint
 from .coding import check_coding
 from .faults import FaultSpec
-from .programs import PROGRAMS, broken, run_suite
+from .programs import PROGRAMS, run_suite
 from .recovery import coarse_taint
 
 
@@ -93,7 +93,7 @@ def qualify_report_fixture(case):
 
 
 
-def extended_case(case, args, llm, rec, task, catalog, clean, stop):
+def run_conditions(case, args, llm, rec, task, catalog, clean, stop):
     from .runner import run_workflow, RECOVER
     common = {'task_id': case['task_id'], 'seed': args.llm_seed, 'dataset': 'mbpp',
               'clean_success': clean['success']}
@@ -104,11 +104,10 @@ def extended_case(case, args, llm, rec, task, catalog, clean, stop):
     schedules = [(kind, stage, {}) for kind, stages in (
         ('semantic_mutation', ('coder', 'coder:2')),
         ('tester_timeout', ('tester', 'tester:2'))) for stage in stages]
-    if getattr(args, 'phase', 'extended') == 'full':
-        schedules += [(kind, stage, {}) for kind, stages in (
-            ('bad_patch', ('coder', 'coder:2')),
-            ('drop_requirement', ('spec', 'spec:2')),
-            ('requirement_hijack', ('spec', 'spec:2'))) for stage in stages]
+    schedules += [(kind, stage, {}) for kind, stages in (
+        ('bad_patch', ('coder', 'coder:2')),
+        ('drop_requirement', ('spec', 'spec:2')),
+        ('requirement_hijack', ('spec', 'spec:2'))) for stage in stages]
     program = PROGRAMS[task['name']]
     # Qualify synthetic fixtures using feedback only. Final tests never choose faults.
     reference = program['reference']
@@ -135,50 +134,13 @@ def extended_case(case, args, llm, rec, task, catalog, clean, stop):
         vw, vp, vi, vs = run_workflow(task, catalog, llm, spec, verify=True, scenario=fixture)
         record_coding(rec, base, 'verify', task, vw, vp, vs, vi)
         if inj.fired:
-            methods = ('restart', 'suffix', 'coarse') if getattr(args, 'phase', 'extended') == 'full' else ('restart',)
+            methods = ('restart', 'suffix', 'coarse')
             for method in methods:
                 rw, rp = copy.deepcopy(w), copy.deepcopy(p)
                 recovery = RECOVER[method](task, rw, llm, rp)
                 total = {k: stats['usage'][k] + recovery.usage[k] for k in recovery.usage}
                 record_coding(rec, {**base, 'fault_fired': True}, method, task, rw,
                               recovery.prov, {**recovery.row(), 'total_usage': total})
-    if getattr(args, 'include_travel', False) and case['task_id'] == args.stateful_task_id:
-        run_travel(llm, rec, seed=args.llm_seed)
     if getattr(args, 'include_authorization', False) and case['task_id'] == args.stateful_task_id:
         from .authorization import run_authorization_cases
         run_authorization_cases(llm, rec, seed=args.llm_seed)
-
-
-def run_travel(llm, rec, seed=0):
-    """One simulated stateful task with clean, faulty, verify and restart conditions."""
-    from .tasks import make_task
-    from .checker import check
-    from .runner import run_workflow, RECOVER
-    task, truth, catalog = make_task(seed)
-    w, p, inj, stats = run_workflow(task, catalog, llm)
-    def save(name, method, world, prov, metrics, injector=None):
-        result = check(world, truth)
-        # Strengthen inherited success: historical wrong emails cannot be erased,
-        # Refundable status is auxiliary: the original task does not request it.
-        strict = result['success'] and result['wrong_emails_to_user'] == 0
-        exposed = coarse_taint(prov)
-        steps = [s for s in prov.of_kind('step') if s.id in exposed]
-        rec.row(dataset='travel_simulated', task_id=seed, scenario=name, fault=name,
-                method=method, **result, strict_success=strict,
-                fault_fired=injector.fired > 0 if injector else None,
-                exposed_stages=[s.key for s in steps],
-                irreversible_effects=sum(n.data.get('class') == 'irreversible' for n in prov.of_kind('effect')),
-                **metrics)
-        rec.trace(f'travel_{seed}_{name}_{method}', prov, world)
-        print(f'travel {name} {method} strict_success={strict}', flush=True)
-    save('clean', 'clean', w, p, stats, inj)
-    for spec in [FaultSpec('malicious_instruction', 'research_hotels', True),
-                 FaultSpec('bad_argument', 'book_flight', False)]:
-        w, p, inj, stats = run_workflow(task, catalog, llm, spec)
-        save(spec.name, 'none', w, p, stats, inj)
-        vw, vp, vi, vs = run_workflow(task, catalog, llm, spec, verify=True)
-        save(spec.name, 'verify', vw, vp, vs, vi)
-        if inj.fired:
-            rw, rp = copy.deepcopy(w), copy.deepcopy(p)
-            recovery = RECOVER['restart'](task, rw, llm, rp)
-            save(spec.name, 'restart', rw, recovery.prov, recovery.row())

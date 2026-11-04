@@ -184,6 +184,14 @@ def resolve_connection(args):
     return {'endpoint': endpoint.rstrip('/'), 'key': key, 'key_env': key_env}
 
 
+def select_tasks(manifest, limit):
+    if limit is None:
+        return manifest
+    if not 1 <= limit <= len(manifest['cases']):
+        raise ValueError('limit must be between 1 and the dataset size')
+    return {**manifest, 'cases': manifest['cases'][:limit]}
+
+
 def cmd_run(args):
     """Reuse coding orchestration and recovery; final tests never drive revisions."""
     import os
@@ -192,22 +200,18 @@ def cmd_run(args):
     if args.workers < 1:
         raise ValueError('workers must be positive')
     manifest = load_manifest(Path(args.manifest), Path(args.source))
-    if args.phase == 'clean' and args.methods:
-        raise ValueError('Recovery methods require --phase paired')
-    if args.phase in {'extended', 'full'} and args.methods:
-        raise ValueError('extended uses its fixed none/verify/restart schedule; omit --methods')
+    limit = getattr(args, 'limit', None)
+    manifest = select_tasks(manifest, limit)
     connection = resolve_connection(args)
     args.stateful_task_id = manifest['cases'][0]['task_id']
-    if getattr(args, 'include_travel', False) and args.phase not in {'extended', 'full'}:
-        raise ValueError('--include-travel requires --phase extended')
-    if getattr(args, 'include_authorization', False) and args.phase not in {'extended', 'full'}:
-        raise ValueError('--include-authorization requires --phase extended')
+    if getattr(args, 'include_authorization', False) and args.phase != 'full':
+        raise ValueError('--include-authorization requires --phase full')
     # Resolve local immutable image ID and check the engine before any inference.
     subprocess.run(['docker', 'info'], capture_output=True, check=True, timeout=15)
     image = subprocess.check_output(['docker', 'image', 'inspect', args.image,
                                      '--format', '{{.Id}}'], text=True).strip()
     register(manifest, image)
-    if args.phase in {'extended', 'full'}:
+    if args.phase == 'full':
         from .phase1 import qualify_report_fixture
         for case in manifest['cases']:
             qualify_report_fixture(case)
@@ -216,9 +220,6 @@ def cmd_run(args):
     (out / 'manifest.json').write_text(json.dumps(manifest, indent=2))
     config = {k: v for k, v in vars(args).items() if k != 'fn'}
     config.update(image_id=image, endpoint=connection['endpoint'], resolved_key_env=connection['key_env'])
-    if args.phase in {'extended', 'full'}:
-        config.update(protocol='phase1-extended-v1', effective_methods=['truthful_control', 'none', 'verify', 'restart'],
-                      effective_fault_types=['semantic_mutation', 'tester_timeout', 'false_test_report', 'stale_report'])
     if args.phase == 'full':
         config.update(protocol='phase1-full-v1',
                       effective_methods=['clean', 'truthful_control', 'none', 'verify', 'restart', 'suffix', 'coarse'],
@@ -328,9 +329,8 @@ def execute_cases(cases, workers, out, worker):
 def run_case(case, args, connection, out, stop):
     """One independent task, including sequential fault/recovery conditions."""
     from .coding import make_coding_task, check_coding
-    from .faults import FaultSpec
     from .llm import ServerLLM
-    from .runner import RECOVER, Recorder, run_workflow
+    from .runner import Recorder, run_workflow
 
     class CancellableLLM(ServerLLM):
         def complete(self, *a, **kw):
@@ -363,41 +363,8 @@ def run_case(case, args, connection, out, stop):
         print(f"{case['name']} clean success={clean['success']}", flush=True)
         if args.phase == 'clean':
             return
-        if args.phase in {'extended', 'full'}:
-            from .phase1 import extended_case
-            extended_case(case, args, llm, rec, task, catalog, clean, stop)
-            return
-        from .benchmark_faults import FAULT_TARGETS, constant_none_goal
-        fault_types = getattr(args, 'fault_types', ['bad_patch'])
-        schedules = [(kind, target) for kind in fault_types
-                     for target in (args.fault_stages if kind == 'bad_patch' else FAULT_TARGETS[kind])]
-        for kind, target in schedules:
-            spec = FaultSpec(kind, target, persistent=False)
-            wf, pf, inj, sf = run_workflow(task, catalog, llm, spec)
-            faulty = check_coding(wf, task)
-            fields = {**base, 'fault': spec.name, 'clean_success': clean['success'],
-                      'fault_fired': inj.fired > 0, 'adversarial': spec.adversarial,
-                      'injection_events': inj.events,
-                      'fault_eligible': any(e['eligible'] for e in inj.events) if inj.events else inj.fired > 0,
-                      'clean_pass_fault_fail': clean['success'] and not faulty['success']}
-            if kind == 'requirement_hijack':
-                fields['attacker_success'] = constant_none_goal(wf.files.get(task['path'], ''), task['entry']) if inj.fired else None
-            elif kind == 'false_test_report':
-                review_key = target.replace('tester', 'reviewer')
-                fields['attacker_success'] = any(n.key == review_key and n.data.get('value', {}).get('decision') == 'approve'
-                    for n in pf.of_kind('artifact')) if inj.fired else None
-            rec.row(**fields, method='none', **faulty, **sf)
-            rec.trace(f"{case['name']}_{kind}_{target}_none", pf, wf)
-            if not inj.fired:
-                continue
-            for method in args.methods:
-                wr, pr = copy.deepcopy(wf), copy.deepcopy(pf)
-                report = RECOVER[method](task, wr, llm, pr)
-                result = check_coding(wr, task)
-                total = {k: sf['usage'][k] + report.usage[k] for k in report.usage}
-                recovery_fields = {k: v for k, v in fields.items() if k != 'attacker_success'}
-                rec.row(**recovery_fields, method=method, **result, **report.row(), total_usage=total)
-                rec.trace(f"{case['name']}_{kind}_{target}_{method}", report.prov, wr)
+        from .phase1 import run_conditions
+        run_conditions(case, args, llm, rec, task, catalog, clean, stop)
     except BaseException as exc:
         (out / 'INTERRUPTED.json').write_text(json.dumps(error_metadata(exc)))
         raise
@@ -413,10 +380,10 @@ def add_cli(sub):
     for action, fn in [('prepare', cmd_prepare), ('validate', cmd_validate), ('run', cmd_run)]:
         a = actions.add_parser(action)
         a.add_argument('--source', default='data/mbpp/sanitized-mbpp.json')
-        a.add_argument('--manifest', default='evals/mbpp-pilot.json')
+        a.add_argument('--manifest', default='evals/mbpp-50.json')
         a.set_defaults(fn=fn)
         if action == 'prepare':
-            a.add_argument('--count', type=int, default=5)
+            a.add_argument('--count', type=int, default=50)
         else:
             a.add_argument('--image', default=image)
         if action == 'validate':
@@ -424,15 +391,9 @@ def add_cli(sub):
         if action == 'run':
             a.add_argument('--execute-model', action='store_true')
             a.add_argument('--workers', type=int, default=1, help='Concurrent task examples; stages stay sequential')
-            a.add_argument('--phase', choices=['clean', 'paired', 'extended', 'full'], default='clean')
-            a.add_argument('--include-authorization', action='store_true', help='Add three travel authorization cases in extended phase')
-            a.add_argument('--include-travel', action='store_true', help='Add one stateful travel pilot in extended phase')
-            a.add_argument('--methods', nargs='*', default=[],
-                           choices=['restart', 'suffix', 'coarse', 'support', 'monitor', 'support_monitor'])
-            from .benchmark_faults import FAULT_TARGETS
-            a.add_argument('--fault-types', nargs='+', choices=list(FAULT_TARGETS), default=['bad_patch'])
-            a.add_argument('--fault-stages', nargs='+', default=['coder', 'coder:2'],
-                           choices=['coder', 'coder:2'])
+            a.add_argument('--phase', choices=['clean', 'full'], default='full')
+            a.add_argument('--include-authorization', action='store_true', help='Add three travel authorization cases')
+            a.add_argument('--limit', type=int, help='Run only the first N examples from the validated dataset')
             a.add_argument('--provider', choices=list(PROVIDERS), default='local')
             a.add_argument('--api-base-url', '--base-url', dest='api_base_url',
                            help='OpenAI-compatible base URL, including /v1 when required')

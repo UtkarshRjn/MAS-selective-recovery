@@ -214,13 +214,9 @@ ln -s ~/.venvs/agent-recovery .venv && uv sync
   dependency inference should improve on.
 - The world is fully simulated. No container or filesystem snapshots yet.
 
-## Benchmark example expansion
+## Phase 1 experiment
 
-The coding workflow now supports a pinned 5-task MBPP pilot and 50-task expansion,
-with containerized tests and separate feedback/final assertions. A snapshot of
-50 travel instances is also available. See [expansion instructions and limitations](evals/EXPANSION.md).
-The suite includes seven coding fault families, bounded forward verification, and three
-simulated travel authorization cases. See [Phase 1 protocol](evals/PHASE1.md),
-[authorization scenarios](evals/AUTHORIZATION.md), and [saved evaluation summaries](evals/evidence/README.md).
-Raw traces and credentials are excluded from Git. Model failures and skipped injections
-are retained; pilot results are not general robustness guarantees.
+The current experiment adds 50 pinned MBPP tasks, seven fault families, and three
+simulated travel authorization cases. Run the 10-task pilot with `--limit 10`.
+See [setup, commands, and metrics](evals/README.md). Historical results and deployment
+helpers are local-only; credentials and raw traces are excluded from Git.
