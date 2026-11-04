@@ -51,14 +51,18 @@ def make_llm(args: argparse.Namespace) -> LLM:
 
 
 def run_workflow(
-    task: dict[str, Any], catalog: Catalog, llm: LLM, spec: FaultSpec | None = None, verify: bool = False
+    task: dict[str, Any], catalog: Catalog, llm: LLM, spec: FaultSpec | None = None, verify: bool = False, scenario: dict[str, str] | None = None
 ) -> tuple[World, Provenance, Injector, dict[str, Any]]:
     world = World(*catalog)
+    if task.get("authorization_policy"):
+        from .authorization import initialize_world
+        initialize_world(world, task)
     injector = Injector(spec)
-    ctx = RunContext(task, world, llm, injector=injector, verify=verify)
+    ctx = RunContext(task, world, llm, injector=injector, verify=verify, scenario=scenario or {})
     before, t0 = llm.usage.copy(), time.perf_counter()
     run_agents(ctx)
-    stats = {"usage": llm.usage.since(before), "wall_s": round(time.perf_counter() - t0, 3)}
+    stats = {"usage": llm.usage.since(before), "wall_s": round(time.perf_counter() - t0, 3),
+             "provenance_write_s": getattr(ctx.prov, "write_s", 0.0)}
     return world, ctx.prov, injector, stats
 
 
@@ -83,7 +87,7 @@ class Recorder:
     def trace(self, name: str, prov: Provenance, world: World) -> None:
         data = {
             "provenance": prov.to_dict(),
-            "world": {"bookings": world.bookings, "outbox": world.outbox, "files": world.files},
+            "world": {"bookings": world.bookings, "outbox": world.outbox, "files": world.files, "action_history": world.action_history},
         }
         (self.out_dir / "traces" / f"{name}.json").write_text(json.dumps(data, indent=1))
 
@@ -208,6 +212,9 @@ def main() -> None:
     p.add_argument("--seed", type=int, default=0, help="first task seed")
     p.add_argument("--out", default="results")
     sub = p.add_subparsers(dest="cmd", required=True)
+
+    from .mbpp import add_cli
+    add_cli(sub)
 
     c = sub.add_parser("clean")
     c.add_argument("--tasks", type=int, default=10)

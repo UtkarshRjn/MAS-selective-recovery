@@ -106,6 +106,24 @@ class Provenance:
 
     def to_dict(self) -> dict[str, Any]:
         return {
+            "model_calls": getattr(self, "model_calls", []),
             "nodes": [asdict(n) for n in sorted(self.nodes.values(), key=lambda n: n.seq)],
             "edges": [{"src": s, "dst": d, "type": t} for s, d, t in self.edges],
         }
+
+
+# Measure provenance writes only; excludes graph traversal, serialization and audit.
+def _timed_write(fn):
+    from functools import wraps
+    from time import perf_counter
+    @wraps(fn)
+    def wrapped(self, *args, **kwargs):
+        start = perf_counter()
+        try:
+            return fn(self, *args, **kwargs)
+        finally:
+            self.write_s = getattr(self, "write_s", 0.0) + perf_counter() - start
+    return wrapped
+
+for _method in ("add_step", "add_artifact", "add_input", "add_effect", "update", "add_support"):
+    setattr(Provenance, _method, _timed_write(getattr(Provenance, _method)))

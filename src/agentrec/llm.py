@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import copy
 import re
 import time
 from dataclasses import dataclass, replace
@@ -53,7 +54,7 @@ def parse_json_object(text: str) -> dict[str, Any]:
 
 
 class ServerLLM:
-    """Client for llama.cpp's OpenAI-compatible `llama-server`.
+    """Client for OpenAI-compatible chat endpoints, including llama-server.
 
     Run the server with `--parallel 1`: concurrent slots batch requests together, which
     changes floating-point results and breaks run-to-run reproducibility at temperature 0.
@@ -66,8 +67,23 @@ class ServerLLM:
         seed: int = 0,
         max_tokens: int = 768,
         timeout_s: float = 600.0,
+        model: str | None = None,
+        api_key: str | None = None,
+        send_seed: bool = True,
+        send_temperature: bool = True,
+        send_json_mode: bool = True,
+        token_limit_field: str = "max_tokens",
     ) -> None:
-        self.client = httpx.Client(base_url=base_url, timeout=timeout_s)
+        if token_limit_field not in {"max_tokens", "max_completion_tokens"}:
+            raise ValueError("Unsupported token limit field")
+        self.send_seed = send_seed
+        self.send_temperature = send_temperature
+        self.send_json_mode = send_json_mode
+        self.token_limit_field = token_limit_field
+        headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+        self.client = httpx.Client(base_url=base_url, timeout=timeout_s, headers=headers)
+        self.recorded_calls: list[dict[str, Any]] = []
+        self.model = model
         self.temperature = temperature
         self.seed = seed
         self.max_tokens = max_tokens
@@ -79,12 +95,16 @@ class ServerLLM:
     def complete(self, messages: Messages, *, json_mode: bool = False, max_tokens: int | None = None) -> str:
         body: dict[str, Any] = {
             "messages": messages,
-            "temperature": self.temperature,
-            "seed": self.seed,
-            "max_tokens": self.max_tokens if max_tokens is None else max_tokens,
+            self.token_limit_field: self.max_tokens if max_tokens is None else max_tokens,
         }
-        if json_mode:
+        if self.send_seed:
+            body["seed"] = self.seed
+        if self.send_temperature:
+            body["temperature"] = self.temperature
+        if json_mode and self.send_json_mode:
             body["response_format"] = {"type": "json_object"}
+        if self.model:
+            body["model"] = self.model
         t0 = time.perf_counter()
         resp = self.client.post("/chat/completions", json=body)
         resp.raise_for_status()
@@ -97,7 +117,13 @@ class ServerLLM:
         return data["choices"][0]["message"]["content"]
 
     def chat(self, agent: str, messages: Messages) -> dict[str, Any]:
-        return parse_json_object(self.complete(messages, json_mode=True))
+        before = self.usage.copy()
+        raw = self.complete(messages, json_mode=True)
+        result = parse_json_object(raw)
+        self.recorded_calls.append({"agent": agent, "messages": copy.deepcopy(messages),
+                                    "raw_response": raw, "parsed_response": copy.deepcopy(result),
+                                    "usage": self.usage.since(before)})
+        return result
 
 
 EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
