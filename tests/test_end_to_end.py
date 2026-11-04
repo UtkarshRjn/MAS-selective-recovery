@@ -5,7 +5,6 @@ import pytest
 from agentrec.checker import check
 from agentrec.faults import ATTACKER_EMAIL, FAULTS_BY_NAME, MISSING_EXEC_TOOL
 from agentrec.llm import MockLLM
-from agentrec.monitor import monitor_recover, support_monitor_recover
 from agentrec.recovery import coarse_lineage, full_restart, suffix_recover, support_recover
 from agentrec.runner import run_workflow
 from agentrec.tasks import make_task
@@ -76,20 +75,6 @@ def test_coarse_lineage_reuses_untainted_research(setup):
     assert check(world, truth)["final_correct"]
 
 
-class _RecordingLLM:
-    """Forwards to the mock and keeps the user prompt of each recovery call."""
-
-    def __init__(self, inner: MockLLM) -> None:
-        self.inner = inner
-        self.prompts: list[str] = []
-
-    @property
-    def usage(self):
-        return self.inner.usage
-
-    def chat(self, agent: str, messages):
-        self.prompts.append(messages[1]["content"])
-        return self.inner.chat(agent, messages)
 
 
 def test_suffix_reruns_later_step_that_did_not_read_the_fault(setup):
@@ -149,36 +134,8 @@ def test_support_keeps_the_flight_booking_when_only_the_hotel_claim_is_wrong(set
     assert check(coarse_world, truth)["success"]
 
 
-def test_support_monitor_notes_only_the_support_set(setup):
-    task, truth, catalog, llm = setup
-    world, prov, _, _ = run_workflow(task, catalog, llm, FAULTS_BY_NAME["false_refundable@research_hotels"])
-    plain_world, plain_prov = copy.deepcopy(world), copy.deepcopy(prov)
-    noted_world, noted_prov = copy.deepcopy(world), copy.deepcopy(prov)
-    plain = support_recover(task, plain_world, llm, plain_prov)
-    recorded = _RecordingLLM(llm)
-    noted = support_monitor_recover(task, noted_world, recorded, noted_prov)
-    assert noted.tainted_steps == plain.tainted_steps
-    assert recorded.prompts
-    assert all("FAULT_JSON:" in prompt and "false_refundable@research_hotels" in prompt for prompt in recorded.prompts)
-    assert check(noted_world, truth)["success"]
 
 
-def test_monitor_matches_coarse_and_notes_redone_steps(setup):
-    task, truth, catalog, llm = setup
-    world, prov, _, _ = run_workflow(task, catalog, llm, FAULTS_BY_NAME["fabrication@research_hotels"])
-    coarse_world, coarse_prov = copy.deepcopy(world), copy.deepcopy(prov)
-    mon_world, mon_prov = copy.deepcopy(world), copy.deepcopy(prov)
-
-    coarse = coarse_lineage(task, coarse_world, llm, coarse_prov)
-    recorded = _RecordingLLM(llm)
-    report = monitor_recover(task, mon_world, recorded, mon_prov)
-
-    assert report.tainted_steps == coarse.tainted_steps
-    assert report.steps_reused == coarse.steps_reused == 1
-    assert recorded.prompts
-    assert all("FAULT_JSON:" in prompt and "fabrication@research_hotels" in prompt for prompt in recorded.prompts)
-    assert all('"research_flights"' not in prompt for prompt in recorded.prompts)
-    assert check(mon_world, truth)["final_correct"]
 
 
 def _plan(prov):

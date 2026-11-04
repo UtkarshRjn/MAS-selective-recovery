@@ -6,8 +6,6 @@ so recovery quality is measured independently of fault detection.
   full_restart    undo every effect, then rerun the whole workflow
   coarse_lineage  undo only effects downstream of the fault, reuse untainted steps,
                   and rerun the rest; dependencies are everything in a step's context
-  monitor         same restart set as coarse lineage, plus a fault note on redone steps
-                  (see `monitor.monitor_recover`)
 
 The always-verify baseline is not a recovery method: it runs the workflow forward with a
 verifier call on every intermediate result (see `RunContext.verify`).
