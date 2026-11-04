@@ -35,9 +35,15 @@ be new. Five workers means five task examples in parallel; conditions within a t
 run sequentially. The three travel cases run once on the first worker.
 
 Defaults: temperature 0, seed 0, 2,048 tokens per call, 120-second API timeout. A seed
-cannot guarantee remote-model determinism. API errors stop new work and preserve
-completed rows; no automatic retry/resume. HTTP status is recorded without response
-bodies or credentials. Provider URL and key environment/file options are in `--help`.
+cannot guarantee remote-model determinism. Errors are isolated to individual conditions: record `status=error`, `success=false`,
+exception type/location, HTTP status when available, elapsed time and partial recorded
+usage, then continue independent conditions/tasks. A missing faulty execution causes
+its dependent recovery methods to be `skipped` (success unknown), not counted as
+successful or failed recovery. Clean-baseline errors leave `clean_success=null` for
+later conditions. Model/task failures and execution errors must be reported separately.
+No automatic retry/resume or replacement of failed scores. After all work finishes,
+the command exits nonzero if any condition/task errored; explicit cancellation still
+stops scheduling. Provider bodies, exception messages, and credentials are not saved. Provider URL and key environment/file options are in `--help`.
 
 ## Setup and faults
 

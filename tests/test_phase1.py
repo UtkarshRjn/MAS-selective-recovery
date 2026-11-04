@@ -145,3 +145,67 @@ def test_full_schedule_covers_all_fault_families_and_recovery_methods(fixture_ca
             assert {r['method'] for r in rows if r['scenario'] == row['scenario']} >= {
                 'none', 'verify', 'restart', 'suffix', 'coarse'}
     assert all('code_stage_correctness' in r for r in rows)
+
+
+@pytest.mark.parametrize('failure', ['verify_clean', 'faulty', 'restart'])
+def test_condition_errors_do_not_abort_other_conditions(fixture_case, tmp_path, monkeypatch, failure):
+    from agentrec import runner
+    case = fixture_case
+    task, _, catalog = make_coding_task(case['name'])
+    original = runner.run_workflow
+    fired = False
+    def run(task, catalog, model, spec=None, verify=False, scenario=None):
+        nonlocal fired
+        should_fail = (failure == 'verify_clean' and spec is None and verify) or (
+            failure == 'faulty' and spec and spec.type == 'semantic_mutation' and not verify)
+        if should_fail and not fired:
+            fired = True
+            raise TypeError('private error text')
+        return original(task, catalog, model, spec, verify=verify, scenario=scenario)
+    monkeypatch.setattr(runner, 'run_workflow', run)
+    if failure == 'restart':
+        def bad_restart(*args):
+            raise TypeError('private error text')
+        monkeypatch.setitem(runner.RECOVER, 'restart', bad_restart)
+    rec = Recorder(tmp_path)
+    try:
+        run_conditions(case, SimpleNamespace(llm_seed=0, include_authorization=False),
+                       Answers(case), rec, task, catalog, {'success': True}, Event())
+    finally:
+        rec.rows.close()
+    text = (tmp_path/'rows.jsonl').read_text()
+    rows = [json.loads(s) for s in text.splitlines()]
+    errors = [r for r in rows if r['status'] == 'error']
+    assert errors and all(r['error_type'] == 'TypeError' and r['success'] is False for r in errors)
+    assert 'private error text' not in text
+    assert rows[-1]['scenario'] == 'controlled_stale_report@tester:2'
+    assert rows[-1]['method'] == 'coarse' and rows[-1]['status'] == 'completed'
+    if failure == 'faulty':
+        group = [r for r in rows if r['scenario'] == 'semantic_mutation@coder']
+        assert next(r for r in group if r['method'] == 'verify')['status'] == 'completed'
+        assert {r['method'] for r in group if r['status'] == 'skipped'} == {'restart', 'suffix', 'coarse'}
+
+
+def test_clean_error_does_not_prevent_fault_experiments(fixture_case, tmp_path, monkeypatch):
+    from agentrec import runner, llm
+    class Model(Answers):
+        def __init__(self, **kwargs):
+            super().__init__(fixture_case)
+            self.client = SimpleNamespace(close=lambda: None)
+    monkeypatch.setattr(llm, 'ServerLLM', Model)
+    original = runner.run_workflow
+    first = True
+    def run(*args, **kwargs):
+        nonlocal first
+        if first:
+            first = False
+            raise TypeError('clean failed')
+        return original(*args, **kwargs)
+    monkeypatch.setattr(runner, 'run_workflow', run)
+    args = SimpleNamespace(model='fake', temperature=0, llm_seed=0, max_tokens=100,
+                           request_timeout=1, phase='full', include_authorization=False)
+    mbpp.run_case(fixture_case, args, {'endpoint': 'unused', 'key': None}, tmp_path, Event())
+    rows = [json.loads(s) for s in (tmp_path/'rows.jsonl').read_text().splitlines()]
+    assert rows[0]['method'] == 'clean' and rows[0]['status'] == 'error'
+    assert rows[-1]['method'] == 'coarse' and rows[-1]['status'] == 'completed'
+    assert all(r['clean_success'] is None for r in rows[1:])

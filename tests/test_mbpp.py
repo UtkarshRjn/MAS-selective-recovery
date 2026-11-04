@@ -162,27 +162,25 @@ def test_parallel_scheduler_overlaps_and_merges_in_manifest_order(tmp_path):
     assert all(s['status'] == 'completed' for s in status['tasks'].values())
 
 
-def test_failure_stops_new_tasks_and_preserves_partial_rows(tmp_path):
+def test_task_failure_does_not_cancel_running_or_queued_tasks(tmp_path):
     from threading import Barrier
     barrier = Barrier(2)
     def worker(case, out, stop):
-        barrier.wait(timeout=3)
+        if case['name'] != 'queued':
+            barrier.wait(timeout=3)
+        assert not stop.is_set()
+        (out/'rows.jsonl').write_text(json.dumps({'task_id': case['name']})+'\n')
         if case['name'] == 'bad':
-            (out/'rows.jsonl').write_text('{"method":"clean"}\n')
             raise ValueError('secret should not appear in status')
-        assert stop.wait(timeout=3)
-        raise mbpp.TaskCancelled()
     cases = [{'name': name} for name in ['bad', 'running', 'queued']]
-    with pytest.raises(RuntimeError, match='Batch stopped'):
+    with pytest.raises(RuntimeError, match='Batch finished with errors'):
         mbpp.execute_cases(cases, 2, tmp_path, worker)
     text = (tmp_path/'run_status.json').read_text()
     states = json.loads(text)['tasks']
     assert states['bad']['status'] == 'failed'
-    assert states['running']['status'] == 'cancelled'
-    assert states['queued']['status'] == 'not_started'
+    assert states['running']['status'] == states['queued']['status'] == 'completed'
     assert 'secret' not in text
-    assert json.loads((tmp_path/'rows.jsonl').read_text()) == {'method':'clean'}
-
+    assert len((tmp_path/'rows.jsonl').read_text().splitlines()) == 3
 
 def test_invalid_worker_count_rejected_before_start(tmp_path):
     with pytest.raises(ValueError, match='positive'):
@@ -202,6 +200,7 @@ def test_parallel_tasks_have_independent_clients_and_traces(registered, monkeypa
     class Model:
         def __init__(self, **kwargs):
             self.client = Client()
+            self.usage = llm.Usage()
             clients.append(self)
     monkeypatch.setattr(llm, 'ServerLLM', Model)
     def run(task, catalog, model):

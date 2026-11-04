@@ -71,10 +71,10 @@ def record_coding(rec, base, method, task, world, prov, stats, inj=None):
                       adversarial=inj.spec.adversarial if inj.spec else False)
     # Tracking time also occurs in stats for forward runs; keep one field.
     audit = audit_coding(task, world, prov)
-    rec.row(**fields, method=method, **check_coding(world, task),
-            **{k: v for k, v in stats.items() if k not in audit}, **audit)
     label = f"{task['name']}_{base['scenario']}_{method}"
     rec.trace(label, prov, world)
+    rec.row(**fields, method=method, status='completed', **check_coding(world, task),
+            **{k: v for k, v in stats.items() if k not in audit}, **audit)
     print(label, 'completed', flush=True)
 
 
@@ -97,10 +97,15 @@ def run_conditions(case, args, llm, rec, task, catalog, clean, stop):
     from .runner import run_workflow, RECOVER
     common = {'task_id': case['task_id'], 'seed': args.llm_seed, 'dataset': 'mbpp',
               'clean_success': clean['success']}
-    # Verification is also measured without faults, to expose its own failures/cost.
-    w, p, inj, stats = run_workflow(task, catalog, llm, verify=True)
-    record_coding(rec, {**common, 'fault': None, 'scenario': 'verify_clean'},
-                  'verify', task, w, p, stats, inj)
+    from .conditions import attempt, skip_recovery
+    def forward(base, method, spec=None, fixture=None, verify=False):
+        def execute():
+            result = run_workflow(task, catalog, llm, spec, verify=verify, scenario=fixture)
+            w, p, inj, stats = result
+            record_coding(rec, base, method, task, w, p, stats, inj)
+            return result
+        return attempt(rec, {**base, 'method': method}, llm, execute)
+    forward({**common, 'fault': None, 'scenario': 'verify_clean'}, 'verify', verify=True)
     schedules = [(kind, stage, {}) for kind, stages in (
         ('semantic_mutation', ('coder', 'coder:2')),
         ('tester_timeout', ('tester', 'tester:2'))) for stage in stages]
@@ -125,22 +130,24 @@ def run_conditions(case, args, llm, rec, task, catalog, clean, stop):
         base = {**common, 'fault': spec.name, 'scenario': scenario,
                 'controlled_fixture': bool(fixture), 'compound_scenario': bool(fixture)}
         if fixture:
-            # Exact same fixed code/spec prefix and task, truthful report delivery.
-            w, p, inj, stats = run_workflow(task, catalog, llm, scenario=fixture)
-            record_coding(rec, base, 'truthful_control', task, w, p, stats, inj)
-        w, p, inj, stats = run_workflow(task, catalog, llm, spec, scenario=fixture)
-        record_coding(rec, base, 'none', task, w, p, stats, inj)
-        # Always-verify is a forward baseline, not oracle-localized recovery.
-        vw, vp, vi, vs = run_workflow(task, catalog, llm, spec, verify=True, scenario=fixture)
-        record_coding(rec, base, 'verify', task, vw, vp, vs, vi)
+            forward(base, 'truthful_control', fixture=fixture)
+        faulty = forward(base, 'none', spec, fixture)
+        forward(base, 'verify', spec, fixture, verify=True)
+        methods = ('restart', 'suffix', 'coarse')
+        if faulty is None:
+            skip_recovery(rec, base, methods)
+            continue
+        w, p, inj, stats = faulty
         if inj.fired:
-            methods = ('restart', 'suffix', 'coarse')
             for method in methods:
-                rw, rp = copy.deepcopy(w), copy.deepcopy(p)
-                recovery = RECOVER[method](task, rw, llm, rp)
-                total = {k: stats['usage'][k] + recovery.usage[k] for k in recovery.usage}
-                record_coding(rec, {**base, 'fault_fired': True}, method, task, rw,
-                              recovery.prov, {**recovery.row(), 'total_usage': total})
+                def recover():
+                    rw, rp = copy.deepcopy(w), copy.deepcopy(p)
+                    recovery = RECOVER[method](task, rw, llm, rp)
+                    total = {k: stats['usage'][k] + recovery.usage[k] for k in recovery.usage}
+                    record_coding(rec, {**base, 'fault_fired': True}, method, task, rw,
+                                  recovery.prov, {**recovery.row(), 'total_usage': total})
+                    return recovery
+                attempt(rec, {**base, 'method': method, 'fault_fired': True}, llm, recover)
     if getattr(args, 'include_authorization', False) and case['task_id'] == args.stateful_task_id:
         from .authorization import run_authorization_cases
         run_authorization_cases(llm, rec, seed=args.llm_seed)

@@ -245,7 +245,7 @@ class TaskCancelled(Exception):
 
 
 def execute_cases(cases, workers, out, worker):
-    """Bound submissions; stop scheduling on failure; preserve and merge partial rows."""
+    """Bound submissions; isolate task failures; preserve and merge every completed row."""
     from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
     from threading import Event
     import time
@@ -293,11 +293,12 @@ def execute_cases(cases, workers, out, worker):
             future.result()
         except TaskCancelled:
             states[name] = {'status': 'cancelled'}
-        except BaseException as exc:
+        except Exception as exc:
             states[name] = {'status': 'failed', **error_metadata(exc)}
-            stop.set()
         else:
-            states[name] = {'status': 'completed'}
+            rows = out / 'tasks' / name / 'rows.jsonl'
+            errors = sum(json.loads(line).get('status') == 'error' for line in rows.read_text().splitlines()) if rows.exists() else 0
+            states[name] = {'status': 'completed_with_errors' if errors else 'completed', 'condition_errors': errors}
 
     try:
         for _ in range(min(workers, len(cases))):
@@ -307,7 +308,7 @@ def execute_cases(cases, workers, out, worker):
             done, _ = wait(pending, return_when=FIRST_COMPLETED)
             for future in done:
                 collect(future)
-            # Inspect every completed future for failures before scheduling more.
+            # A failed task does not cancel unrelated running or queued tasks.
             if not stop.is_set():
                 for _ in done:
                     submit()
@@ -322,8 +323,8 @@ def execute_cases(cases, workers, out, worker):
         for future in list(pending):
             collect(future)
         save()
-    if any(s['status'] in {'failed', 'cancelled'} for s in states.values()):
-        raise RuntimeError('Batch stopped; inspect run_status.json and per-task partial results')
+    if any(s['status'] in {'failed', 'cancelled', 'completed_with_errors'} for s in states.values()):
+        raise RuntimeError('Batch finished with errors; inspect run_status.json and per-task results')
 
 
 def run_case(case, args, connection, out, stop):
@@ -351,20 +352,23 @@ def run_case(case, args, connection, out, stop):
     rec = Recorder(out)
     try:
         task, _, catalog = make_coding_task(case['name'])
-        world, prov, _, stats = run_workflow(task, catalog, llm)
-        clean = check_coding(world, task)
+        from .conditions import attempt
         base = {'task_id': case['task_id'], 'seed': args.llm_seed, 'dataset': 'mbpp'}
-        if args.phase == 'full':
-            from .phase1 import audit_coding
-            audit = audit_coding(task, world, prov)
-            stats.update(audit)
-        rec.row(**base, fault=None, method='clean', **clean, **stats)
-        rec.trace(f"{case['name']}_clean", prov, world)
-        print(f"{case['name']} clean success={clean['success']}", flush=True)
+        def run_clean():
+            world, prov, _, stats = run_workflow(task, catalog, llm)
+            clean = check_coding(world, task)
+            if args.phase == 'full':
+                from .phase1 import audit_coding
+                stats.update(audit_coding(task, world, prov))
+            rec.trace(f"{case['name']}_clean", prov, world)
+            rec.row(**base, fault=None, method='clean', status='completed', **clean, **stats)
+            print(f"{case['name']} clean success={clean['success']}", flush=True)
+            return clean
+        clean = attempt(rec, {**base, 'fault': None, 'method': 'clean'}, llm, run_clean)
         if args.phase == 'clean':
             return
         from .phase1 import run_conditions
-        run_conditions(case, args, llm, rec, task, catalog, clean, stop)
+        run_conditions(case, args, llm, rec, task, catalog, clean or {'success': None}, stop)
     except BaseException as exc:
         (out / 'INTERRUPTED.json').write_text(json.dumps(error_metadata(exc)))
         raise
