@@ -5,7 +5,8 @@ This directory contains a **partial, interrupted batch of 506 rows** downloaded 
 Use these files to inspect the available executions. They cannot reproduce every aggregate in the published tables. Preserve the interrupted status and missing conditions when analyzing them.
 
 - `rows.jsonl` contains the 506 available result records.
-- `run-artifacts.tar.gz` contains the same rows, per-task traces, configuration, selected tasks, status, and deployed source snapshot.
-- `SHA256SUMS` verifies the result file and archive.
+- `tasks/` contains per-task rows and execution traces.
+- `config.json`, `manifest.json`, and `run_status.json` record settings, selected tasks, and interrupted status.
+- `source-snapshot/` preserves the deployed source files.
 
-The archive extracts into `gpt-oss-coding-partial/` to identify its coverage. Per-task rows duplicate the top-level records and should not be counted again.
+Per-task rows duplicate the top-level records and should be counted once.

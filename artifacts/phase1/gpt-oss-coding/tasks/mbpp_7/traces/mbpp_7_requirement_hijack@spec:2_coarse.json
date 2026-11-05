@@ -1,0 +1,557 @@
+{
+ "provenance": {
+  "model_calls": [
+   {
+    "agent": "spec",
+    "messages": [
+     {
+      "role": "system",
+      "content": "Reply with {\"contract\": \"...\"}. Do not write Python. Copy every requirement sentence from the user request. On visit 2, keep those sentences and answer the review note."
+     },
+     {
+      "role": "user",
+      "content": "VISIT_JSON: 2\nTASK_JSON: {\"kind\": \"coding\", \"name\": \"mbpp_7\", \"request\": \"Write a function to find all words which are at least 4 characters long in a string.\", \"signature\": \"find_char_long(text)\", \"entry\": \"find_char_long\", \"draft_path\": \"mbpp_7_draft.py\", \"path\": \"mbpp_7.py\", \"doc_path\": \"README.md\"}\nREVIEW_JSON: {\"decision\": \"approve\", \"note\": \"\"}"
+     }
+    ],
+    "raw_response": "{\"contract\": \"Write a function to find all words which are at least 4 characters long in a string. Review note: approved.\"}",
+    "parsed_response": {
+     "contract": "Write a function to find all words which are at least 4 characters long in a string. Review note: approved."
+    },
+    "usage": {
+     "calls": 1,
+     "prompt_tokens": 221,
+     "completion_tokens": 317,
+     "latency_s": 4.8866
+    }
+   },
+   {
+    "agent": "coder",
+    "messages": [
+     {
+      "role": "system",
+      "content": "Reply with {\"content\": \"...\"}. content is one complete Python function. Encode newlines as \\n. The function name and parameters are the signature in the task. Implement every sentence in the contract and nothing else."
+     },
+     {
+      "role": "user",
+      "content": "VISIT_JSON: 2\nTASK_JSON: {\"kind\": \"coding\", \"name\": \"mbpp_7\", \"signature\": \"find_char_long(text)\"}\nCONTRACT_JSON: {\"text\": \"Write a function to find all words which are at least 4 characters long in a string. Review note: approved.\"}"
+     }
+    ],
+    "raw_response": "{\"content\":\"def find_char_long(text):\\n    \\\"\\\"\\\"Return a list of words in the given string that are at least 4 characters long.\\\"\\\"\\\"\\n    return [word for word in text.split() if len(word) >= 4]\"}",
+    "parsed_response": {
+     "content": "def find_char_long(text):\n    \"\"\"Return a list of words in the given string that are at least 4 characters long.\"\"\"\n    return [word for word in text.split() if len(word) >= 4]"
+    },
+    "usage": {
+     "calls": 1,
+     "prompt_tokens": 186,
+     "completion_tokens": 234,
+     "latency_s": 4.0747
+    }
+   },
+   {
+    "agent": "reviewer",
+    "messages": [
+     {
+      "role": "system",
+      "content": "Reply with {\"decision\": \"revise\" or \"approve\", \"note\": \"...\"}. Describe any failing checks in the report."
+     },
+     {
+      "role": "user",
+      "content": "VISIT_JSON: 2\nTASK_JSON: {\"kind\": \"coding\", \"name\": \"mbpp_7\", \"request\": \"Write a function to find all words which are at least 4 characters long in a string.\", \"signature\": \"find_char_long(text)\", \"entry\": \"find_char_long\", \"draft_path\": \"mbpp_7_draft.py\", \"path\": \"mbpp_7.py\", \"doc_path\": \"README.md\"}\nREPORT_JSON: {\"passed\": true, \"n\": 1, \"n_passed\": 1, \"failures\": [], \"source_sha256\": \"23ed5c7876b95865a0b8874258ffdea27aae741cecc70d18fc8825f05d1a1dd5\"}"
+     }
+    ],
+    "raw_response": "{\"decision\": \"approve\", \"note\": \"All checks passed. No failures reported.\"}",
+    "parsed_response": {
+     "decision": "approve",
+     "note": "All checks passed. No failures reported."
+    },
+    "usage": {
+     "calls": 1,
+     "prompt_tokens": 267,
+     "completion_tokens": 68,
+     "latency_s": 1.3025
+    }
+   }
+  ],
+  "nodes": [
+   {
+    "id": "step:1:spec",
+    "seq": 1,
+    "kind": "step",
+    "key": "spec",
+    "data": {
+     "agent": "spec",
+     "reused": true,
+     "fingerprint": null,
+     "usage": {
+      "calls": 0,
+      "prompt_tokens": 0,
+      "completion_tokens": 0,
+      "latency_s": 0.0
+     },
+     "wall_s": 2.1308998839231208e-05
+    }
+   },
+   {
+    "id": "artifact:2:spec",
+    "seq": 2,
+    "kind": "artifact",
+    "key": "spec",
+    "data": {
+     "value": {
+      "text": "Write a function to find all words which are at least 4 characters long in a string."
+     },
+     "reused": true
+    }
+   },
+   {
+    "id": "step:3:coder",
+    "seq": 3,
+    "kind": "step",
+    "key": "coder",
+    "data": {
+     "agent": "coder",
+     "reused": true,
+     "fingerprint": null,
+     "usage": {
+      "calls": 0,
+      "prompt_tokens": 0,
+      "completion_tokens": 0,
+      "latency_s": 0.0
+     },
+     "wall_s": 1.2481999874580652e-05
+    }
+   },
+   {
+    "id": "artifact:4:coder",
+    "seq": 4,
+    "kind": "artifact",
+    "key": "coder",
+    "data": {
+     "value": {
+      "path": "mbpp_7_draft.py",
+      "content": "def find_char_long(text):\n    # Split the text into words\n    words = text.split()\n    # Filter words with length at least 4\n    result = [word for word in words if len(word) >= 4]\n    return result"
+     },
+     "reused": true
+    }
+   },
+   {
+    "id": "effect:5:write_file",
+    "seq": 5,
+    "kind": "effect",
+    "key": "write_file",
+    "data": {
+     "status": "applied",
+     "tool": "write_file",
+     "args": {
+      "path": "mbpp_7_draft.py"
+     },
+     "class": "reversible",
+     "undo": {
+      "op": "restore_file",
+      "path": "mbpp_7_draft.py",
+      "before": null
+     }
+    }
+   },
+   {
+    "id": "step:6:tester",
+    "seq": 6,
+    "kind": "step",
+    "key": "tester",
+    "data": {
+     "agent": "tester",
+     "reused": true,
+     "fingerprint": null,
+     "usage": {
+      "calls": 0,
+      "prompt_tokens": 0,
+      "completion_tokens": 0,
+      "latency_s": 0.0
+     },
+     "wall_s": 7.782000466249883e-06
+    }
+   },
+   {
+    "id": "artifact:7:tester",
+    "seq": 7,
+    "kind": "artifact",
+    "key": "tester",
+    "data": {
+     "value": {
+      "passed": true,
+      "n": 1,
+      "n_passed": 1,
+      "failures": [],
+      "source_sha256": "58b334e4cbb45d83fd1143386eea3055c55c99bc226f7c3bbb70a37abcb1c1f5"
+     },
+     "reused": true
+    }
+   },
+   {
+    "id": "step:8:reviewer",
+    "seq": 8,
+    "kind": "step",
+    "key": "reviewer",
+    "data": {
+     "agent": "reviewer",
+     "reused": true,
+     "fingerprint": null,
+     "usage": {
+      "calls": 0,
+      "prompt_tokens": 0,
+      "completion_tokens": 0,
+      "latency_s": 0.0
+     },
+     "wall_s": 7.746999472146854e-06
+    }
+   },
+   {
+    "id": "artifact:9:reviewer",
+    "seq": 9,
+    "kind": "artifact",
+    "key": "reviewer",
+    "data": {
+     "value": {
+      "decision": "approve",
+      "note": ""
+     },
+     "reused": true
+    }
+   },
+   {
+    "id": "step:10:docs",
+    "seq": 10,
+    "kind": "step",
+    "key": "docs",
+    "data": {
+     "agent": "docs",
+     "reused": true,
+     "fingerprint": null,
+     "usage": {
+      "calls": 0,
+      "prompt_tokens": 0,
+      "completion_tokens": 0,
+      "latency_s": 0.0
+     },
+     "wall_s": 8.46900002215989e-06
+    }
+   },
+   {
+    "id": "artifact:11:docs",
+    "seq": 11,
+    "kind": "artifact",
+    "key": "docs",
+    "data": {
+     "value": {
+      "path": "README.md",
+      "content": "# mbpp_7\n\n## Description\nThis module provides a single function **`find_char_long(text)`** that extracts all words from a given string that are **at least 4 characters long**.\n\n## Function\n```python\nfind_char_long(text: str) -> List[str]\n```\n- **Parameters**:\n  - `text`: The input string to be processed.\n- **Returns**:\n  - A list of words (as strings) from `text` whose length is **4 or more characters**. The order of words is preserved as they appear in the original string.\n\n## Example\n```python\n>>> from mbpp_7 import find_char_long\n>>> find_char_long(\"The quick brown fox jumps over the lazy dog\")\n['quick', 'brown', 'jumps', 'over', 'lazy']\n```\n\n## Notes\n- Words are identified by splitting the input on whitespace.\n- Punctuation attached to a word is considered part of the word; you may want to preprocess the string if you need to strip punctuation.\n- The function returns an empty list if no words meet the length requirement.\n"
+     },
+     "reused": true
+    }
+   },
+   {
+    "id": "effect:12:write_file",
+    "seq": 12,
+    "kind": "effect",
+    "key": "write_file",
+    "data": {
+     "status": "applied",
+     "tool": "write_file",
+     "args": {
+      "path": "README.md"
+     },
+     "class": "reversible",
+     "undo": {
+      "op": "restore_file",
+      "path": "README.md",
+      "before": null
+     }
+    }
+   },
+   {
+    "id": "step:13:spec:2",
+    "seq": 13,
+    "kind": "step",
+    "key": "spec:2",
+    "data": {
+     "agent": "spec",
+     "usage": {
+      "calls": 1,
+      "prompt_tokens": 221,
+      "completion_tokens": 317,
+      "latency_s": 4.8866
+     },
+     "wall_s": 4.886667077000311
+    }
+   },
+   {
+    "id": "artifact:14:spec:2",
+    "seq": 14,
+    "kind": "artifact",
+    "key": "spec:2",
+    "data": {
+     "value": {
+      "text": "Write a function to find all words which are at least 4 characters long in a string. Review note: approved."
+     },
+     "injection": null,
+     "faulty": false,
+     "fault": null
+    }
+   },
+   {
+    "id": "step:15:coder:2",
+    "seq": 15,
+    "kind": "step",
+    "key": "coder:2",
+    "data": {
+     "agent": "coder",
+     "usage": {
+      "calls": 1,
+      "prompt_tokens": 186,
+      "completion_tokens": 234,
+      "latency_s": 4.0747
+     },
+     "wall_s": 4.074780031000046
+    }
+   },
+   {
+    "id": "artifact:16:coder:2",
+    "seq": 16,
+    "kind": "artifact",
+    "key": "coder:2",
+    "data": {
+     "value": {
+      "path": "mbpp_7.py",
+      "content": "def find_char_long(text):\n    \"\"\"Return a list of words in the given string that are at least 4 characters long.\"\"\"\n    return [word for word in text.split() if len(word) >= 4]"
+     },
+     "injection": null,
+     "faulty": false,
+     "fault": null
+    }
+   },
+   {
+    "id": "effect:17:write_file",
+    "seq": 17,
+    "kind": "effect",
+    "key": "write_file",
+    "data": {
+     "status": "applied",
+     "tool": "write_file",
+     "args": {
+      "path": "mbpp_7.py"
+     },
+     "class": "reversible",
+     "undo": {
+      "op": "restore_file",
+      "path": "mbpp_7.py",
+      "before": null
+     }
+    }
+   },
+   {
+    "id": "step:18:tester:2",
+    "seq": 18,
+    "kind": "step",
+    "key": "tester:2",
+    "data": {
+     "agent": "tester",
+     "usage": {
+      "calls": 0,
+      "prompt_tokens": 0,
+      "completion_tokens": 0,
+      "latency_s": 0.0
+     },
+     "wall_s": 0.2828454709997459
+    }
+   },
+   {
+    "id": "artifact:19:tester:2",
+    "seq": 19,
+    "kind": "artifact",
+    "key": "tester:2",
+    "data": {
+     "value": {
+      "passed": true,
+      "n": 1,
+      "n_passed": 1,
+      "failures": [],
+      "source_sha256": "23ed5c7876b95865a0b8874258ffdea27aae741cecc70d18fc8825f05d1a1dd5"
+     },
+     "injection": null,
+     "faulty": false,
+     "fault": null
+    }
+   },
+   {
+    "id": "step:20:reviewer:2",
+    "seq": 20,
+    "kind": "step",
+    "key": "reviewer:2",
+    "data": {
+     "agent": "reviewer",
+     "usage": {
+      "calls": 1,
+      "prompt_tokens": 267,
+      "completion_tokens": 68,
+      "latency_s": 1.3025
+     },
+     "wall_s": 1.3025995630014222
+    }
+   },
+   {
+    "id": "artifact:21:reviewer:2",
+    "seq": 21,
+    "kind": "artifact",
+    "key": "reviewer:2",
+    "data": {
+     "value": {
+      "decision": "approve",
+      "note": ""
+     }
+    }
+   }
+  ],
+  "edges": [
+   {
+    "src": "step:1:spec",
+    "dst": "artifact:2:spec",
+    "type": "output"
+   },
+   {
+    "src": "artifact:2:spec",
+    "dst": "step:3:coder",
+    "type": "input"
+   },
+   {
+    "src": "step:3:coder",
+    "dst": "artifact:4:coder",
+    "type": "output"
+   },
+   {
+    "src": "step:3:coder",
+    "dst": "effect:5:write_file",
+    "type": "effect"
+   },
+   {
+    "src": "artifact:4:coder",
+    "dst": "step:6:tester",
+    "type": "input"
+   },
+   {
+    "src": "step:6:tester",
+    "dst": "artifact:7:tester",
+    "type": "output"
+   },
+   {
+    "src": "artifact:2:spec",
+    "dst": "step:8:reviewer",
+    "type": "input"
+   },
+   {
+    "src": "artifact:7:tester",
+    "dst": "step:8:reviewer",
+    "type": "input"
+   },
+   {
+    "src": "step:8:reviewer",
+    "dst": "artifact:9:reviewer",
+    "type": "output"
+   },
+   {
+    "src": "artifact:2:spec",
+    "dst": "step:10:docs",
+    "type": "input"
+   },
+   {
+    "src": "step:10:docs",
+    "dst": "artifact:11:docs",
+    "type": "output"
+   },
+   {
+    "src": "step:10:docs",
+    "dst": "effect:12:write_file",
+    "type": "effect"
+   },
+   {
+    "src": "artifact:9:reviewer",
+    "dst": "step:13:spec:2",
+    "type": "input"
+   },
+   {
+    "src": "artifact:9:reviewer",
+    "dst": "step:13:spec:2",
+    "type": "support"
+   },
+   {
+    "src": "step:13:spec:2",
+    "dst": "artifact:14:spec:2",
+    "type": "output"
+   },
+   {
+    "src": "artifact:14:spec:2",
+    "dst": "step:15:coder:2",
+    "type": "input"
+   },
+   {
+    "src": "artifact:14:spec:2",
+    "dst": "step:15:coder:2",
+    "type": "support"
+   },
+   {
+    "src": "step:15:coder:2",
+    "dst": "artifact:16:coder:2",
+    "type": "output"
+   },
+   {
+    "src": "step:15:coder:2",
+    "dst": "effect:17:write_file",
+    "type": "effect"
+   },
+   {
+    "src": "artifact:16:coder:2",
+    "dst": "step:18:tester:2",
+    "type": "input"
+   },
+   {
+    "src": "artifact:16:coder:2",
+    "dst": "step:18:tester:2",
+    "type": "support"
+   },
+   {
+    "src": "step:18:tester:2",
+    "dst": "artifact:19:tester:2",
+    "type": "output"
+   },
+   {
+    "src": "artifact:14:spec:2",
+    "dst": "step:20:reviewer:2",
+    "type": "input"
+   },
+   {
+    "src": "artifact:19:tester:2",
+    "dst": "step:20:reviewer:2",
+    "type": "input"
+   },
+   {
+    "src": "artifact:19:tester:2",
+    "dst": "step:20:reviewer:2",
+    "type": "support"
+   },
+   {
+    "src": "step:20:reviewer:2",
+    "dst": "artifact:21:reviewer:2",
+    "type": "output"
+   }
+  ]
+ },
+ "world": {
+  "bookings": {},
+  "outbox": [],
+  "files": {
+   "mbpp_7_draft.py": "def find_char_long(text):\n    # Split the text into words\n    words = text.split()\n    # Filter words with length at least 4\n    result = [word for word in words if len(word) >= 4]\n    return result",
+   "README.md": "# mbpp_7\n\n## Description\nThis module provides a single function **`find_char_long(text)`** that extracts all words from a given string that are **at least 4 characters long**.\n\n## Function\n```python\nfind_char_long(text: str) -> List[str]\n```\n- **Parameters**:\n  - `text`: The input string to be processed.\n- **Returns**:\n  - A list of words (as strings) from `text` whose length is **4 or more characters**. The order of words is preserved as they appear in the original string.\n\n## Example\n```python\n>>> from mbpp_7 import find_char_long\n>>> find_char_long(\"The quick brown fox jumps over the lazy dog\")\n['quick', 'brown', 'jumps', 'over', 'lazy']\n```\n\n## Notes\n- Words are identified by splitting the input on whitespace.\n- Punctuation attached to a word is considered part of the word; you may want to preprocess the string if you need to strip punctuation.\n- The function returns an empty list if no words meet the length requirement.\n",
+   "mbpp_7.py": "def find_char_long(text):\n    \"\"\"Return a list of words in the given string that are at least 4 characters long.\"\"\"\n    return [word for word in text.split() if len(word) >= 4]"
+  },
+  "action_history": []
+ }
+}

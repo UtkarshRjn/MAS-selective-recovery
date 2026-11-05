@@ -37,17 +37,9 @@ Coding programs: one run per program and fault. On `clamp` with a dropped requir
 | `muse-coding/` | 580 | Complete saved Muse batch, including four execution errors and three skipped recovery conditions. |
 | `gpt-oss-coding/` | 506 | Interrupted GPT-OSS batch copied locally before continuation. The completed 579-row batch used by the README tables still needs to be retrieved. |
 
-Each directory contains readable `rows.jsonl`, a `run-artifacts.tar.gz` archive, and `SHA256SUMS`. The archives preserve the downloaded run directories, including model exchanges and provenance traces under `tasks/`, configuration, task manifests, status, and source snapshots. The Muse archive also contains resume lineage. Model endpoint names and deployment paths remain in the saved configuration for reproducibility. Credentials are supplied separately at execution time.
+Each directory contains `rows.jsonl`, per-task model exchanges and provenance traces under `tasks/`, configuration, the task manifest, and run status. Deployed code is preserved as ordinary files under `source-snapshot/`. Muse also includes `resume.json` with continuation lineage. Model endpoint names and deployment paths remain in the configuration for reproducibility. Credentials are supplied separately at execution time.
 
-Verify and extract an archive from the repository root.
-
-```bash
-(cd artifacts/phase1/muse-coding && shasum -a 256 -c SHA256SUMS)
-mkdir -p results/saved-evidence
-tar -xzf artifacts/phase1/muse-coding/run-artifacts.tar.gz -C results/saved-evidence
-```
-
-For GPT-OSS, substitute `gpt-oss-coding` in both paths. The top-level `rows.jsonl` is also present inside each archive. Count it once when aggregating results. Within a run, per-task rows repeat the same conditions as the top-level file. Muse continuation rows also include copied earlier results.
+Use the top-level `rows.jsonl` for aggregation. Per-task rows repeat those records. Muse continuation rows also include copied earlier results. All files can be read directly after cloning the repository.
 
 The partial GPT-OSS batch must be analyzed as its own subset. Its 506 rows cannot reproduce all statistics from the final 579-row batch. Keep its saved interrupted status and missing conditions visible in any analysis.
 

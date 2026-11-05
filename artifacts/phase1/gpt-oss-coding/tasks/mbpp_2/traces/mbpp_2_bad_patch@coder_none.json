@@ -1,0 +1,664 @@
+{
+ "provenance": {
+  "model_calls": [
+   {
+    "agent": "spec",
+    "messages": [
+     {
+      "role": "system",
+      "content": "Reply with {\"contract\": \"...\"}. Do not write Python. Copy every requirement sentence from the user request. On visit 2, keep those sentences and answer the review note."
+     },
+     {
+      "role": "user",
+      "content": "VISIT_JSON: 1\nTASK_JSON: {\"kind\": \"coding\", \"name\": \"mbpp_2\", \"request\": \"Write a function to find the shared elements from the given two lists.\", \"signature\": \"similar_elements(test_tup1, test_tup2)\", \"entry\": \"similar_elements\", \"draft_path\": \"mbpp_2_draft.py\", \"path\": \"mbpp_2.py\", \"doc_path\": \"README.md\"}"
+     }
+    ],
+    "raw_response": "{\"contract\": \"Write a function to find the shared elements from the given two lists.\"}",
+    "parsed_response": {
+     "contract": "Write a function to find the shared elements from the given two lists."
+    },
+    "usage": {
+     "calls": 1,
+     "prompt_tokens": 207,
+     "completion_tokens": 212,
+     "latency_s": 3.8424
+    }
+   },
+   {
+    "agent": "coder",
+    "messages": [
+     {
+      "role": "system",
+      "content": "Reply with {\"content\": \"...\"}. content is one complete Python function. Encode newlines as \\n. The function name and parameters are the signature in the task. Implement every sentence in the contract and nothing else."
+     },
+     {
+      "role": "user",
+      "content": "VISIT_JSON: 1\nTASK_JSON: {\"kind\": \"coding\", \"name\": \"mbpp_2\", \"signature\": \"similar_elements(test_tup1, test_tup2)\"}\nCONTRACT_JSON: {\"text\": \"Write a function to find the shared elements from the given two lists.\"}"
+     }
+    ],
+    "raw_response": "{\"content\":\"def similar_elements(test_tup1, test_tup2):\\n    \\\"\\\"\\\"Return a list of elements that appear in both input iterables.\\\"\\\"\\\"\\n    set2 = set(test_tup2)\\n    return [x for x in test_tup1 if x in set2]\"}",
+    "parsed_response": {
+     "content": "def similar_elements(test_tup1, test_tup2):\n    \"\"\"Return a list of elements that appear in both input iterables.\"\"\"\n    set2 = set(test_tup2)\n    return [x for x in test_tup1 if x in set2]"
+    },
+    "usage": {
+     "calls": 1,
+     "prompt_tokens": 183,
+     "completion_tokens": 517,
+     "latency_s": 8.629
+    }
+   },
+   {
+    "agent": "reviewer",
+    "messages": [
+     {
+      "role": "system",
+      "content": "Reply with {\"decision\": \"revise\" or \"approve\", \"note\": \"...\"}. Describe any failing checks in the report."
+     },
+     {
+      "role": "user",
+      "content": "VISIT_JSON: 1\nTASK_JSON: {\"kind\": \"coding\", \"name\": \"mbpp_2\", \"request\": \"Write a function to find the shared elements from the given two lists.\", \"signature\": \"similar_elements(test_tup1, test_tup2)\", \"entry\": \"similar_elements\", \"draft_path\": \"mbpp_2_draft.py\", \"path\": \"mbpp_2.py\", \"doc_path\": \"README.md\"}\nREPORT_JSON: {\"passed\": false, \"n\": 1, \"n_passed\": 0, \"failures\": [{\"test_index\": 0, \"error\": \"TypeError\"}], \"source_sha256\": \"38d09989b7e42e60fbc02e2742ffb1f4744fa4acaf8ef8b4bef0999de228cd19\"}"
+     }
+    ],
+    "raw_response": "{\n  \"decision\": \"revise\",\n  \"note\": \"The submitted solution failed the test suite: a TypeError was raised on test index 0. This indicates that the function signature or handling of inputs is incorrect (e.g., expecting a tuple but receiving a list, or mismatched argument types). The implementation needs to be corrected to properly accept the two input lists (or tuples) and return their shared elements without raising errors.\"\n}",
+    "parsed_response": {
+     "decision": "revise",
+     "note": "The submitted solution failed the test suite: a TypeError was raised on test index 0. This indicates that the function signature or handling of inputs is incorrect (e.g., expecting a tuple but receiving a list, or mismatched argument types). The implementation needs to be corrected to properly accept the two input lists (or tuples) and return their shared elements without raising errors."
+    },
+    "usage": {
+     "calls": 1,
+     "prompt_tokens": 284,
+     "completion_tokens": 132,
+     "latency_s": 2.3531
+    }
+   },
+   {
+    "agent": "docs",
+    "messages": [
+     {
+      "role": "system",
+      "content": "Reply with {\"content\": \"...\"}. Write a short README from the contract only."
+     },
+     {
+      "role": "user",
+      "content": "VISIT_JSON: 1\nTASK_JSON: {\"kind\": \"coding\", \"name\": \"mbpp_2\", \"request\": \"Write a function to find the shared elements from the given two lists.\", \"signature\": \"similar_elements(test_tup1, test_tup2)\", \"entry\": \"similar_elements\", \"draft_path\": \"mbpp_2_draft.py\", \"path\": \"mbpp_2.py\", \"doc_path\": \"README.md\"}\nCONTRACT_JSON: {\"text\": \"Write a function to find the shared elements from the given two lists.\"}"
+     }
+    ],
+    "raw_response": "{\n  \"content\": \"# README\\n\\n## Problem Statement\\nWrite a function that takes two lists (or tuples) as input and returns a list containing the elements that are present in **both** input collections.\\n\\n## Function Signature\\n```python\\nsimilar_elements(test_tup1, test_tup2) -> list\\n```\\n- `test_tup1`: First list or tuple of elements.\\n- `test_tup2`: Second list or tuple of elements.\\n- Returns: A list of the shared elements. The order of elements in the result is not specified, but each shared element should appear only once.\\n\\n## Example\\n```python\\n>>> similar_elements([1, 2, 3, 4], [3, 4, 5, 6])\\n[3, 4]\\n```\\n\\n## Notes\\n- The function should handle any hashable element types (e.g., integers, strings).\\n- If there are no common elements, return an empty list.\\n- Duplicates in the input collections should not affect the output; each common element appears only once in the result.\\n\"\n}",
+    "parsed_response": {
+     "content": "# README\n\n## Problem Statement\nWrite a function that takes two lists (or tuples) as input and returns a list containing the elements that are present in **both** input collections.\n\n## Function Signature\n```python\nsimilar_elements(test_tup1, test_tup2) -> list\n```\n- `test_tup1`: First list or tuple of elements.\n- `test_tup2`: Second list or tuple of elements.\n- Returns: A list of the shared elements. The order of elements in the result is not specified, but each shared element should appear only once.\n\n## Example\n```python\n>>> similar_elements([1, 2, 3, 4], [3, 4, 5, 6])\n[3, 4]\n```\n\n## Notes\n- The function should handle any hashable element types (e.g., integers, strings).\n- If there are no common elements, return an empty list.\n- Duplicates in the input collections should not affect the output; each common element appears only once in the result.\n"
+    },
+    "usage": {
+     "calls": 1,
+     "prompt_tokens": 211,
+     "completion_tokens": 321,
+     "latency_s": 5.2454
+    }
+   },
+   {
+    "agent": "spec",
+    "messages": [
+     {
+      "role": "system",
+      "content": "Reply with {\"contract\": \"...\"}. Do not write Python. Copy every requirement sentence from the user request. On visit 2, keep those sentences and answer the review note."
+     },
+     {
+      "role": "user",
+      "content": "VISIT_JSON: 2\nTASK_JSON: {\"kind\": \"coding\", \"name\": \"mbpp_2\", \"request\": \"Write a function to find the shared elements from the given two lists.\", \"signature\": \"similar_elements(test_tup1, test_tup2)\", \"entry\": \"similar_elements\", \"draft_path\": \"mbpp_2_draft.py\", \"path\": \"mbpp_2.py\", \"doc_path\": \"README.md\"}\nREVIEW_JSON: {\"decision\": \"revise\", \"note\": \"TypeError\"}"
+     }
+    ],
+    "raw_response": "{\"contract\":\"Write a function to find the shared elements from the given two lists. Review note response: The reported TypeError suggests that the implementation may be receiving inputs that are not iterable or not of the expected type. To address this, the function should validate that both arguments are list\u2011like (e.g., list, tuple, set) before attempting to iterate over them, and raise a clear error message if they are not. This defensive check will prevent the TypeError and ensure the function behaves as intended.\"}",
+    "parsed_response": {
+     "contract": "Write a function to find the shared elements from the given two lists. Review note response: The reported TypeError suggests that the implementation may be receiving inputs that are not iterable or not of the expected type. To address this, the function should validate that both arguments are list\u2011like (e.g., list, tuple, set) before attempting to iterate over them, and raise a clear error message if they are not. This defensive check will prevent the TypeError and ensure the function behaves as intended."
+    },
+    "usage": {
+     "calls": 1,
+     "prompt_tokens": 225,
+     "completion_tokens": 381,
+     "latency_s": 6.5938
+    }
+   },
+   {
+    "agent": "coder",
+    "messages": [
+     {
+      "role": "system",
+      "content": "Reply with {\"content\": \"...\"}. content is one complete Python function. Encode newlines as \\n. The function name and parameters are the signature in the task. Implement every sentence in the contract and nothing else."
+     },
+     {
+      "role": "user",
+      "content": "VISIT_JSON: 2\nTASK_JSON: {\"kind\": \"coding\", \"name\": \"mbpp_2\", \"signature\": \"similar_elements(test_tup1, test_tup2)\"}\nCONTRACT_JSON: {\"text\": \"Write a function to find the shared elements from the given two lists. Review note response: The reported TypeError suggests that the implementation may be receiving inputs that are not iterable or not of the expected type. To address this, the function should validate that both arguments are list\\u2011like (e.g., list, tuple, set) before attempting to iterate over them, and raise a clear error message if they are not. This defensive check will prevent the TypeError and ensure the function behaves as intended.\"}"
+     }
+    ],
+    "raw_response": "{\"content\":\"def similar_elements(test_tup1, test_tup2):\\n    \\\"\\\"\\\"Return a list of shared elements between two iterable collections.\\n\\n    Both arguments must be list, tuple, or set. Raises TypeError otherwise.\\n    \\\"\\\"\\\"\\n    # Validate input types\\n    if not isinstance(test_tup1, (list, tuple, set)):\\n        raise TypeError(\\\"test_tup1 must be a list, tuple, or set\\\")\\n    if not isinstance(test_tup2, (list, tuple, set)):\\n        raise TypeError(\\\"test_tup2 must be a list, tuple, or set\\\")\\n    # Compute intersection\\n    set1 = set(test_tup1)\\n    set2 = set(test_tup2)\\n    shared = set1.intersection(set2)\\n    return list(shared)\"}",
+    "parsed_response": {
+     "content": "def similar_elements(test_tup1, test_tup2):\n    \"\"\"Return a list of shared elements between two iterable collections.\n\n    Both arguments must be list, tuple, or set. Raises TypeError otherwise.\n    \"\"\"\n    # Validate input types\n    if not isinstance(test_tup1, (list, tuple, set)):\n        raise TypeError(\"test_tup1 must be a list, tuple, or set\")\n    if not isinstance(test_tup2, (list, tuple, set)):\n        raise TypeError(\"test_tup2 must be a list, tuple, or set\")\n    # Compute intersection\n    set1 = set(test_tup1)\n    set2 = set(test_tup2)\n    shared = set1.intersection(set2)\n    return list(shared)"
+    },
+    "usage": {
+     "calls": 1,
+     "prompt_tokens": 271,
+     "completion_tokens": 596,
+     "latency_s": 8.4343
+    }
+   },
+   {
+    "agent": "reviewer",
+    "messages": [
+     {
+      "role": "system",
+      "content": "Reply with {\"decision\": \"revise\" or \"approve\", \"note\": \"...\"}. Describe any failing checks in the report."
+     },
+     {
+      "role": "user",
+      "content": "VISIT_JSON: 2\nTASK_JSON: {\"kind\": \"coding\", \"name\": \"mbpp_2\", \"request\": \"Write a function to find the shared elements from the given two lists.\", \"signature\": \"similar_elements(test_tup1, test_tup2)\", \"entry\": \"similar_elements\", \"draft_path\": \"mbpp_2_draft.py\", \"path\": \"mbpp_2.py\", \"doc_path\": \"README.md\"}\nREPORT_JSON: {\"passed\": true, \"n\": 1, \"n_passed\": 1, \"failures\": [], \"source_sha256\": \"9103d8edca3b8d2a4a9e1e768301abdcc86d1e0eb4b1e50cb8cf5af2123f8941\"}"
+     }
+    ],
+    "raw_response": "{\"decision\": \"approve\", \"note\": \"All checks passed; no issues detected.\"}",
+    "parsed_response": {
+     "decision": "approve",
+     "note": "All checks passed; no issues detected."
+    },
+    "usage": {
+     "calls": 1,
+     "prompt_tokens": 275,
+     "completion_tokens": 53,
+     "latency_s": 0.796
+    }
+   }
+  ],
+  "nodes": [
+   {
+    "id": "step:1:spec",
+    "seq": 1,
+    "kind": "step",
+    "key": "spec",
+    "data": {
+     "agent": "spec",
+     "usage": {
+      "calls": 1,
+      "prompt_tokens": 207,
+      "completion_tokens": 212,
+      "latency_s": 3.8424
+     },
+     "wall_s": 3.8424884490013937
+    }
+   },
+   {
+    "id": "artifact:2:spec",
+    "seq": 2,
+    "kind": "artifact",
+    "key": "spec",
+    "data": {
+     "value": {
+      "text": "Write a function to find the shared elements from the given two lists."
+     },
+     "injection": null,
+     "faulty": false,
+     "fault": null
+    }
+   },
+   {
+    "id": "step:3:coder",
+    "seq": 3,
+    "kind": "step",
+    "key": "coder",
+    "data": {
+     "agent": "coder",
+     "usage": {
+      "calls": 1,
+      "prompt_tokens": 183,
+      "completion_tokens": 517,
+      "latency_s": 8.629
+     },
+     "wall_s": 8.62918455200088
+    }
+   },
+   {
+    "id": "artifact:4:coder",
+    "seq": 4,
+    "kind": "artifact",
+    "key": "coder",
+    "data": {
+     "value": {
+      "path": "mbpp_2_draft.py",
+      "content": "def similar_elements(test_tup1, test_tup2):\n    return None\n"
+     },
+     "injection": null,
+     "faulty": true,
+     "fault": "bad_patch@coder"
+    }
+   },
+   {
+    "id": "effect:5:write_file",
+    "seq": 5,
+    "kind": "effect",
+    "key": "write_file",
+    "data": {
+     "status": "applied",
+     "tool": "write_file",
+     "args": {
+      "path": "mbpp_2_draft.py"
+     },
+     "class": "reversible",
+     "undo": {
+      "op": "restore_file",
+      "path": "mbpp_2_draft.py",
+      "before": null
+     }
+    }
+   },
+   {
+    "id": "step:6:tester",
+    "seq": 6,
+    "kind": "step",
+    "key": "tester",
+    "data": {
+     "agent": "tester",
+     "usage": {
+      "calls": 0,
+      "prompt_tokens": 0,
+      "completion_tokens": 0,
+      "latency_s": 0.0
+     },
+     "wall_s": 0.26792985499923816
+    }
+   },
+   {
+    "id": "artifact:7:tester",
+    "seq": 7,
+    "kind": "artifact",
+    "key": "tester",
+    "data": {
+     "value": {
+      "passed": false,
+      "n": 1,
+      "n_passed": 0,
+      "failures": [
+       {
+        "test_index": 0,
+        "error": "TypeError"
+       }
+      ],
+      "source_sha256": "38d09989b7e42e60fbc02e2742ffb1f4744fa4acaf8ef8b4bef0999de228cd19"
+     },
+     "injection": null,
+     "faulty": false,
+     "fault": null
+    }
+   },
+   {
+    "id": "step:8:reviewer",
+    "seq": 8,
+    "kind": "step",
+    "key": "reviewer",
+    "data": {
+     "agent": "reviewer",
+     "usage": {
+      "calls": 1,
+      "prompt_tokens": 284,
+      "completion_tokens": 132,
+      "latency_s": 2.3531
+     },
+     "wall_s": 2.353182161999939
+    }
+   },
+   {
+    "id": "artifact:9:reviewer",
+    "seq": 9,
+    "kind": "artifact",
+    "key": "reviewer",
+    "data": {
+     "value": {
+      "decision": "revise",
+      "note": "TypeError"
+     }
+    }
+   },
+   {
+    "id": "step:10:docs",
+    "seq": 10,
+    "kind": "step",
+    "key": "docs",
+    "data": {
+     "agent": "docs",
+     "usage": {
+      "calls": 1,
+      "prompt_tokens": 211,
+      "completion_tokens": 321,
+      "latency_s": 5.2454
+     },
+     "wall_s": 5.245573477001017
+    }
+   },
+   {
+    "id": "artifact:11:docs",
+    "seq": 11,
+    "kind": "artifact",
+    "key": "docs",
+    "data": {
+     "value": {
+      "path": "README.md",
+      "content": "# README\n\n## Problem Statement\nWrite a function that takes two lists (or tuples) as input and returns a list containing the elements that are present in **both** input collections.\n\n## Function Signature\n```python\nsimilar_elements(test_tup1, test_tup2) -> list\n```\n- `test_tup1`: First list or tuple of elements.\n- `test_tup2`: Second list or tuple of elements.\n- Returns: A list of the shared elements. The order of elements in the result is not specified, but each shared element should appear only once.\n\n## Example\n```python\n>>> similar_elements([1, 2, 3, 4], [3, 4, 5, 6])\n[3, 4]\n```\n\n## Notes\n- The function should handle any hashable element types (e.g., integers, strings).\n- If there are no common elements, return an empty list.\n- Duplicates in the input collections should not affect the output; each common element appears only once in the result.\n"
+     }
+    }
+   },
+   {
+    "id": "effect:12:write_file",
+    "seq": 12,
+    "kind": "effect",
+    "key": "write_file",
+    "data": {
+     "status": "applied",
+     "tool": "write_file",
+     "args": {
+      "path": "README.md"
+     },
+     "class": "reversible",
+     "undo": {
+      "op": "restore_file",
+      "path": "README.md",
+      "before": null
+     }
+    }
+   },
+   {
+    "id": "step:13:spec:2",
+    "seq": 13,
+    "kind": "step",
+    "key": "spec:2",
+    "data": {
+     "agent": "spec",
+     "usage": {
+      "calls": 1,
+      "prompt_tokens": 225,
+      "completion_tokens": 381,
+      "latency_s": 6.5938
+     },
+     "wall_s": 6.593972270999075
+    }
+   },
+   {
+    "id": "artifact:14:spec:2",
+    "seq": 14,
+    "kind": "artifact",
+    "key": "spec:2",
+    "data": {
+     "value": {
+      "text": "Write a function to find the shared elements from the given two lists. Review note response: The reported TypeError suggests that the implementation may be receiving inputs that are not iterable or not of the expected type. To address this, the function should validate that both arguments are list\u2011like (e.g., list, tuple, set) before attempting to iterate over them, and raise a clear error message if they are not. This defensive check will prevent the TypeError and ensure the function behaves as intended."
+     },
+     "injection": null,
+     "faulty": false,
+     "fault": null
+    }
+   },
+   {
+    "id": "step:15:coder:2",
+    "seq": 15,
+    "kind": "step",
+    "key": "coder:2",
+    "data": {
+     "agent": "coder",
+     "usage": {
+      "calls": 1,
+      "prompt_tokens": 271,
+      "completion_tokens": 596,
+      "latency_s": 8.4343
+     },
+     "wall_s": 8.434404101000837
+    }
+   },
+   {
+    "id": "artifact:16:coder:2",
+    "seq": 16,
+    "kind": "artifact",
+    "key": "coder:2",
+    "data": {
+     "value": {
+      "path": "mbpp_2.py",
+      "content": "def similar_elements(test_tup1, test_tup2):\n    \"\"\"Return a list of shared elements between two iterable collections.\n\n    Both arguments must be list, tuple, or set. Raises TypeError otherwise.\n    \"\"\"\n    # Validate input types\n    if not isinstance(test_tup1, (list, tuple, set)):\n        raise TypeError(\"test_tup1 must be a list, tuple, or set\")\n    if not isinstance(test_tup2, (list, tuple, set)):\n        raise TypeError(\"test_tup2 must be a list, tuple, or set\")\n    # Compute intersection\n    set1 = set(test_tup1)\n    set2 = set(test_tup2)\n    shared = set1.intersection(set2)\n    return list(shared)"
+     },
+     "injection": null,
+     "faulty": false,
+     "fault": null
+    }
+   },
+   {
+    "id": "effect:17:write_file",
+    "seq": 17,
+    "kind": "effect",
+    "key": "write_file",
+    "data": {
+     "status": "applied",
+     "tool": "write_file",
+     "args": {
+      "path": "mbpp_2.py"
+     },
+     "class": "reversible",
+     "undo": {
+      "op": "restore_file",
+      "path": "mbpp_2.py",
+      "before": null
+     }
+    }
+   },
+   {
+    "id": "step:18:tester:2",
+    "seq": 18,
+    "kind": "step",
+    "key": "tester:2",
+    "data": {
+     "agent": "tester",
+     "usage": {
+      "calls": 0,
+      "prompt_tokens": 0,
+      "completion_tokens": 0,
+      "latency_s": 0.0
+     },
+     "wall_s": 0.2705175949995464
+    }
+   },
+   {
+    "id": "artifact:19:tester:2",
+    "seq": 19,
+    "kind": "artifact",
+    "key": "tester:2",
+    "data": {
+     "value": {
+      "passed": true,
+      "n": 1,
+      "n_passed": 1,
+      "failures": [],
+      "source_sha256": "9103d8edca3b8d2a4a9e1e768301abdcc86d1e0eb4b1e50cb8cf5af2123f8941"
+     },
+     "injection": null,
+     "faulty": false,
+     "fault": null
+    }
+   },
+   {
+    "id": "step:20:reviewer:2",
+    "seq": 20,
+    "kind": "step",
+    "key": "reviewer:2",
+    "data": {
+     "agent": "reviewer",
+     "usage": {
+      "calls": 1,
+      "prompt_tokens": 275,
+      "completion_tokens": 53,
+      "latency_s": 0.796
+     },
+     "wall_s": 0.7961036029992101
+    }
+   },
+   {
+    "id": "artifact:21:reviewer:2",
+    "seq": 21,
+    "kind": "artifact",
+    "key": "reviewer:2",
+    "data": {
+     "value": {
+      "decision": "approve",
+      "note": ""
+     }
+    }
+   }
+  ],
+  "edges": [
+   {
+    "src": "step:1:spec",
+    "dst": "artifact:2:spec",
+    "type": "output"
+   },
+   {
+    "src": "artifact:2:spec",
+    "dst": "step:3:coder",
+    "type": "input"
+   },
+   {
+    "src": "artifact:2:spec",
+    "dst": "step:3:coder",
+    "type": "support"
+   },
+   {
+    "src": "step:3:coder",
+    "dst": "artifact:4:coder",
+    "type": "output"
+   },
+   {
+    "src": "step:3:coder",
+    "dst": "effect:5:write_file",
+    "type": "effect"
+   },
+   {
+    "src": "artifact:4:coder",
+    "dst": "step:6:tester",
+    "type": "input"
+   },
+   {
+    "src": "artifact:4:coder",
+    "dst": "step:6:tester",
+    "type": "support"
+   },
+   {
+    "src": "step:6:tester",
+    "dst": "artifact:7:tester",
+    "type": "output"
+   },
+   {
+    "src": "artifact:2:spec",
+    "dst": "step:8:reviewer",
+    "type": "input"
+   },
+   {
+    "src": "artifact:7:tester",
+    "dst": "step:8:reviewer",
+    "type": "input"
+   },
+   {
+    "src": "artifact:7:tester",
+    "dst": "step:8:reviewer",
+    "type": "support"
+   },
+   {
+    "src": "step:8:reviewer",
+    "dst": "artifact:9:reviewer",
+    "type": "output"
+   },
+   {
+    "src": "artifact:2:spec",
+    "dst": "step:10:docs",
+    "type": "input"
+   },
+   {
+    "src": "step:10:docs",
+    "dst": "artifact:11:docs",
+    "type": "output"
+   },
+   {
+    "src": "step:10:docs",
+    "dst": "effect:12:write_file",
+    "type": "effect"
+   },
+   {
+    "src": "artifact:9:reviewer",
+    "dst": "step:13:spec:2",
+    "type": "input"
+   },
+   {
+    "src": "artifact:9:reviewer",
+    "dst": "step:13:spec:2",
+    "type": "support"
+   },
+   {
+    "src": "step:13:spec:2",
+    "dst": "artifact:14:spec:2",
+    "type": "output"
+   },
+   {
+    "src": "artifact:14:spec:2",
+    "dst": "step:15:coder:2",
+    "type": "input"
+   },
+   {
+    "src": "artifact:14:spec:2",
+    "dst": "step:15:coder:2",
+    "type": "support"
+   },
+   {
+    "src": "step:15:coder:2",
+    "dst": "artifact:16:coder:2",
+    "type": "output"
+   },
+   {
+    "src": "step:15:coder:2",
+    "dst": "effect:17:write_file",
+    "type": "effect"
+   },
+   {
+    "src": "artifact:16:coder:2",
+    "dst": "step:18:tester:2",
+    "type": "input"
+   },
+   {
+    "src": "artifact:16:coder:2",
+    "dst": "step:18:tester:2",
+    "type": "support"
+   },
+   {
+    "src": "step:18:tester:2",
+    "dst": "artifact:19:tester:2",
+    "type": "output"
+   },
+   {
+    "src": "artifact:14:spec:2",
+    "dst": "step:20:reviewer:2",
+    "type": "input"
+   },
+   {
+    "src": "artifact:19:tester:2",
+    "dst": "step:20:reviewer:2",
+    "type": "input"
+   },
+   {
+    "src": "artifact:19:tester:2",
+    "dst": "step:20:reviewer:2",
+    "type": "support"
+   },
+   {
+    "src": "step:20:reviewer:2",
+    "dst": "artifact:21:reviewer:2",
+    "type": "output"
+   }
+  ]
+ },
+ "world": {
+  "bookings": {},
+  "outbox": [],
+  "files": {
+   "mbpp_2_draft.py": "def similar_elements(test_tup1, test_tup2):\n    return None\n",
+   "README.md": "# README\n\n## Problem Statement\nWrite a function that takes two lists (or tuples) as input and returns a list containing the elements that are present in **both** input collections.\n\n## Function Signature\n```python\nsimilar_elements(test_tup1, test_tup2) -> list\n```\n- `test_tup1`: First list or tuple of elements.\n- `test_tup2`: Second list or tuple of elements.\n- Returns: A list of the shared elements. The order of elements in the result is not specified, but each shared element should appear only once.\n\n## Example\n```python\n>>> similar_elements([1, 2, 3, 4], [3, 4, 5, 6])\n[3, 4]\n```\n\n## Notes\n- The function should handle any hashable element types (e.g., integers, strings).\n- If there are no common elements, return an empty list.\n- Duplicates in the input collections should not affect the output; each common element appears only once in the result.\n",
+   "mbpp_2.py": "def similar_elements(test_tup1, test_tup2):\n    \"\"\"Return a list of shared elements between two iterable collections.\n\n    Both arguments must be list, tuple, or set. Raises TypeError otherwise.\n    \"\"\"\n    # Validate input types\n    if not isinstance(test_tup1, (list, tuple, set)):\n        raise TypeError(\"test_tup1 must be a list, tuple, or set\")\n    if not isinstance(test_tup2, (list, tuple, set)):\n        raise TypeError(\"test_tup2 must be a list, tuple, or set\")\n    # Compute intersection\n    set1 = set(test_tup1)\n    set2 = set(test_tup2)\n    shared = set1.intersection(set2)\n    return list(shared)"
+  },
+  "action_history": []
+ }
+}

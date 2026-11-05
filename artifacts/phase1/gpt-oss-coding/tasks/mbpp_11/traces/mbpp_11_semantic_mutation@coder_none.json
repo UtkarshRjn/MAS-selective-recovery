@@ -1,0 +1,680 @@
+{
+ "provenance": {
+  "model_calls": [
+   {
+    "agent": "spec",
+    "messages": [
+     {
+      "role": "system",
+      "content": "Reply with {\"contract\": \"...\"}. Do not write Python. Copy every requirement sentence from the user request. On visit 2, keep those sentences and answer the review note."
+     },
+     {
+      "role": "user",
+      "content": "VISIT_JSON: 1\nTASK_JSON: {\"kind\": \"coding\", \"name\": \"mbpp_11\", \"request\": \"Write a python function to remove first and last occurrence of a given character from the string.\", \"signature\": \"remove_Occ(s, ch)\", \"entry\": \"remove_Occ\", \"draft_path\": \"mbpp_11_draft.py\", \"path\": \"mbpp_11.py\", \"doc_path\": \"README.md\"}"
+     }
+    ],
+    "raw_response": "{\"contract\": \"Write a python function to remove first and last occurrence of a given character from the string.\"}",
+    "parsed_response": {
+     "contract": "Write a python function to remove first and last occurrence of a given character from the string."
+    },
+    "usage": {
+     "calls": 1,
+     "prompt_tokens": 207,
+     "completion_tokens": 263,
+     "latency_s": 4.3565
+    }
+   },
+   {
+    "agent": "coder",
+    "messages": [
+     {
+      "role": "system",
+      "content": "Reply with {\"content\": \"...\"}. content is one complete Python function. Encode newlines as \\n. The function name and parameters are the signature in the task. Implement every sentence in the contract and nothing else."
+     },
+     {
+      "role": "user",
+      "content": "VISIT_JSON: 1\nTASK_JSON: {\"kind\": \"coding\", \"name\": \"mbpp_11\", \"signature\": \"remove_Occ(s, ch)\"}\nCONTRACT_JSON: {\"text\": \"Write a python function to remove first and last occurrence of a given character from the string.\"}"
+     }
+    ],
+    "raw_response": "{\"content\":\"def remove_Occ(s, ch):\\n    \\\"\\\"\\\"Remove the first and last occurrence of ch in s and return the new string.\\n    If ch does not occur, returns s unchanged. If ch occurs only once, that occurrence is removed.\\n    \\\"\\\"\\\"\\n    first = s.find(ch)\\n    if first == -1:\\n        return s\\n    last = s.rfind(ch)\\n    if first == last:\\n        return s[:first] + s[first+1:]\\n    # remove last first to keep first index valid\\n    return s[:first] + s[first+1:last] + s[last+1:]\"}",
+    "parsed_response": {
+     "content": "def remove_Occ(s, ch):\n    \"\"\"Remove the first and last occurrence of ch in s and return the new string.\n    If ch does not occur, returns s unchanged. If ch occurs only once, that occurrence is removed.\n    \"\"\"\n    first = s.find(ch)\n    if first == -1:\n        return s\n    last = s.rfind(ch)\n    if first == last:\n        return s[:first] + s[first+1:]\n    # remove last first to keep first index valid\n    return s[:first] + s[first+1:last] + s[last+1:]"
+    },
+    "usage": {
+     "calls": 1,
+     "prompt_tokens": 182,
+     "completion_tokens": 912,
+     "latency_s": 14.6615
+    }
+   },
+   {
+    "agent": "reviewer",
+    "messages": [
+     {
+      "role": "system",
+      "content": "Reply with {\"decision\": \"revise\" or \"approve\", \"note\": \"...\"}. Describe any failing checks in the report."
+     },
+     {
+      "role": "user",
+      "content": "VISIT_JSON: 1\nTASK_JSON: {\"kind\": \"coding\", \"name\": \"mbpp_11\", \"request\": \"Write a python function to remove first and last occurrence of a given character from the string.\", \"signature\": \"remove_Occ(s, ch)\", \"entry\": \"remove_Occ\", \"draft_path\": \"mbpp_11_draft.py\", \"path\": \"mbpp_11.py\", \"doc_path\": \"README.md\"}\nREPORT_JSON: {\"passed\": false, \"n\": 1, \"n_passed\": 0, \"failures\": [{\"test_index\": 0, \"error\": \"AssertionError\"}], \"source_sha256\": \"a53322c5ccd1e3fd568a0c0f85ac66504615228576c32cbc3358bd396de7e1ed\"}"
+     }
+    ],
+    "raw_response": "{\"decision\": \"revise\", \"note\": \"The solution failed the test suite (AssertionError on test index 0). The function does not correctly remove the first and last occurrence of the specified character, leading to a failing assertion. The implementation needs to be corrected to handle edge cases (e.g., character not present, only one occurrence) and ensure both the first and last occurrences are removed before returning the string.\"}",
+    "parsed_response": {
+     "decision": "revise",
+     "note": "The solution failed the test suite (AssertionError on test index 0). The function does not correctly remove the first and last occurrence of the specified character, leading to a failing assertion. The implementation needs to be corrected to handle edge cases (e.g., character not present, only one occurrence) and ensure both the first and last occurrences are removed before returning the string."
+    },
+    "usage": {
+     "calls": 1,
+     "prompt_tokens": 281,
+     "completion_tokens": 122,
+     "latency_s": 2.1676
+    }
+   },
+   {
+    "agent": "docs",
+    "messages": [
+     {
+      "role": "system",
+      "content": "Reply with {\"content\": \"...\"}. Write a short README from the contract only."
+     },
+     {
+      "role": "user",
+      "content": "VISIT_JSON: 1\nTASK_JSON: {\"kind\": \"coding\", \"name\": \"mbpp_11\", \"request\": \"Write a python function to remove first and last occurrence of a given character from the string.\", \"signature\": \"remove_Occ(s, ch)\", \"entry\": \"remove_Occ\", \"draft_path\": \"mbpp_11_draft.py\", \"path\": \"mbpp_11.py\", \"doc_path\": \"README.md\"}\nCONTRACT_JSON: {\"text\": \"Write a python function to remove first and last occurrence of a given character from the string.\"}"
+     }
+    ],
+    "raw_response": "{\n  \"content\": \"# mbpp_11\\n\\n## Description\\nImplement a Python function `remove_Occ(s, ch)` that removes **the first and the last occurrence** of the character `ch` from the input string `s`. If the character does not appear at least twice, the original string should be returned unchanged.\\n\\n## Function Signature\\n```python\\nremove_Occ(s: str, ch: str) -> str\\n```\\n\\n## Parameters\\n- `s`: The original string.\\n- `ch`: A single character whose first and last occurrences need to be removed.\\n\\n## Returns\\n- A new string with the first and last occurrence of `ch` removed, or the original string if `ch` occurs fewer than two times.\\n\\n## Example\\n```python\\n>>> remove_Occ(\\\"abracadabra\\\", \\\"a\\\")\\n'brcadabr'\\n>>> remove_Occ(\\\"hello\\\", \\\"l\\\")\\n'helo'\\n>>> remove_Occ(\\\"test\\\", \\\"z\\\")\\n'test'  # 'z' not present, string unchanged\\n```\\n\\n## Notes\\n- The function should handle empty strings and single\u2011character strings gracefully.\\n- Only the **first** and **last** occurrences are removed; any occurrences in between remain untouched.\\n\"\n}",
+    "parsed_response": {
+     "content": "# mbpp_11\n\n## Description\nImplement a Python function `remove_Occ(s, ch)` that removes **the first and the last occurrence** of the character `ch` from the input string `s`. If the character does not appear at least twice, the original string should be returned unchanged.\n\n## Function Signature\n```python\nremove_Occ(s: str, ch: str) -> str\n```\n\n## Parameters\n- `s`: The original string.\n- `ch`: A single character whose first and last occurrences need to be removed.\n\n## Returns\n- A new string with the first and last occurrence of `ch` removed, or the original string if `ch` occurs fewer than two times.\n\n## Example\n```python\n>>> remove_Occ(\"abracadabra\", \"a\")\n'brcadabr'\n>>> remove_Occ(\"hello\", \"l\")\n'helo'\n>>> remove_Occ(\"test\", \"z\")\n'test'  # 'z' not present, string unchanged\n```\n\n## Notes\n- The function should handle empty strings and single\u2011character strings gracefully.\n- Only the **first** and **last** occurrences are removed; any occurrences in between remain untouched.\n"
+    },
+    "usage": {
+     "calls": 1,
+     "prompt_tokens": 215,
+     "completion_tokens": 359,
+     "latency_s": 5.7516
+    }
+   },
+   {
+    "agent": "spec",
+    "messages": [
+     {
+      "role": "system",
+      "content": "Reply with {\"contract\": \"...\"}. Do not write Python. Copy every requirement sentence from the user request. On visit 2, keep those sentences and answer the review note."
+     },
+     {
+      "role": "user",
+      "content": "VISIT_JSON: 2\nTASK_JSON: {\"kind\": \"coding\", \"name\": \"mbpp_11\", \"request\": \"Write a python function to remove first and last occurrence of a given character from the string.\", \"signature\": \"remove_Occ(s, ch)\", \"entry\": \"remove_Occ\", \"draft_path\": \"mbpp_11_draft.py\", \"path\": \"mbpp_11.py\", \"doc_path\": \"README.md\"}\nREVIEW_JSON: {\"decision\": \"revise\", \"note\": \"AssertionError\"}"
+     }
+    ],
+    "raw_response": "{\"contract\":\"Write a python function to remove first and last occurrence of a given character from the string. signature: remove_Occ(s, ch). The AssertionError in the review indicates that the current implementation likely fails on edge cases (e.g., when the character does not appear twice, appears only once, or the string is empty). To resolve this, add logic to check the count of the character and return the original string unchanged if the count is less than two, and correctly handle index calculations for removal of the first and last occurrences.\"}",
+    "parsed_response": {
+     "contract": "Write a python function to remove first and last occurrence of a given character from the string. signature: remove_Occ(s, ch). The AssertionError in the review indicates that the current implementation likely fails on edge cases (e.g., when the character does not appear twice, appears only once, or the string is empty). To resolve this, add logic to check the count of the character and return the original string unchanged if the count is less than two, and correctly handle index calculations for removal of the first and last occurrences."
+    },
+    "usage": {
+     "calls": 1,
+     "prompt_tokens": 225,
+     "completion_tokens": 468,
+     "latency_s": 7.5905
+    }
+   },
+   {
+    "agent": "coder",
+    "messages": [
+     {
+      "role": "system",
+      "content": "Reply with {\"content\": \"...\"}. content is one complete Python function. Encode newlines as \\n. The function name and parameters are the signature in the task. Implement every sentence in the contract and nothing else."
+     },
+     {
+      "role": "user",
+      "content": "VISIT_JSON: 2\nTASK_JSON: {\"kind\": \"coding\", \"name\": \"mbpp_11\", \"signature\": \"remove_Occ(s, ch)\"}\nCONTRACT_JSON: {\"text\": \"Write a python function to remove first and last occurrence of a given character from the string. signature: remove_Occ(s, ch). The AssertionError in the review indicates that the current implementation likely fails on edge cases (e.g., when the character does not appear twice, appears only once, or the string is empty). To resolve this, add logic to check the count of the character and return the original string unchanged if the count is less than two, and correctly handle index calculations for removal of the first and last occurrences.\"}"
+     }
+    ],
+    "raw_response": "{\"content\":\"def remove_Occ(s, ch):\\n    '''Remove the first and last occurrence of ch in s. If ch occurs fewer than two times, return s unchanged.'''\\n    count = s.count(ch)\\n    if count < 2:\\n        return s\\n    first = s.find(ch)\\n    last = s.rfind(ch)\\n    return s[:first] + s[first+1:last] + s[last+1:]\"}",
+    "parsed_response": {
+     "content": "def remove_Occ(s, ch):\n    '''Remove the first and last occurrence of ch in s. If ch occurs fewer than two times, return s unchanged.'''\n    count = s.count(ch)\n    if count < 2:\n        return s\n    first = s.find(ch)\n    last = s.rfind(ch)\n    return s[:first] + s[first+1:last] + s[last+1:]"
+    },
+    "usage": {
+     "calls": 1,
+     "prompt_tokens": 270,
+     "completion_tokens": 660,
+     "latency_s": 10.5823
+    }
+   },
+   {
+    "agent": "reviewer",
+    "messages": [
+     {
+      "role": "system",
+      "content": "Reply with {\"decision\": \"revise\" or \"approve\", \"note\": \"...\"}. Describe any failing checks in the report."
+     },
+     {
+      "role": "user",
+      "content": "VISIT_JSON: 2\nTASK_JSON: {\"kind\": \"coding\", \"name\": \"mbpp_11\", \"request\": \"Write a python function to remove first and last occurrence of a given character from the string.\", \"signature\": \"remove_Occ(s, ch)\", \"entry\": \"remove_Occ\", \"draft_path\": \"mbpp_11_draft.py\", \"path\": \"mbpp_11.py\", \"doc_path\": \"README.md\"}\nREPORT_JSON: {\"passed\": true, \"n\": 1, \"n_passed\": 1, \"failures\": [], \"source_sha256\": \"87797f7b1cc6c7473ce06c346f7b972a000caa98fd66bc3485888e712b128115\"}"
+     }
+    ],
+    "raw_response": "{\"decision\": \"approve\", \"note\": \"All checks passed; no issues detected.\"}",
+    "parsed_response": {
+     "decision": "approve",
+     "note": "All checks passed; no issues detected."
+    },
+    "usage": {
+     "calls": 1,
+     "prompt_tokens": 267,
+     "completion_tokens": 53,
+     "latency_s": 1.045
+    }
+   }
+  ],
+  "nodes": [
+   {
+    "id": "step:1:spec",
+    "seq": 1,
+    "kind": "step",
+    "key": "spec",
+    "data": {
+     "agent": "spec",
+     "usage": {
+      "calls": 1,
+      "prompt_tokens": 207,
+      "completion_tokens": 263,
+      "latency_s": 4.3565
+     },
+     "wall_s": 4.356671536999784
+    }
+   },
+   {
+    "id": "artifact:2:spec",
+    "seq": 2,
+    "kind": "artifact",
+    "key": "spec",
+    "data": {
+     "value": {
+      "text": "Write a python function to remove first and last occurrence of a given character from the string."
+     },
+     "injection": null,
+     "faulty": false,
+     "fault": null
+    }
+   },
+   {
+    "id": "step:3:coder",
+    "seq": 3,
+    "kind": "step",
+    "key": "coder",
+    "data": {
+     "agent": "coder",
+     "usage": {
+      "calls": 1,
+      "prompt_tokens": 182,
+      "completion_tokens": 912,
+      "latency_s": 14.6615
+     },
+     "wall_s": 14.662015051000708
+    }
+   },
+   {
+    "id": "artifact:4:coder",
+    "seq": 4,
+    "kind": "artifact",
+    "key": "coder",
+    "data": {
+     "value": {
+      "path": "mbpp_11_draft.py",
+      "content": "def remove_Occ(s, ch):\n    \"\"\"Remove the first and last occurrence of ch in s and return the new string.\n    If ch does not occur, returns s unchanged. If ch occurs only once, that occurrence is removed.\n    \"\"\"\n    first = s.find(ch)\n    if first != -1:\n        return s\n    last = s.rfind(ch)\n    if first == last:\n        return s[:first] + s[first + 1:]\n    return s[:first] + s[first + 1:last] + s[last + 1:]\n"
+     },
+     "injection": {
+      "type": "semantic_mutation",
+      "target": "coder",
+      "eligible": true,
+      "fired": true,
+      "mutation": {
+       "line": 6,
+       "from": "Eq",
+       "to": "NotEq"
+      },
+      "before": {
+       "content": "def remove_Occ(s, ch):\n    \"\"\"Remove the first and last occurrence of ch in s and return the new string.\n    If ch does not occur, returns s unchanged. If ch occurs only once, that occurrence is removed.\n    \"\"\"\n    first = s.find(ch)\n    if first == -1:\n        return s\n    last = s.rfind(ch)\n    if first == last:\n        return s[:first] + s[first+1:]\n    # remove last first to keep first index valid\n    return s[:first] + s[first+1:last] + s[last+1:]"
+      },
+      "after": {
+       "content": "def remove_Occ(s, ch):\n    \"\"\"Remove the first and last occurrence of ch in s and return the new string.\n    If ch does not occur, returns s unchanged. If ch occurs only once, that occurrence is removed.\n    \"\"\"\n    first = s.find(ch)\n    if first != -1:\n        return s\n    last = s.rfind(ch)\n    if first == last:\n        return s[:first] + s[first + 1:]\n    return s[:first] + s[first + 1:last] + s[last + 1:]\n"
+      }
+     },
+     "faulty": true,
+     "fault": "semantic_mutation@coder"
+    }
+   },
+   {
+    "id": "effect:5:write_file",
+    "seq": 5,
+    "kind": "effect",
+    "key": "write_file",
+    "data": {
+     "status": "applied",
+     "tool": "write_file",
+     "args": {
+      "path": "mbpp_11_draft.py"
+     },
+     "class": "reversible",
+     "undo": {
+      "op": "restore_file",
+      "path": "mbpp_11_draft.py",
+      "before": null
+     }
+    }
+   },
+   {
+    "id": "step:6:tester",
+    "seq": 6,
+    "kind": "step",
+    "key": "tester",
+    "data": {
+     "agent": "tester",
+     "usage": {
+      "calls": 0,
+      "prompt_tokens": 0,
+      "completion_tokens": 0,
+      "latency_s": 0.0
+     },
+     "wall_s": 0.2804202970000915
+    }
+   },
+   {
+    "id": "artifact:7:tester",
+    "seq": 7,
+    "kind": "artifact",
+    "key": "tester",
+    "data": {
+     "value": {
+      "passed": false,
+      "n": 1,
+      "n_passed": 0,
+      "failures": [
+       {
+        "test_index": 0,
+        "error": "AssertionError"
+       }
+      ],
+      "source_sha256": "a53322c5ccd1e3fd568a0c0f85ac66504615228576c32cbc3358bd396de7e1ed"
+     },
+     "injection": null,
+     "faulty": false,
+     "fault": null
+    }
+   },
+   {
+    "id": "step:8:reviewer",
+    "seq": 8,
+    "kind": "step",
+    "key": "reviewer",
+    "data": {
+     "agent": "reviewer",
+     "usage": {
+      "calls": 1,
+      "prompt_tokens": 281,
+      "completion_tokens": 122,
+      "latency_s": 2.1676
+     },
+     "wall_s": 2.1677058980003494
+    }
+   },
+   {
+    "id": "artifact:9:reviewer",
+    "seq": 9,
+    "kind": "artifact",
+    "key": "reviewer",
+    "data": {
+     "value": {
+      "decision": "revise",
+      "note": "AssertionError"
+     }
+    }
+   },
+   {
+    "id": "step:10:docs",
+    "seq": 10,
+    "kind": "step",
+    "key": "docs",
+    "data": {
+     "agent": "docs",
+     "usage": {
+      "calls": 1,
+      "prompt_tokens": 215,
+      "completion_tokens": 359,
+      "latency_s": 5.7516
+     },
+     "wall_s": 5.751690320999842
+    }
+   },
+   {
+    "id": "artifact:11:docs",
+    "seq": 11,
+    "kind": "artifact",
+    "key": "docs",
+    "data": {
+     "value": {
+      "path": "README.md",
+      "content": "# mbpp_11\n\n## Description\nImplement a Python function `remove_Occ(s, ch)` that removes **the first and the last occurrence** of the character `ch` from the input string `s`. If the character does not appear at least twice, the original string should be returned unchanged.\n\n## Function Signature\n```python\nremove_Occ(s: str, ch: str) -> str\n```\n\n## Parameters\n- `s`: The original string.\n- `ch`: A single character whose first and last occurrences need to be removed.\n\n## Returns\n- A new string with the first and last occurrence of `ch` removed, or the original string if `ch` occurs fewer than two times.\n\n## Example\n```python\n>>> remove_Occ(\"abracadabra\", \"a\")\n'brcadabr'\n>>> remove_Occ(\"hello\", \"l\")\n'helo'\n>>> remove_Occ(\"test\", \"z\")\n'test'  # 'z' not present, string unchanged\n```\n\n## Notes\n- The function should handle empty strings and single\u2011character strings gracefully.\n- Only the **first** and **last** occurrences are removed; any occurrences in between remain untouched.\n"
+     }
+    }
+   },
+   {
+    "id": "effect:12:write_file",
+    "seq": 12,
+    "kind": "effect",
+    "key": "write_file",
+    "data": {
+     "status": "applied",
+     "tool": "write_file",
+     "args": {
+      "path": "README.md"
+     },
+     "class": "reversible",
+     "undo": {
+      "op": "restore_file",
+      "path": "README.md",
+      "before": null
+     }
+    }
+   },
+   {
+    "id": "step:13:spec:2",
+    "seq": 13,
+    "kind": "step",
+    "key": "spec:2",
+    "data": {
+     "agent": "spec",
+     "usage": {
+      "calls": 1,
+      "prompt_tokens": 225,
+      "completion_tokens": 468,
+      "latency_s": 7.5905
+     },
+     "wall_s": 7.590656835000118
+    }
+   },
+   {
+    "id": "artifact:14:spec:2",
+    "seq": 14,
+    "kind": "artifact",
+    "key": "spec:2",
+    "data": {
+     "value": {
+      "text": "Write a python function to remove first and last occurrence of a given character from the string. signature: remove_Occ(s, ch). The AssertionError in the review indicates that the current implementation likely fails on edge cases (e.g., when the character does not appear twice, appears only once, or the string is empty). To resolve this, add logic to check the count of the character and return the original string unchanged if the count is less than two, and correctly handle index calculations for removal of the first and last occurrences."
+     },
+     "injection": null,
+     "faulty": false,
+     "fault": null
+    }
+   },
+   {
+    "id": "step:15:coder:2",
+    "seq": 15,
+    "kind": "step",
+    "key": "coder:2",
+    "data": {
+     "agent": "coder",
+     "usage": {
+      "calls": 1,
+      "prompt_tokens": 270,
+      "completion_tokens": 660,
+      "latency_s": 10.5823
+     },
+     "wall_s": 10.582420556000216
+    }
+   },
+   {
+    "id": "artifact:16:coder:2",
+    "seq": 16,
+    "kind": "artifact",
+    "key": "coder:2",
+    "data": {
+     "value": {
+      "path": "mbpp_11.py",
+      "content": "def remove_Occ(s, ch):\n    '''Remove the first and last occurrence of ch in s. If ch occurs fewer than two times, return s unchanged.'''\n    count = s.count(ch)\n    if count < 2:\n        return s\n    first = s.find(ch)\n    last = s.rfind(ch)\n    return s[:first] + s[first+1:last] + s[last+1:]"
+     },
+     "injection": null,
+     "faulty": false,
+     "fault": null
+    }
+   },
+   {
+    "id": "effect:17:write_file",
+    "seq": 17,
+    "kind": "effect",
+    "key": "write_file",
+    "data": {
+     "status": "applied",
+     "tool": "write_file",
+     "args": {
+      "path": "mbpp_11.py"
+     },
+     "class": "reversible",
+     "undo": {
+      "op": "restore_file",
+      "path": "mbpp_11.py",
+      "before": null
+     }
+    }
+   },
+   {
+    "id": "step:18:tester:2",
+    "seq": 18,
+    "kind": "step",
+    "key": "tester:2",
+    "data": {
+     "agent": "tester",
+     "usage": {
+      "calls": 0,
+      "prompt_tokens": 0,
+      "completion_tokens": 0,
+      "latency_s": 0.0
+     },
+     "wall_s": 0.27622695800164365
+    }
+   },
+   {
+    "id": "artifact:19:tester:2",
+    "seq": 19,
+    "kind": "artifact",
+    "key": "tester:2",
+    "data": {
+     "value": {
+      "passed": true,
+      "n": 1,
+      "n_passed": 1,
+      "failures": [],
+      "source_sha256": "87797f7b1cc6c7473ce06c346f7b972a000caa98fd66bc3485888e712b128115"
+     },
+     "injection": null,
+     "faulty": false,
+     "fault": null
+    }
+   },
+   {
+    "id": "step:20:reviewer:2",
+    "seq": 20,
+    "kind": "step",
+    "key": "reviewer:2",
+    "data": {
+     "agent": "reviewer",
+     "usage": {
+      "calls": 1,
+      "prompt_tokens": 267,
+      "completion_tokens": 53,
+      "latency_s": 1.045
+     },
+     "wall_s": 1.0451655680008116
+    }
+   },
+   {
+    "id": "artifact:21:reviewer:2",
+    "seq": 21,
+    "kind": "artifact",
+    "key": "reviewer:2",
+    "data": {
+     "value": {
+      "decision": "approve",
+      "note": ""
+     }
+    }
+   }
+  ],
+  "edges": [
+   {
+    "src": "step:1:spec",
+    "dst": "artifact:2:spec",
+    "type": "output"
+   },
+   {
+    "src": "artifact:2:spec",
+    "dst": "step:3:coder",
+    "type": "input"
+   },
+   {
+    "src": "artifact:2:spec",
+    "dst": "step:3:coder",
+    "type": "support"
+   },
+   {
+    "src": "step:3:coder",
+    "dst": "artifact:4:coder",
+    "type": "output"
+   },
+   {
+    "src": "step:3:coder",
+    "dst": "effect:5:write_file",
+    "type": "effect"
+   },
+   {
+    "src": "artifact:4:coder",
+    "dst": "step:6:tester",
+    "type": "input"
+   },
+   {
+    "src": "artifact:4:coder",
+    "dst": "step:6:tester",
+    "type": "support"
+   },
+   {
+    "src": "step:6:tester",
+    "dst": "artifact:7:tester",
+    "type": "output"
+   },
+   {
+    "src": "artifact:2:spec",
+    "dst": "step:8:reviewer",
+    "type": "input"
+   },
+   {
+    "src": "artifact:7:tester",
+    "dst": "step:8:reviewer",
+    "type": "input"
+   },
+   {
+    "src": "artifact:7:tester",
+    "dst": "step:8:reviewer",
+    "type": "support"
+   },
+   {
+    "src": "step:8:reviewer",
+    "dst": "artifact:9:reviewer",
+    "type": "output"
+   },
+   {
+    "src": "artifact:2:spec",
+    "dst": "step:10:docs",
+    "type": "input"
+   },
+   {
+    "src": "step:10:docs",
+    "dst": "artifact:11:docs",
+    "type": "output"
+   },
+   {
+    "src": "step:10:docs",
+    "dst": "effect:12:write_file",
+    "type": "effect"
+   },
+   {
+    "src": "artifact:9:reviewer",
+    "dst": "step:13:spec:2",
+    "type": "input"
+   },
+   {
+    "src": "artifact:9:reviewer",
+    "dst": "step:13:spec:2",
+    "type": "support"
+   },
+   {
+    "src": "step:13:spec:2",
+    "dst": "artifact:14:spec:2",
+    "type": "output"
+   },
+   {
+    "src": "artifact:14:spec:2",
+    "dst": "step:15:coder:2",
+    "type": "input"
+   },
+   {
+    "src": "artifact:14:spec:2",
+    "dst": "step:15:coder:2",
+    "type": "support"
+   },
+   {
+    "src": "step:15:coder:2",
+    "dst": "artifact:16:coder:2",
+    "type": "output"
+   },
+   {
+    "src": "step:15:coder:2",
+    "dst": "effect:17:write_file",
+    "type": "effect"
+   },
+   {
+    "src": "artifact:16:coder:2",
+    "dst": "step:18:tester:2",
+    "type": "input"
+   },
+   {
+    "src": "artifact:16:coder:2",
+    "dst": "step:18:tester:2",
+    "type": "support"
+   },
+   {
+    "src": "step:18:tester:2",
+    "dst": "artifact:19:tester:2",
+    "type": "output"
+   },
+   {
+    "src": "artifact:14:spec:2",
+    "dst": "step:20:reviewer:2",
+    "type": "input"
+   },
+   {
+    "src": "artifact:19:tester:2",
+    "dst": "step:20:reviewer:2",
+    "type": "input"
+   },
+   {
+    "src": "artifact:19:tester:2",
+    "dst": "step:20:reviewer:2",
+    "type": "support"
+   },
+   {
+    "src": "step:20:reviewer:2",
+    "dst": "artifact:21:reviewer:2",
+    "type": "output"
+   }
+  ]
+ },
+ "world": {
+  "bookings": {},
+  "outbox": [],
+  "files": {
+   "mbpp_11_draft.py": "def remove_Occ(s, ch):\n    \"\"\"Remove the first and last occurrence of ch in s and return the new string.\n    If ch does not occur, returns s unchanged. If ch occurs only once, that occurrence is removed.\n    \"\"\"\n    first = s.find(ch)\n    if first != -1:\n        return s\n    last = s.rfind(ch)\n    if first == last:\n        return s[:first] + s[first + 1:]\n    return s[:first] + s[first + 1:last] + s[last + 1:]\n",
+   "README.md": "# mbpp_11\n\n## Description\nImplement a Python function `remove_Occ(s, ch)` that removes **the first and the last occurrence** of the character `ch` from the input string `s`. If the character does not appear at least twice, the original string should be returned unchanged.\n\n## Function Signature\n```python\nremove_Occ(s: str, ch: str) -> str\n```\n\n## Parameters\n- `s`: The original string.\n- `ch`: A single character whose first and last occurrences need to be removed.\n\n## Returns\n- A new string with the first and last occurrence of `ch` removed, or the original string if `ch` occurs fewer than two times.\n\n## Example\n```python\n>>> remove_Occ(\"abracadabra\", \"a\")\n'brcadabr'\n>>> remove_Occ(\"hello\", \"l\")\n'helo'\n>>> remove_Occ(\"test\", \"z\")\n'test'  # 'z' not present, string unchanged\n```\n\n## Notes\n- The function should handle empty strings and single\u2011character strings gracefully.\n- Only the **first** and **last** occurrences are removed; any occurrences in between remain untouched.\n",
+   "mbpp_11.py": "def remove_Occ(s, ch):\n    '''Remove the first and last occurrence of ch in s. If ch occurs fewer than two times, return s unchanged.'''\n    count = s.count(ch)\n    if count < 2:\n        return s\n    first = s.find(ch)\n    last = s.rfind(ch)\n    return s[:first] + s[first+1:last] + s[last+1:]"
+  },
+  "action_history": []
+ }
+}

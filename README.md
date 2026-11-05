@@ -192,10 +192,10 @@ latexmk -pdf -interaction=nonstopmode -halt-on-error \
 | Evidence | Available files | Coverage |
 |---|---|---|
 | Qwen booking and graph experiments | [Rows, traces, and reproduction instructions](artifacts/phase1/README.md) | Source revisions and logs supporting the Qwen tables. |
-| Muse coding and authorization | [580 result rows](artifacts/phase1/muse-coding/rows.jsonl), [run archive](artifacts/phase1/muse-coding/run-artifacts.tar.gz) | Complete saved batch, including four execution errors and three skipped recovery rows. |
-| GPT-OSS coding and authorization | [Result rows](artifacts/phase1/gpt-oss-coding/rows.jsonl), [run archive](artifacts/phase1/gpt-oss-coding/run-artifacts.tar.gz) | Saved run files and [artifact notes](artifacts/phase1/gpt-oss-coding/README.md). |
+| Muse coding and authorization | [580 result rows](artifacts/phase1/muse-coding/rows.jsonl), [logs and configuration](artifacts/phase1/muse-coding/) | Complete saved batch, including four execution errors and three skipped recovery rows. |
+| GPT-OSS coding and authorization | [Result rows](artifacts/phase1/gpt-oss-coding/rows.jsonl), [logs and configuration](artifacts/phase1/gpt-oss-coding/) | Saved run files and [artifact notes](artifacts/phase1/gpt-oss-coding/README.md). |
 
-Each coding archive contains per-task traces, configuration, the selected task manifest, run status, and a deployed source snapshot. SHA-256 checksums accompany both archives. The [artifact guide](artifacts/phase1/README.md) provides extraction instructions and notes for each run.
+Each coding directory contains per-task traces, configuration, the selected task manifest, run status, and a deployed source snapshot. See the [artifact guide](artifacts/phase1/README.md) for file descriptions and notes for each run.
 
 ## External benchmarks
 
