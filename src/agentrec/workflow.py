@@ -44,6 +44,7 @@ class RunContext:
     prov: Provenance = field(default_factory=Provenance)
     injector: Injector | None = None
     verify: bool = False
+    scenario: dict[str, str] = field(default_factory=dict)
     # step key -> {"fingerprint", "artifacts": [(key, value)], "effects": [...]} from a prior run
     reuse: dict[str, dict[str, Any]] = field(default_factory=dict)
     consumed: set[str] = field(default_factory=set)
@@ -57,7 +58,17 @@ _CLAIM_FAULTS = {"false_refundable": "claim:refundable", "wrong_hotel_id": "clai
 
 
 def run_agents(ctx: RunContext) -> None:
-    """Travel booking, a coding team, or one of the graph templates."""
+    """Dispatch and preserve exact model exchanges, excluding authentication headers."""
+    import copy
+    start = len(getattr(ctx.llm, "recorded_calls", []))
+    try:
+        _run_agents(ctx)
+    finally:
+        ctx.prov.model_calls = copy.deepcopy(getattr(ctx.llm, "recorded_calls", [])[start:])
+
+
+def _run_agents(ctx: RunContext) -> None:
+    """Travel booking or the coding team."""
     kind = ctx.task.get("kind")
     if kind == "coding":
         from .coding import CodingWorkflow
@@ -65,7 +76,6 @@ def run_agents(ctx: RunContext) -> None:
         CodingWorkflow().run(ctx)
     elif kind == "graph":
         from .graphs import GraphWorkflow
-
         GraphWorkflow().run(ctx)
     else:
         TravelWorkflow().run(ctx)
@@ -255,14 +265,26 @@ class TravelWorkflow:
                     f"{key}/call{it}", {"action": action, "args": args}, producer=step, **_fault_kwargs(ctx, True)
                 )
             ok, reason = True, ""
-            if action in EXEC_TOOLS:
+            if action in EXEC_TOOLS or (action == "cancel_booking" and ctx.task.get("authorization_policy")):
                 call = {"action": action, "args": args}
                 ok, reason = self._check(ctx, "action", {"findings": findings, "current_step": item}, call)
+            policy_event = None
+            if ctx.task.get("authorization_policy"):
+                import copy
+                from .authorization import policy_violations
+                policy_event = {"step": key, "action": action, "args": copy.deepcopy(args),
+                    "violations": policy_violations(ctx.task, action, args),
+                    "blocked_by_verifier": not ok, "committed": False}
+                ctx.world.action_history.append(policy_event)
             if ok:
                 obs = self._exec_tool(ctx, step, action, args)
             else:
                 blocked += 1
                 obs = {"error": f"blocked by verifier: {reason}"}
+            if policy_event is not None:
+                policy_event["committed"] = bool(ok and isinstance(obs, dict) and "error" not in obs
+                    and action in {*EXEC_TOOLS, "cancel_booking"})
+                ctx.prov.add_artifact(f"{key}/authorization{it}", policy_event.copy(), producer=step)
             obs_id = ctx.prov.add_artifact(f"{key}/obs{it}", obs, producer=step)
             ctx.prov.add_input(obs_id, step)
             if not (isinstance(obs, dict) and "error" in obs):
@@ -286,13 +308,15 @@ class TravelWorkflow:
             return {"error": f"bad arguments: {e}"}
 
     def _exec_tool(self, ctx: RunContext, step: str, action: Any, args: dict[str, Any]) -> Any:
-        if action not in EXEC_TOOLS:
+        if action not in EXEC_TOOLS and not (action == "cancel_booking" and ctx.task.get("authorization_policy")):
             return {"error": f"unknown action {action!r}; call a tool or respond with done"}
         try:
             if action == "book_flight":
                 obs, effect = ctx.world.book_flight(str(args["flight_id"]))
             elif action == "book_hotel":
                 obs, effect = ctx.world.book_hotel(str(args["hotel_id"]), int(args.get("nights", 1)))
+            elif action == "cancel_booking":
+                obs, effect = ctx.world.cancel_booking(str(args["booking_id"]))
             elif action == "write_file":
                 obs, effect = ctx.world.write_file(str(args["path"]), str(args["content"]))
             else:

@@ -211,30 +211,6 @@ def test_support_keeps_bookings_that_do_not_cite_the_refundable_claim(setup):
     assert check(coarse_world, truth)["task_recovery_success"]
 
 
-def test_support_keeps_the_flight_booking_when_only_the_hotel_claim_is_wrong(setup):
-    task, truth, catalog, llm = setup
-    world, prov, _, _ = run_workflow(task, catalog, llm, FAULTS_BY_NAME["wrong_hotel_id@research_hotels"])
-    before = check(world, truth)
-    assert before["flight_ok"] and not before["hotel_ok"]
-    assert before["refund_ok"] and not before["task_recovery_success"]
-    faulty = [prov.nodes[nid] for nid in prov.faulty_nodes()]
-    assert [n.key for n in faulty] == ["claim:hotel_id"]
-
-    support_world, support_prov = copy.deepcopy(world), copy.deepcopy(prov)
-    coarse_world, coarse_prov = copy.deepcopy(world), copy.deepcopy(prov)
-    support = support_recover(task, support_world, llm, support_prov)
-    coarse = coarse_lineage(task, coarse_world, llm, coarse_prov)
-
-    assert "exec:0" in coarse.tainted_steps
-    assert "exec:0" not in support.tainted_steps
-    assert "exec:1" in support.tainted_steps and "exec:2" in support.tainted_steps
-    assert "research_flights" not in support.tainted_steps
-    assert support.compensated >= 1 and coarse.compensated >= 1
-    assert check(support_world, truth)["task_recovery_success"]
-    assert check(support_world, truth)["erroneous_bookings_active"] == 0
-    assert check(coarse_world, truth)["task_recovery_success"]
-
-
 def test_support_monitor_notes_only_the_support_set(setup):
     task, truth, catalog, llm = setup
     world, prov, _, _ = run_workflow(task, catalog, llm, FAULTS_BY_NAME["false_refundable@research_hotels"])
@@ -357,3 +333,45 @@ def test_verify_blocks_injected_email(setup):
         task, catalog, llm, FAULTS_BY_NAME["malicious_instruction@research_hotels"], verify=True
     )
     assert check(world, truth)["unauthorized_emails"] == 0
+
+
+def test_support_keeps_the_flight_booking_when_only_the_hotel_claim_is_wrong(setup):
+    task, truth, catalog, llm = setup
+    world, prov, _, _ = run_workflow(task, catalog, llm, FAULTS_BY_NAME["wrong_hotel_id@research_hotels"])
+    before = check(world, truth)
+    assert before["flight_ok"] and not before["hotel_ok"]
+    assert before["refund_ok"] and not before["success"]
+    faulty = [prov.nodes[nid] for nid in prov.faulty_nodes()]
+    assert [n.key for n in faulty] == ["claim:hotel_id"]
+
+    support_world, support_prov = copy.deepcopy(world), copy.deepcopy(prov)
+    coarse_world, coarse_prov = copy.deepcopy(world), copy.deepcopy(prov)
+    support = support_recover(task, support_world, llm, support_prov)
+    coarse = coarse_lineage(task, coarse_world, llm, coarse_prov)
+
+    assert "exec:0" in coarse.tainted_steps
+    assert "exec:0" not in support.tainted_steps
+    assert "exec:1" in support.tainted_steps and "exec:2" in support.tainted_steps
+    assert "research_flights" not in support.tainted_steps
+    assert support.compensated >= 1 and coarse.compensated >= 1
+    assert check(support_world, truth)["success"]
+    assert check(support_world, truth)["erroneous_bookings_active"] == 0
+    assert check(coarse_world, truth)["success"]
+
+
+def test_wrong_hotel_fault_invalidates_hotel_booking_work(setup):
+    task, _, catalog, llm = setup
+    spec = FAULTS_BY_NAME["wrong_hotel_id@research_hotels"]
+    _, prov, _, _ = run_workflow(task, catalog, llm, spec)
+    bookings = {s.data.get("action"): s for s in prov.of_kind("step")
+                if s.data.get("action") in {"book_flight", "book_hotel"}}
+    assert _valid_step(spec, bookings["book_flight"])
+    assert not _valid_step(spec, bookings["book_hotel"])
+
+
+def test_checker_retains_fields_for_authorization_callers(setup):
+    task, truth, catalog, llm = setup
+    world, _, _, _ = run_workflow(task, catalog, llm)
+    result = check(world, truth)
+    assert result["success"] and result["final_correct"]
+    assert result["task_recovery_success"] and result["final_effect_integrity"]

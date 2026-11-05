@@ -117,9 +117,12 @@ def strip_requirement(name: str, text: str) -> str:
     return " ".join(text.replace(dropped["text"], "").split())
 
 
-def run_suite(src: str, name: str) -> dict[str, Any]:
+def run_suite(src: str, name: str, split: str = "final") -> dict[str, Any]:
     """Execute `src` and score it against the hidden suite for `name`."""
     program = PROGRAMS[name]
+    if program.get("benchmark") == "mbpp":
+        from .mbpp import evaluate
+        return evaluate(src, program, split)
     namespace: dict[str, Any] = {}
     try:
         exec(src, {"__builtins__": _BUILTINS}, namespace)  # noqa: S102

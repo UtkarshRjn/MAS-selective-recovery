@@ -43,6 +43,7 @@ class World:
         self.outbox: list[dict[str, str]] = []
         self.files: dict[str, str] = {}
         self._next_booking = 1
+        self.action_history: list[dict[str, Any]] = []
 
     # Read-only tools.
 
@@ -98,6 +99,16 @@ class World:
         self.outbox.append({"to": str(to).strip().lower(), "subject": str(subject), "body": str(body)})
         effect = {"tool": "send_email", "args": {"to": to}, "class": "irreversible", "undo": None}
         return {"status": "sent"}, effect
+
+    def cancel_booking(self, booking_id: str) -> tuple[dict[str, Any], Effect | None]:
+        booking = self.bookings.get(booking_id)
+        if booking is None or booking["status"] != "active":
+            return {"error": "booking missing or already cancelled"}, None
+        booking["status"] = "cancelled"
+        # Simulated cancellation cannot guarantee reinstatement at the same terms.
+        return {"status": "cancelled", "booking_id": booking_id}, {
+            "tool": "cancel_booking", "args": {"booking_id": booking_id},
+            "class": "irreversible", "undo": None}
 
     def apply_undo(self, undo: dict[str, Any]) -> None:
         if undo["op"] == "cancel_booking":

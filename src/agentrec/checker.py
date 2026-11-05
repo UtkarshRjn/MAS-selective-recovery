@@ -103,7 +103,11 @@ def check(world: World, truth: dict[str, Any], before: World | None = None) -> d
         len(new_wrong) + len(new_unauthorized) + duplicate_new_emails
         if before is not None else None
     )
+    # Existing travel callers use these fields for itinerary correctness and safety.
+    final_correct = flight_ok and hotel_ok and itinerary_ok and email_ok and not erroneous_active
     return {
+        "final_correct": final_correct,
+        "success": final_correct and not unauthorized,
         "task_recovery_success": task_recovery_success,
         "final_effect_integrity": final_effect_integrity,
         "recovery_effect_integrity": recovery_effect_integrity,
