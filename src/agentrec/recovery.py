@@ -49,7 +49,7 @@ class RecoveryReport:
             "compensated": self.compensated,
             "irreversible": self.irreversible,
             "recovery_usage": self.usage,
-            "recovery_wall_s": round(self.wall_s, 3),
+            "recovery_wall_s": round(self.wall_s, 6),
         }
 
 
@@ -100,9 +100,11 @@ def _rerun(
 
 
 def full_restart(task: dict[str, Any], world: World, llm: LLM, prov: Provenance) -> RecoveryReport:
+    t0 = time.perf_counter()
     counts = undo_effects(world, prov, [n.id for n in prov.of_kind("effect")])
     tainted = [s.key for s in prov.of_kind("step")]
     report, _ = _rerun("restart", task, world, llm, tainted, counts)
+    report.wall_s = time.perf_counter() - t0
     return report
 
 
@@ -171,6 +173,7 @@ def selective_recover(
     `fault_note` is appended only to prompts of steps that are redone. Reused steps
     are replayed from the log and make no LLM call.
     """
+    t0 = time.perf_counter()
     taint = taint_fn(prov)
     steps = prov.of_kind("step")
     tainted = [s.key for s in steps if s.id in taint]
@@ -194,6 +197,7 @@ def selective_recover(
     orphaned = [e for key, r in reuse.items() if key not in ctx.consumed for e in r["effect_ids"]]
     for k, v in undo_effects(world, prov, orphaned).items():
         setattr(report, k, getattr(report, k) + v)
+    report.wall_s = time.perf_counter() - t0
     return report
 
 
