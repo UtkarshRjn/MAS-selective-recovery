@@ -1,12 +1,14 @@
-# GPT-OSS saved run files
+# GPT-OSS experiment evidence
 
-This directory contains a **partial, interrupted batch of 506 rows** downloaded before the run resumed. The published tables describe the completed 579-row batch. The remaining rows and traces still need to be retrieved.
+The completed batch contains 579 result rows and 578 saved execution traces. It retains 1 execution errors and 0 skipped conditions. Errors or skipped conditions can lack a trace.
 
-Use these files to inspect the available executions. They cannot reproduce every aggregate in the published tables. Preserve the interrupted status and missing conditions when analyzing them.
+| File | Contents |
+|---|---|
+| `rows.jsonl` | One aggregate record per condition. Use this file for analysis. |
+| `traces/` | Agent messages, intermediate outputs, dependencies, and simulated state. Filenames identify the task, fault, and method. |
+| `config.json` | Model and execution settings. |
+| `manifest.json` | Selected task definitions and dataset metadata. |
 
-- `rows.jsonl` contains the 506 available result records.
-- `tasks/` contains per-task rows and execution traces.
-- `config.json`, `manifest.json`, and `run_status.json` record settings, selected tasks, and interrupted status.
-- `source-snapshot/` preserves the deployed source files.
+The batch resumed an interrupted run and includes earlier completed records once. Historical deployment paths in configuration refer to the original machine.
 
-Per-task rows duplicate the top-level records and should be counted once.
+The exact deployed source snapshot and original run/resume metadata are preserved at commit `aec632102fd172d7ba432ddb357743d03d31a5ff`. Use that snapshot when reproducing historical scoring and timing. [Source snapshot](https://github.com/UtkarshRjn/MAS-selective-recovery/tree/aec632102fd172d7ba432ddb357743d03d31a5ff/artifacts/phase1/gpt-oss-coding/source-snapshot) · [Run and resume metadata](https://github.com/UtkarshRjn/MAS-selective-recovery/tree/aec632102fd172d7ba432ddb357743d03d31a5ff/artifacts/phase1/gpt-oss-coding)
