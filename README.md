@@ -11,15 +11,15 @@ The two main evaluations cover simulated travel booking and Python programming t
 | Travel booking | Seven steps research flights and hotels, plan a trip, book both, save an itinerary, and email the traveler. Tools update a simulated world. | Qwen2.5-7B-Instruct on two task seeds and eleven fault types. |
 | Python coding | Nine steps write a specification, code, test results, review, and documentation, followed by a second specification–code–test–review pass. | GPT-OSS 120B and Muse Glimmer 30B on 10 of 50 prepared sanitized MBPP tasks. |
 
-Coding uses one test for revision feedback and hidden tests to score the final code. Generated code runs in Docker. Workflow details appear in the report’s Experimental Setup section. [Report, page 1](output/pdf/phase1_report.pdf#page=1)
+Coding uses one test for revision feedback and hidden tests to score the final code. Generated code runs in Docker. Workflow details appear in the report’s Experimental Setup section. [Report, page 1](docs/phase1_report.pdf#page=1)
 
 ## Recovery methods
 
 We compare restarting the whole workflow, replaying its remaining suffix, and selecting steps through recorded dependencies (coarse). Support uses citations to retain independent work. Monitor and support-monitor add a known-fault note to the selected steps. Always-verify checks intermediate outputs during the forward run.
 
-The report explains graph construction, replay, and the fault-note monitor in “Baseline: Coarse Lineage Recovery” and “Proposed: Fault-Note Monitor.” [Report, page 1](output/pdf/phase1_report.pdf#page=1)
+The report explains graph construction, replay, and the fault-note monitor in “Baseline: Coarse Lineage Recovery” and “Proposed: Fault-Note Monitor.” [Report, page 1](docs/phase1_report.pdf#page=1)
 
-A worked example shows how support retains a correct flight booking after a hotel fault. [Appendix C, page 3](output/pdf/phase1_report.pdf#page=3)
+A worked example shows how support retains a correct flight booking after a hotel fault. [Appendix C, page 3](docs/phase1_report.pdf#page=3)
 
 ## Results
 
@@ -100,7 +100,7 @@ Qwen also evaluated three small coding programs and four synthetic dependency gr
 
 The fault note also had mixed results. For `clamp` with a missing requirement, monitor used 2,109 tokens and 13.87 seconds, compared with coarse's 1,453 tokens and 8.22 seconds. On the synthetic graphs, monitor produced three incorrect outputs where coarse succeeded. The [table-generation script](analysis/phase1_tables.py) reproduces these comparisons from committed rows.
 
-The report discusses the failure cases, limitations, and planned recovery improvements in “Phase 2 Direction” and the appendices. [Phase 1 report (PDF)](output/pdf/phase1_report.pdf)
+The report discusses the failure cases, limitations, and planned recovery improvements in “Phase 2 Direction” and the appendices. [Phase 1 report (PDF)](docs/phase1_report.pdf)
 
 ## Setup and reproduction
 
@@ -180,11 +180,11 @@ Rebuild the Qwen tables directly from the committed rows.
 uv run python analysis/phase1_tables.py
 ```
 
-The compiled report is available as a [PDF](output/pdf/phase1_report.pdf). To rebuild it locally, install a TeX distribution with `latexmk` and run the following command.
+The compiled report is available as a [PDF](docs/phase1_report.pdf). To rebuild it locally, install a TeX distribution with `latexmk` and run the following command.
 
 ```bash
 latexmk -pdf -interaction=nonstopmode -halt-on-error \
-  -outdir=output/pdf docs/phase1_report.tex
+  -outdir=docs docs/phase1_report.tex
 ```
 
 ## Results and logs
@@ -224,4 +224,4 @@ uv run agentrec who-when summary
 | [evals/travel-and-external.md](evals/travel-and-external.md) | Travel, graph, and external benchmark instructions. |
 | [artifacts/phase1/](artifacts/phase1/) | Committed Qwen results, traces, and source revisions. |
 | [analysis/phase1_tables.py](analysis/phase1_tables.py) | Rebuilds the Qwen tables from saved rows. |
-| [Phase 1 report (PDF)](output/pdf/phase1_report.pdf) | Design, experiments, results, and limitations. |
+| [Phase 1 report (PDF)](docs/phase1_report.pdf) | Design, experiments, results, and limitations. |

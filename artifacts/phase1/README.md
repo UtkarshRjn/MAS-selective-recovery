@@ -1,6 +1,6 @@
 # Phase 1 results and logs
 
-These are the raw runs behind the Qwen numbers in the [Phase 1 report](../../output/pdf/phase1_report.pdf). Each row is one run. Each trace in `qwen-booking/traces/` records the model exchanges, tool effects, provenance graph, and recovery decision for one task, fault, and method.
+These are the raw runs behind the Qwen numbers in the [Phase 1 report](../../docs/phase1_report.pdf). Each row is one run. Each trace in `qwen-booking/traces/` records the model exchanges, tool effects, provenance graph, and recovery decision for one task, fault, and method.
 
 ```bash
 uv run python analysis/phase1_tables.py     # rebuilds the tables below from these rows
