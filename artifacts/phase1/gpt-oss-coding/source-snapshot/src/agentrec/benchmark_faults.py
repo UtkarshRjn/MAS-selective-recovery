@@ -1,4 +1,4 @@
-"""Controlled MBPP perturbations; literature rationale: evals/FAULTS.md.
+"""Controlled MBPP perturbations; literature rationale: evals/README.md.
 
 No model calls, code execution, or private tests in the injector.
 """

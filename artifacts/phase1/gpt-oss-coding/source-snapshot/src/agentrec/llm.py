@@ -40,6 +40,8 @@ class LLM(Protocol):
 
 
 def parse_json_object(text: str) -> dict[str, Any]:
+    if not isinstance(text, str):
+        raise ValueError("Model returned non-text content")
     try:
         obj = json.loads(text)
     except json.JSONDecodeError:

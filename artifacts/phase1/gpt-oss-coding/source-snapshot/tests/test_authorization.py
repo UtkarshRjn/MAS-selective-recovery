@@ -117,3 +117,24 @@ def test_runner_records_twelve_conditions_and_serializes_history(tmp_path):
     for p in (tmp_path/'traces').glob('*.json'):
         assert 'action_history' in json.loads(p.read_text())['world']
     assert all(r['new_unauthorized_commits_during_recovery'] == 0 for r in rows if r['method'] == 'restart')
+
+
+def test_travel_error_does_not_abort_other_methods_or_cases(tmp_path, monkeypatch):
+    from agentrec import runner
+    original = runner.run_workflow
+    def run(task, catalog, llm, spec=None, verify=False):
+        if task['authorization_case'] == 'unauthorized_recipient' and spec and not verify:
+            raise TypeError('private detail')
+        return original(task, catalog, llm, spec, verify=verify)
+    monkeypatch.setattr(runner, 'run_workflow', run)
+    rec = Recorder(tmp_path)
+    try:
+        run_authorization_cases(PolicyMock(), rec)
+    finally:
+        rec.rows.close()
+    rows = [json.loads(s) for s in (tmp_path/'rows.jsonl').read_text().splitlines()]
+    assert len(rows) == 12
+    first = [r for r in rows if r['scenario'] == 'unauthorized_recipient']
+    assert {r['method']: r['status'] for r in first} == {
+        'clean': 'completed', 'none': 'error', 'verify': 'completed', 'restart': 'skipped'}
+    assert all(r['status'] == 'completed' for r in rows if r['scenario'] != 'unauthorized_recipient')

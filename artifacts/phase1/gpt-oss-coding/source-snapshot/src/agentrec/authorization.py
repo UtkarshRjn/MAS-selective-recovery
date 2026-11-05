@@ -80,29 +80,43 @@ def check_authorization(world, task, truth):
 def run_authorization_cases(llm, rec, seed=0):
     """Clean / injected / always-verify / restart, independently per case."""
     from .runner import run_workflow, RECOVER
+    from .conditions import attempt, skip_recovery
     for name in AUTHORIZATION_ATTACKS:
         task, truth, catalog = make_authorization_case(name, seed)
         spec = FaultSpec(name, 'research_hotels', persistent=True)
         def save(method, world, prov, stats, injector=None, **extra):
-            rec.row(dataset='travel_authorization', task_id=seed, scenario=name, method=method,
+            rec.trace(f'authorization_{seed}_{name}_{method}', prov, world)
+            rec.row(status='completed', dataset='travel_authorization', task_id=seed, scenario=name, method=method,
                     policy=task['authorization_policy'], adversarial=method != 'clean',
                     condition_type='clean' if method == 'clean' else 'adversarial',
                     attacker_goal=name, injection_boundary='hotel_description',
                     injection_events=injector.events if injector else [],
                     fault_fired=bool(injector.fired) if injector else None,
                     **check_authorization(world, task, truth), **stats, **extra)
-            rec.trace(f'authorization_{seed}_{name}_{method}', prov, world)
-        w, p, inj, stats = run_workflow(task, catalog, llm)
-        save('clean', w, p, stats, inj)
-        w, p, inj, stats = run_workflow(task, catalog, llm, spec)
-        save('none', w, p, stats, inj)
-        vw, vp, vi, vs = run_workflow(task, catalog, llm, spec, verify=True)
-        save('verify', vw, vp, vs, vi)
+        base = {'dataset': 'travel_authorization', 'task_id': seed, 'scenario': name,
+                'policy': task['authorization_policy']}
+        def forward(method, injection=None, verify=False):
+            def execute():
+                result = run_workflow(task, catalog, llm, injection, verify=verify)
+                w, p, inj, stats = result
+                save(method, w, p, stats, inj)
+                return result
+            return attempt(rec, {**base, 'method': method, 'adversarial': method != 'clean'}, llm, execute)
+        forward('clean')
+        faulty = forward('none', spec)
+        forward('verify', spec, verify=True)
+        if faulty is None:
+            skip_recovery(rec, base, ('restart',))
+            continue
+        w, p, inj, stats = faulty
         if inj.fired:
-            rw, rp = copy.deepcopy(w), copy.deepcopy(p)
-            prior_events = len(rw.action_history)
-            recovery = RECOVER['restart'](task, rw, llm, rp)
-            save('restart', rw, recovery.prov, recovery.row(),
-                 source_fault_fired=True, pre_recovery_action_count=prior_events,
-                 new_unauthorized_commits_during_recovery=sum(
-                     bool(e['violations']) and e['committed'] for e in rw.action_history[prior_events:]))
+            def recover():
+                rw, rp = copy.deepcopy(w), copy.deepcopy(p)
+                prior_events = len(rw.action_history)
+                recovery = RECOVER['restart'](task, rw, llm, rp)
+                save('restart', rw, recovery.prov, recovery.row(),
+                     source_fault_fired=True, pre_recovery_action_count=prior_events,
+                     new_unauthorized_commits_during_recovery=sum(
+                         bool(e['violations']) and e['committed'] for e in rw.action_history[prior_events:]))
+                return recovery
+            attempt(rec, {**base, 'method': 'restart', 'adversarial': True}, llm, recover)

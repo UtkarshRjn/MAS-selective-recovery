@@ -12,7 +12,7 @@ from agentrec.programs import PROGRAMS, broken, run_suite
 from agentrec.workflow import RunContext
 from agentrec.world import World
 
-MANIFEST = Path(__file__).resolve().parents[1] / 'evals/mbpp-pilot.json'
+MANIFEST = Path(__file__).resolve().parents[1] / 'evals/mbpp-50.json'
 
 @pytest.fixture
 def registered(monkeypatch):
@@ -24,7 +24,7 @@ def registered(monkeypatch):
 
 def test_feedback_and_final_tests_are_disjoint():
     manifest = json.loads(MANIFEST.read_text())
-    assert len(manifest['cases']) == 5
+    assert len(manifest['cases']) == 50
     for case in manifest['cases']:
         assert len(case['feedback_tests']) == 1
         assert len(case['final_tests']) >= 2
@@ -162,27 +162,25 @@ def test_parallel_scheduler_overlaps_and_merges_in_manifest_order(tmp_path):
     assert all(s['status'] == 'completed' for s in status['tasks'].values())
 
 
-def test_failure_stops_new_tasks_and_preserves_partial_rows(tmp_path):
+def test_task_failure_does_not_cancel_running_or_queued_tasks(tmp_path):
     from threading import Barrier
     barrier = Barrier(2)
     def worker(case, out, stop):
-        barrier.wait(timeout=3)
+        if case['name'] != 'queued':
+            barrier.wait(timeout=3)
+        assert not stop.is_set()
+        (out/'rows.jsonl').write_text(json.dumps({'task_id': case['name']})+'\n')
         if case['name'] == 'bad':
-            (out/'rows.jsonl').write_text('{"method":"clean"}\n')
             raise ValueError('secret should not appear in status')
-        assert stop.wait(timeout=3)
-        raise mbpp.TaskCancelled()
     cases = [{'name': name} for name in ['bad', 'running', 'queued']]
-    with pytest.raises(RuntimeError, match='Batch stopped'):
+    with pytest.raises(RuntimeError, match='Batch finished with errors'):
         mbpp.execute_cases(cases, 2, tmp_path, worker)
     text = (tmp_path/'run_status.json').read_text()
     states = json.loads(text)['tasks']
     assert states['bad']['status'] == 'failed'
-    assert states['running']['status'] == 'cancelled'
-    assert states['queued']['status'] == 'not_started'
+    assert states['running']['status'] == states['queued']['status'] == 'completed'
     assert 'secret' not in text
-    assert json.loads((tmp_path/'rows.jsonl').read_text()) == {'method':'clean'}
-
+    assert len((tmp_path/'rows.jsonl').read_text().splitlines()) == 3
 
 def test_invalid_worker_count_rejected_before_start(tmp_path):
     with pytest.raises(ValueError, match='positive'):
@@ -202,6 +200,7 @@ def test_parallel_tasks_have_independent_clients_and_traces(registered, monkeypa
     class Model:
         def __init__(self, **kwargs):
             self.client = Client()
+            self.usage = llm.Usage()
             clients.append(self)
     monkeypatch.setattr(llm, 'ServerLLM', Model)
     def run(task, catalog, model):
@@ -272,43 +271,6 @@ def test_new_fault_workflow_trace_and_restart(registered, monkeypatch, kind, tar
     assert not recovered.prov.faulty_nodes()
 
 
-def test_all_fault_cli_schedule_records_skips_and_unique_traces(registered, monkeypatch, tmp_path):
-    from threading import Event
-    from types import SimpleNamespace
-    from agentrec import llm
-    from agentrec.benchmark_faults import FAULT_TARGETS
-    case = PROGRAMS['mbpp_4']
-    class Model:
-        def __init__(self, **kwargs):
-            self.usage = llm.Usage()
-            self.client = SimpleNamespace(close=lambda: None)
-        def chat(self, agent, messages):
-            self.usage.calls += 1
-            if agent == 'spec': return {'contract': case['request']}
-            if agent == 'coder': return {'content': case['reference']}
-            if agent == 'docs': return {'content': case['name']}
-            return {'decision': 'approve', 'note': ''}
-    monkeypatch.setattr(llm, 'ServerLLM', Model)
-    def evaluate(source, program, split):
-        passed = source == case['reference']
-        return {'passed': passed, 'n': 1, 'n_passed': int(passed),
-                'failures': [] if passed else [{'error': 'AssertionError'}]}
-    monkeypatch.setattr(mbpp, 'evaluate', evaluate)
-    args = SimpleNamespace(model='fake', temperature=0, llm_seed=0, max_tokens=100,
-        request_timeout=1, phase='paired', fault_types=list(FAULT_TARGETS),
-        fault_stages=['coder', 'coder:2'], methods=[])
-    mbpp.run_case(case, args, {'endpoint': 'unused', 'key': None}, tmp_path, Event())
-    rows = [json.loads(line) for line in (tmp_path/'rows.jsonl').read_text().splitlines()]
-    expected = 1 + sum(len(v) for v in FAULT_TARGETS.values())
-    assert len(rows) == expected
-    assert len(list((tmp_path/'traces').glob('*.json'))) == expected
-    assert len({r['fault'] for r in rows}) == expected
-    for row in rows:
-        if row['fault'] and row['fault'].startswith(('false_test_report', 'stale_report')):
-            assert not row['fault_fired'] and not row['fault_eligible']
-            assert row['injection_events'][0]['reason']
-
-
 @pytest.mark.parametrize('provider,variable,url', [
     ('nrp', 'NRP_API_KEY', 'https://ellm.nrp-nautilus.io/v1'),
     ('triton', 'TRITON_API_KEY', 'https://tritonai-api.ucsd.edu/v1'),
@@ -359,3 +321,24 @@ def test_optional_provider_fields_and_completion_token_parameter():
         assert model.chat('spec', [{'role': 'user', 'content': 'JSON please'}]) == {'ok': True}
     finally:
         model.client.close()
+
+
+def test_http_error_metadata_excludes_credentials_and_response_body():
+    import httpx
+    from agentrec.mbpp import error_metadata
+    request = httpx.Request('POST', 'https://example.com/v1/chat/completions',
+                            headers={'Authorization': 'Bearer secret-test-value'})
+    response = httpx.Response(429, request=request, text='sensitive provider response')
+    exc = httpx.HTTPStatusError('private error message', request=request, response=response)
+    assert error_metadata(exc) == {'error_type': 'HTTPStatusError', 'http_status': 429}
+    assert error_metadata(ValueError('private')) == {'error_type': 'ValueError'}
+
+
+def test_limit_selects_prefix_without_mutating_dataset():
+    manifest = json.loads(MANIFEST.read_text())
+    subset = mbpp.select_tasks(manifest, 10)
+    assert len(manifest['cases']) == 50
+    assert [c['task_id'] for c in subset['cases']] == [2, 3, 4, 7, 8, 9, 11, 12, 14, 16]
+    for limit in (0, -1, 51):
+        with pytest.raises(ValueError, match='limit'):
+            mbpp.select_tasks(manifest, limit)

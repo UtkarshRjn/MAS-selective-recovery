@@ -12,13 +12,13 @@ from agentrec.llm import Usage, MockLLM
 from agentrec.programs import PROGRAMS, broken
 from agentrec.coding import make_coding_task
 from agentrec.runner import run_workflow, Recorder
-from agentrec.phase1 import audit_coding, extended_case, run_travel
+from agentrec.phase1 import audit_coding, run_conditions
 from agentrec import mbpp
 
 
 @pytest.fixture
 def fixture_case(monkeypatch):
-    case = next(c for c in json.loads(Path('evals/mbpp-pilot.json').read_text())['cases'] if c['task_id'] == 7)
+    case = next(c for c in json.loads(Path('evals/mbpp-50.json').read_text())['cases'] if c['task_id'] == 7)
     monkeypatch.setitem(PROGRAMS, case['name'], {**case, 'benchmark': 'mbpp', 'image': 'unused'})
     def evaluate(source, program, split):
         passed = source == case['reference']
@@ -113,42 +113,6 @@ def test_verifier_rechecks_timeout_and_accounts_extra_calls(fixture_case):
     assert audit_coding(task,w,p)['verification_llm_calls'] == 5
 
 
-def test_complete_extended_schedule_and_fixture_controls(fixture_case, tmp_path):
-    case=fixture_case
-    task,_,catalog=make_coding_task(case['name'])
-    rec=Recorder(tmp_path)
-    try:
-        extended_case(case,SimpleNamespace(llm_seed=0,include_travel=False),Answers(case),rec,
-                      task,catalog,{'success':True},Event())
-    finally:
-        rec.rows.close()
-    rows=[json.loads(s) for s in (tmp_path/'rows.jsonl').read_text().splitlines()]
-    controlled=[r for r in rows if r.get('controlled_fixture')]
-    assert len(controlled)==8  # two scenarios, each control/none/verify/restart
-    for scenario in {r['scenario'] for r in controlled}:
-        group=[r for r in controlled if r['scenario']==scenario]
-        faulty=next(r for r in group if r['method']=='none')
-        assert faulty['fault_fired'] and faulty['compound_scenario']
-        control=next(r for r in group if r['method']=='truthful_control')
-        assert not control['fault_fired']
-    assert all('invalid_code_generation_tokens' in r for r in rows)
-
-
-def test_stateful_unauthorized_effect_survives_restart(tmp_path):
-    rec=Recorder(tmp_path)
-    try:
-        run_travel(MockLLM(),rec,seed=0)
-    finally:
-        rec.rows.close()
-    rows=[json.loads(s) for s in (tmp_path/'rows.jsonl').read_text().splitlines()]
-    malicious=[r for r in rows if r['scenario'].startswith('malicious_instruction')]
-    faulty=next(r for r in malicious if r['method']=='none')
-    restarted=next(r for r in malicious if r['method']=='restart')
-    assert faulty['unauthorized_emails']>0
-    assert restarted['unauthorized_emails']>0 and restarted['irreversible']>0
-    assert not restarted['strict_success']
-
-
 def test_report_fixture_numeric_fallback_uses_only_feedback(fixture_case, monkeypatch):
     from agentrec import phase1
     calls = []
@@ -162,29 +126,12 @@ def test_report_fixture_numeric_fallback_uses_only_feedback(fixture_case, monkey
     assert len(calls) == 3 and all(split == 'feedback' for _, split in calls)
 
 
-def test_travel_does_not_require_unrequested_refund_text(tmp_path, monkeypatch):
-    from agentrec import checker
-    original = checker.check
-    def without_refund_text(world, truth):
-        result = original(world, truth)
-        result['refund_ok'] = False
-        return result
-    monkeypatch.setattr(checker, 'check', without_refund_text)
-    rec = Recorder(tmp_path)
-    try:
-        run_travel(MockLLM(), rec, seed=0)
-    finally:
-        rec.rows.close()
-    clean = json.loads((tmp_path/'rows.jsonl').read_text().splitlines()[0])
-    assert clean['success'] and clean['strict_success'] and not clean['refund_ok']
-
-
 def test_full_schedule_covers_all_fault_families_and_recovery_methods(fixture_case, tmp_path):
     case = fixture_case
     task, _, catalog = make_coding_task(case['name'])
     rec = Recorder(tmp_path)
     try:
-        extended_case(case, SimpleNamespace(phase='full', llm_seed=0, include_travel=False,
+        run_conditions(case, SimpleNamespace(llm_seed=0,
                       include_authorization=False), Answers(case), rec, task, catalog,
                       {'success': True}, Event())
     finally:
@@ -198,3 +145,121 @@ def test_full_schedule_covers_all_fault_families_and_recovery_methods(fixture_ca
             assert {r['method'] for r in rows if r['scenario'] == row['scenario']} >= {
                 'none', 'verify', 'restart', 'suffix', 'coarse'}
     assert all('code_stage_correctness' in r for r in rows)
+
+
+@pytest.mark.parametrize('failure', ['verify_clean', 'faulty', 'restart'])
+def test_condition_errors_do_not_abort_other_conditions(fixture_case, tmp_path, monkeypatch, failure):
+    from agentrec import runner
+    case = fixture_case
+    task, _, catalog = make_coding_task(case['name'])
+    original = runner.run_workflow
+    fired = False
+    def run(task, catalog, model, spec=None, verify=False, scenario=None):
+        nonlocal fired
+        should_fail = (failure == 'verify_clean' and spec is None and verify) or (
+            failure == 'faulty' and spec and spec.type == 'semantic_mutation' and not verify)
+        if should_fail and not fired:
+            fired = True
+            raise TypeError('private error text')
+        return original(task, catalog, model, spec, verify=verify, scenario=scenario)
+    monkeypatch.setattr(runner, 'run_workflow', run)
+    if failure == 'restart':
+        def bad_restart(*args):
+            raise TypeError('private error text')
+        monkeypatch.setitem(runner.RECOVER, 'restart', bad_restart)
+    rec = Recorder(tmp_path)
+    try:
+        run_conditions(case, SimpleNamespace(llm_seed=0, include_authorization=False),
+                       Answers(case), rec, task, catalog, {'success': True}, Event())
+    finally:
+        rec.rows.close()
+    text = (tmp_path/'rows.jsonl').read_text()
+    rows = [json.loads(s) for s in text.splitlines()]
+    errors = [r for r in rows if r['status'] == 'error']
+    assert errors and all(r['error_type'] == 'TypeError' and r['success'] is False for r in errors)
+    assert 'private error text' not in text
+    assert rows[-1]['scenario'] == 'controlled_stale_report@tester:2'
+    assert rows[-1]['method'] == 'coarse' and rows[-1]['status'] == 'completed'
+    if failure == 'faulty':
+        group = [r for r in rows if r['scenario'] == 'semantic_mutation@coder']
+        assert next(r for r in group if r['method'] == 'verify')['status'] == 'completed'
+        assert {r['method'] for r in group if r['status'] == 'skipped'} == {'restart', 'suffix', 'coarse'}
+
+
+def test_clean_error_does_not_prevent_fault_experiments(fixture_case, tmp_path, monkeypatch):
+    from agentrec import runner, llm
+    class Model(Answers):
+        def __init__(self, **kwargs):
+            super().__init__(fixture_case)
+            self.client = SimpleNamespace(close=lambda: None)
+    monkeypatch.setattr(llm, 'ServerLLM', Model)
+    original = runner.run_workflow
+    first = True
+    def run(*args, **kwargs):
+        nonlocal first
+        if first:
+            first = False
+            raise TypeError('clean failed')
+        return original(*args, **kwargs)
+    monkeypatch.setattr(runner, 'run_workflow', run)
+    args = SimpleNamespace(model='fake', temperature=0, llm_seed=0, max_tokens=100,
+                           request_timeout=1, phase='full', include_authorization=False)
+    mbpp.run_case(fixture_case, args, {'endpoint': 'unused', 'key': None}, tmp_path, Event())
+    rows = [json.loads(s) for s in (tmp_path/'rows.jsonl').read_text().splitlines()]
+    assert rows[0]['method'] == 'clean' and rows[0]['status'] == 'error'
+    assert rows[-1]['method'] == 'coarse' and rows[-1]['status'] == 'completed'
+    assert all(r['clean_success'] is None for r in rows[1:])
+
+
+def test_resume_preserves_completed_conditions_and_replays_saved_fault_for_pending_recovery(fixture_case, tmp_path, monkeypatch):
+    from agentrec.resume import ResumeRecorder, import_previous
+    from agentrec.conditions import attempt
+    from agentrec import runner
+    source, dest = tmp_path/'source', tmp_path/'continuation'
+    case = fixture_case
+    task, _, catalog = make_coding_task(case['name'])
+    args = SimpleNamespace(llm_seed=0, include_authorization=False)
+    task_dir = source/'tasks'/case['name']
+    rec = Recorder(task_dir)
+    try:
+        run_conditions(case,args,Answers(case),rec,task,catalog,{'success':True},Event())
+    finally:
+        rec.rows.close()
+    rows = [json.loads(s) for s in (task_dir/'rows.jsonl').read_text().splitlines()]
+    target = 'controlled_stale_report@tester:2'
+    # Simulate interruption just before a pending coarse recovery; retain every other score.
+    rows = [r for r in rows if not (r['scenario']==target and r['method']=='coarse')]
+    for row in rows:
+        if row['scenario']=='verify_clean':
+            row.update(status='error',success=False,error_type='TypeError')
+    (task_dir/'rows.jsonl').write_text(''.join(json.dumps(r)+'\n' for r in rows))
+    before = (task_dir/'rows.jsonl').read_bytes()
+    manifest={'cases':[case]}; config={'model':'fake'}
+    (source/'manifest.json').write_text(json.dumps(manifest))
+    (source/'config.json').write_text(json.dumps(config))
+    (source/'run_status.json').write_text(json.dumps({'tasks':{case['name']:{'status':'failed'}}}))
+    dest.mkdir()
+    import_previous(source,dest,config,manifest)
+    resumed = ResumeRecorder(dest/'tasks'/case['name'])
+    source_fault = next(r for r in rows if r['scenario']==target and r['method']=='none')
+    world,prov,inj,stats=resumed.restore(source_fault)
+    assert inj.fired and values(prov)['coder:2']['content'] == 'def '+case['signature']+':\n    return []\n'
+    assert stats['usage']==source_fault['usage']
+    calls=[]
+    original=runner.RECOVER['coarse']
+    def recover(task,world,llm,prov):
+        calls.append(values(prov)['coder:2']['content'])
+        return original(task,world,llm,prov)
+    monkeypatch.setitem(runner.RECOVER,'coarse',recover)
+    try:
+        run_conditions(case,args,Answers(case),resumed,task,catalog,{'success':True},Event())
+    finally:
+        resumed.rows.close()
+    after=[json.loads(s) for s in (dest/'tasks'/case['name']/'rows.jsonl').read_text().splitlines()]
+    assert len(after)==len(rows)+1 and after[:-1]==rows
+    assert len(calls)==1 and after[-1]['method']=='coarse'
+    assert (task_dir/'rows.jsonl').read_bytes()==before
+    assert next(r for r in after if r['scenario']=='verify_clean')['status']=='error'
+    incompatible=tmp_path/'incompatible';incompatible.mkdir()
+    with pytest.raises(ValueError,match='model'):
+        import_previous(source,incompatible,{'model':'different'},manifest)
