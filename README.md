@@ -8,6 +8,18 @@ The current pilot is the evaluation merged in [#10](https://github.com/UtkarshRj
 
 The Phase 1 writeup is in [docs/phase1_report.tex](docs/phase1_report.tex) ([PDF](output/pdf/phase1_report.pdf)). Commands and fault definitions for the coding pilot are in [evals/README.md](evals/README.md). The travel harness and external benchmarks are in [evals/travel-and-external.md](evals/travel-and-external.md).
 
+## Phase 1 submission
+
+| Required item | Where |
+|---|---|
+| Report | [docs/phase1_report.tex](docs/phase1_report.tex), [PDF](output/pdf/phase1_report.pdf) |
+| Source code | [src/agentrec/](src/agentrec), tests in [tests/](tests) |
+| Dataset | [evals/mbpp-50.json](evals/mbpp-50.json) (50 pinned MBPP tasks); booking tasks and catalogs are generated from a seed by `make_task` in [src/agentrec/tasks.py](src/agentrec/tasks.py); the three coding programs are in [src/agentrec/programs.py](src/agentrec/programs.py) |
+| Experiment instructions | [Setup](#setup) below, [evals/README.md](evals/README.md) for the coding pilot, [artifacts/phase1/README.md](artifacts/phase1/README.md) for the Qwen runs |
+| Results and logs | [artifacts/phase1/](artifacts/phase1): rows and traces behind the Qwen booking, monitor, support, and coding-program numbers; rebuild with `uv run python analysis/phase1_tables.py` |
+
+The GPT-OSS and Muse rows and traces behind the tables below have not been added yet.
+
 ## Results
 
 Both models use the same 10 coding tasks and 3 travel variants. Each task and condition is one observation. Temperature is 0, the seed is 0, and each call allows 2,048 output tokens. Five tasks run in parallel. Conditions inside a task run one after another.
@@ -198,6 +210,8 @@ src/agentrec/
   runner.py            CLI
   tamas.py  a2a.py  a2a_adapter.py  undobench.py  undobench_adapter.py  who_when.py
 analysis/summarize.py
+analysis/phase1_tables.py   Qwen tables in the report, from artifacts/phase1
+artifacts/phase1/           committed rows and traces behind the report
 evals/mbpp-50.json
 evals/README.md
 evals/travel-and-external.md
