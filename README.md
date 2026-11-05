@@ -146,3 +146,10 @@ Run `uv run pytest -q` for offline tests. Mock-model results only validate the h
 they are not model accuracy or attack-success measurements. Real model runs require
 `--execute-model`. Generated code is evaluated in constrained Docker containers;
 travel tools never contact real booking or email services.
+
+## Additional workflows
+
+The repository also includes the original travel experiments with support and monitor
+recovery, plus UndoBench, A2ASecBench, TAMAS, and Who&When adapters. See the
+[travel and external benchmark guide](evals/travel-and-external.md) for their commands
+and metrics. The [coding evaluation guide](evals/README.md) describes the MBPP runs.

@@ -135,3 +135,18 @@ For old runs that recorded only a task-level exception, `--resume-errors FILE` c
 import explicitly audited failed-condition rows. It rejects overwriting any saved
 condition. Unrecorded partial calls from an interrupted condition remain an accounting
 limitation; resuming cannot recover their exact token cost or hidden model state.
+
+For the original travel experiment and external benchmark commands, see the
+[travel and external benchmark guide](travel-and-external.md).
+
+## Integration with the shared recovery harness
+
+The shared CLI also exposes the travel experiments and external benchmark adapters.
+Coding and authorization runs retain their existing success fields. Travel runs now also
+record main's separate task-recovery and side-effect-integrity measurements.
+The shared checker counts an email missing the required refund statement as an incorrect
+email, which can affect authorization scores in future runs.
+
+Recovery timing now includes dependency selection, undo operations, replay, and orphaned
+effect cleanup. The published GPT-OSS and Muse tables use their saved pre-integration
+rerun timings. Keep the source snapshot with each run when comparing timings or scores.

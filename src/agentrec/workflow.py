@@ -236,11 +236,11 @@ class TravelWorkflow:
         if self._reuse(ctx, key, "executor", [task_art, plan_id], fingerprint) is not None:
             return
         before = ctx.llm.usage.copy()
-        step = ctx.prov.add_step(key, "executor", fingerprint=fingerprint)
+        planned_action = item.get("action") if isinstance(item, dict) else None
+        step = ctx.prov.add_step(key, "executor", fingerprint=fingerprint, action=planned_action)
         ctx.prov.add_input(task_art, step)
         ctx.prov.add_input(plan_id, step)
-        action = item.get("action") if isinstance(item, dict) else None
-        for claim_key in CLAIM_SUPPORT.get(action, ()):
+        for claim_key in CLAIM_SUPPORT.get(planned_action, ()):
             claim_id = _latest_artifact(ctx.prov, claim_key)
             if claim_id is not None:
                 ctx.prov.add_support(claim_id, step)
