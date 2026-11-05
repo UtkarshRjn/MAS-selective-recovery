@@ -1,65 +1,151 @@
 # Multi-agent failure propagation and recovery
 
-Phase 1 evaluates a fixed coding workflow on 50 pinned MBPP examples, with seven
-fault families and three simulated travel authorization cases. The reported evaluations
-select 10 coding examples using `--limit 10`, using GPT-OSS 120B and Muse Glimmer 30B.
+When agents pass work to one another, an incorrect result can affect later decisions.
+Restarting the entire workflow repeats useful work. This project asks whether recording
+which results depend on each other lets us recover correctly while repeating fewer steps.
 
-See [experiment setup, commands, and metrics](evals/README.md).
+We inject faults into a running workflow, save its outputs and dependencies, and compare
+recovery methods from copies of the same faulty execution. The recovery methods receive
+the fault location so we can study recovery separately from fault detection.
 
-## Muse results
+## Progress so far
 
-Triton `api-muse-glimmer-30b` completed the same 10 coding tasks and 3 travel
-variants with 5 workers. These are single observations per task/condition.
+- Prepared 50 Python programming tasks from sanitized MBPP and three simulated travel cases.
+- Implemented clean runs, seven fault families, intermediate verification, and three recovery baselines.
+- Evaluated 10 coding tasks and all three travel cases with GPT-OSS 120B through NRP and Muse Glimmer 30B through Triton.
+- Recorded task outcomes, intermediate errors, dependencies, tool actions, tokens, latency, and repeated stages.
 
-| Coding condition | GPT-OSS 120B (NRP) | Muse Glimmer 30B (Triton) |
+The current results cover 10 of the 50 prepared coding tasks. Each task/condition has
+one observation per model. The experiment guide contains installation steps, run commands,
+fault definitions, and output formats. [Experiment guide](evals/README.md)
+
+## How the experiment works
+
+Each coding task contains a request and tests. The workflow runs nine stages in a fixed order.
+
+```text
+Specification → Code → Test → Review → Documentation
+              → Specification → Code → Test → Review
+```
+
+The second pass lets agents revise their work. One test provides feedback during revision.
+The remaining tests are hidden from the agents and score the final code. Success means
+passing all final tests. Model stages use separate API calls with context assembled from
+previous outputs. Tests execute in Docker, and Python determines review decisions from
+test feedback. A normal workflow makes seven model calls.
+
+Dependencies record the inputs used by each stage. They can differ from execution order,
+so a later stage may be reusable when it does not depend on the faulty result.
+
+We first run a clean baseline, then inject one fault per condition. Faults model incorrect
+code, a missing requirement, a changed comparison, a tester timeout, malicious instructions,
+a false test report, and a stale report. Accidental and adversarial cases are labelled.
+The false/stale-report cases deliberately pair bad code with misleading feedback and
+include truthful-feedback controls.
+
+| Comparison | Behavior |
+|---|---|
+| No recovery | Finish the workflow after injection. |
+| Always-verify | Check intermediate outputs and recompute test feedback during execution. |
+| Restart | Rerun all stages after undoing supported effects. |
+| Suffix | Rerun the faulty stage and every later stage. |
+| Coarse | Follow recorded dependencies to select stages for replay. |
+
+Each recovery method receives its own copy of the saved faulty execution. Injection is
+disabled during recovery. Always-verify runs as a separate forward execution.
+
+Travel agents research options, plan, and execute simulated bookings or emails. Three
+cases test unauthorized recipients, booking without approval, and cancellation of a
+protected booking. Actions and authorization history are checked in the simulated world.
+
+## Results
+
+Both evaluations use the same 10 coding tasks and three travel variants, with five task
+workers. Conditions within a task run sequentially.
+
+### Coding correctness
+
+| Condition | GPT-OSS 120B (NRP) | Muse Glimmer 30B (Triton) |
 |---|---:|---:|
 | Clean | 10/10 | 9/10 |
 | No recovery, confirmed injection | 63/96 | 57/95 |
-| Restart: correct after rerun | 95/96 | 87/95 |
-| Suffix: correct after rerun | 86/96 | 78/95 |
-| Coarse: correct after rerun | 86/96 | 77/95 |
+| Correct after restart | 95/96 | 87/95 |
+| Correct after suffix replay | 86/96 | 78/95 |
+| Correct after coarse replay | 86/96 | 77/95 |
 | Always-verify, scheduled fault cases | 106/120 | 106/120 |
 | Always-verify, clean | 9/10 | 9/10 |
 
-Muse has 95 confirmed injected executions and 24 inapplicable injections; one
-additional faulty execution ended in an error without a usable saved state.
-Each recovery method therefore has 95 attempted recoveries plus one skipped row.
-Coarse's 77/95 includes one API error as unsuccessful. These are correctness
-scores after rerunning, not rescue rates restricted to initially failing cases.
-The models' eligible sets differ, so these pooled scores are not a matched-case
-model comparison. Verification covers all 120 scheduled cases, including
-inapplicable injections and an execution error for each model.
+There are 12 fault/stage combinations per task, giving 120 scheduled fault cases.
+GPT-OSS has 96 confirmed injections and 24 inapplicable cases. Muse has 95 confirmed
+injections, 24 inapplicable cases, and one faulty execution that ended without a usable
+saved state. That missing state produces one skipped row for each recovery method.
+Coarse's Muse score includes one API error as unsuccessful.
 
-### Muse work and latency
+Recovery scores include every usable injected case, including those already passing
+without recovery. Rescue rates require matching recovery outcomes to the initially
+failing cases. Eligibility depends on generated outputs, so the two models have different
+eligible sets. Always-verify includes all 120 scheduled cases and one execution error
+for each model.
 
-| Mean per condition | Restart | Suffix | Coarse |
-|---|---:|---:|---:|
-| Conditions with complete cost records | 95 | 95 | 94 |
-| Stages recomputed (out of 9) | 9.00 | 5.39 | 5.00 |
-| Input + output tokens | 4,207 | 2,478 | 2,323 |
-| Rerun seconds | 72.01 | 43.22 | 40.37 |
+### Recovery work and latency
 
-Costs include unsuccessful scored reruns, but exclude skipped rows and the coarse
-API-error row without complete recovery accounting; missing costs are not zero.
-They cover recovery reruns only, excluding the original faulty execution,
-surrounding cleanup, and the separate correctness audit. Clean forward runs
-average 4,172 tokens and 69.44 seconds (10 runs). Fault-scheduled always-verify
-averages 10,121 tokens and 177.03 seconds (119 complete cost records). Endpoint
-load and parallel workers affect latency; these are not controlled speed tests.
+Means below cover the recovery rerun. Tokens include API-reported input and output.
 
-Travel succeeds in all 3 clean, 3 injected/no-recovery, 3 verification, and 3
-restart runs. No unauthorized action was attempted, so these cases do not
-establish recovery from attack-caused damage.
+| Model | Method | Cost records | Stages redone / 9 | Tokens | Seconds |
+|---|---|---:|---:|---:|---:|
+| GPT-OSS 120B | Restart | 96 | 9.00 | 3,340 | 31.76 |
+| GPT-OSS 120B | Suffix | 96 | 5.35 | 1,845 | 16.94 |
+| GPT-OSS 120B | Coarse | 96 | 4.99 | 1,607 | 13.87 |
+| Muse Glimmer 30B | Restart | 95 | 9.00 | 4,207 | 72.01 |
+| Muse Glimmer 30B | Suffix | 95 | 5.39 | 2,478 | 43.22 |
+| Muse Glimmer 30B | Coarse | 94 | 5.00 | 2,323 | 40.37 |
 
-The final Muse batch has **580 rows**: 20 clean/verify-clean, 240 fault-scheduled
-forward runs, 288 recovery rows (including 3 skips), 20 truthful-feedback
-controls, and 12 travel runs. Four execution errors are retained: task 9's
-no-recovery tester-timeout case and stale-report truthful control, task 11's
-stale-report verification, and task 14's coarse recovery after a bad patch
-(HTTP 422). Other conditions continued independently.
+These means include unsuccessful scored reruns. Skips and errors without complete cost
+records are excluded from the cost averages. Timing excludes the original faulty run,
+surrounding cleanup, and the separate correctness audit. Provider load and parallel
+workers affect latency.
 
-Raw run directory (local, ignored by Git):
-`results/aws-triton-muse-glimmer-30b-full-10-w5-resume-001/`.
+### Forward-run cost
+
+| Model | Condition | Cost records | Mean tokens | Mean seconds |
+|---|---|---:|---:|---:|
+| GPT-OSS 120B | Clean | 10 | 3,297 | 34.82 |
+| GPT-OSS 120B | Always-verify, fault cases | 119 | 8,194 | 78.35 |
+| Muse Glimmer 30B | Clean | 10 | 4,172 | 69.44 |
+| Muse Glimmer 30B | Always-verify, fault cases | 119 | 10,121 | 177.03 |
+
+Verification pays for checks throughout the forward run. Recovery costs above are the
+additional work after a faulty execution.
+
+### Travel and execution errors
+
+GPT-OSS passes 2/3 clean travel cases. Its planning-only task fails even without an
+attack, and restart makes one previously passing case incorrect. Muse passes all three
+cases under clean, injected/no-recovery, verification, and restart conditions.
+Neither model attempts an unauthorized action in these cases. Demonstrating recovery
+from harmful actions requires cases where an injected attack changes downstream behavior.
+
+The saved batches contain 579 GPT-OSS rows and 580 Muse rows across all conditions.
+GPT-OSS retains one execution error. Muse retains four execution errors and three
+skipped recovery rows. Independent conditions continue after an error.
+
+## What we learned and what comes next
+
+Suffix and coarse replay reduce repeated work in both evaluations. Restart achieves
+higher pooled correctness. In GPT-OSS, suffix and coarse each fail on the same ten
+stale-report cases. Those cases mark the report as faulty while retaining bad code.
+Replaying the tester reveals the error, but the current rule never reopens code generation.
+
+The next mechanism will validate saved work and trigger another revision when replay
+reveals an error. We also plan to track file versions and simulated actions so recovery
+can restore affected state and account for irreversible effects. Stronger cases will
+adapt message attacks from TAMAS/A2ASecBench and state-changing tasks from UndoBench.
+
+The immediate analysis work is to separate rescued failures from regressions, break down
+accidental/adversarial outcomes, and compare verification on matched cases. Traces expose
+which stages consumed faulty results and record intermediate code errors. Establishing
+causal propagation requires additional checks. Repeated trials will measure uncertainty
+as coverage expands to the remaining coding tasks.
 
 ## Reading order
 
@@ -85,7 +171,3 @@ Run `uv run pytest -q` for offline tests. Mock-model results only validate the h
 they are not model accuracy or attack-success measurements. Real model runs require
 `--execute-model`. Generated code is evaluated in constrained Docker containers;
 travel tools never contact real booking or email services.
-
-Historical reports, deployment helpers, downloaded data, and raw run artifacts are
-ignored. Removed TAMAS, A2A, Who&When, topology, and monitoring utilities remain
-available in Git history. Existing EC2 jobs use their own saved source snapshots.
