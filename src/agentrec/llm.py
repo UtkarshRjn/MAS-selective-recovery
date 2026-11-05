@@ -269,6 +269,58 @@ class MockLLM:
         return {"ok": True, "reason": ""}
 
     @staticmethod
+    def _spec(messages: Messages) -> dict[str, Any]:
+        user = messages[1]["content"]
+        task, visit = read_field(user, "TASK_JSON"), read_field(user, "VISIT_JSON")
+        text = f"clamp {task['name']} into [lo, hi]"
+        if visit == 2:
+            text += f"\nprecondition: {task['precondition']}"
+        return {"contract": text}
+
+    @staticmethod
+    def _coder(messages: Messages) -> dict[str, Any]:
+        user = messages[1]["content"]
+        task = read_field(user, "TASK_JSON")
+        contract = read_field(user, "CONTRACT_JSON") or {}
+        text = str(contract.get("text", ""))
+        if "return the input unchanged" in text:
+            content = "def clamp(x, lo, hi):\n    return x\n"
+        elif task["precondition"] in text:
+            content = "def clamp(x, lo, hi):\n    # lo <= hi\n    return min(max(x, lo), hi)\n"
+        else:
+            content = "def clamp(x, lo, hi):\n    return min(max(x, lo), hi)\n"
+        return {"path": task["path"], "content": content}
+
+    @staticmethod
+    def _tester(messages: Messages) -> dict[str, Any]:
+        src = str((read_field(messages[1]["content"], "FILE_JSON") or {}).get("content", ""))
+        passed = "min(max(x, lo), hi)" in src and "return x\n" not in src
+        return {"passed": passed}
+
+    @staticmethod
+    def _reviewer(messages: Messages) -> dict[str, Any]:
+        user = messages[1]["content"]
+        visit = read_field(user, "VISIT_JSON")
+        report = read_field(user, "REPORT_JSON") or {}
+        if visit == 1:
+            return {"decision": "revise", "note": "require the precondition"}
+        return {"decision": "approve" if report.get("passed") else "revise", "note": ""}
+
+    @staticmethod
+    def _docs(messages: Messages) -> dict[str, Any]:
+        task = read_field(messages[1]["content"], "TASK_JSON")
+        return {"content": f"{task['name']}\n"}
+
+    @staticmethod
+    def _graph(messages: Messages) -> dict[str, Any]:
+        user = messages[1]["content"]
+        key = read_field(user, "KEY_JSON")
+        inputs = read_field(user, "INPUTS_JSON") or []
+        if not inputs:
+            return {"value": key}
+        return {"value": f"{key}({','.join(inputs)})"}
+
+    @staticmethod
     def _review_action(task: dict[str, Any], evidence: dict[str, Any], item: dict[str, Any]) -> dict[str, Any]:
         current = evidence.get("current_step") or {}
         if item.get("action") != current.get("action"):
