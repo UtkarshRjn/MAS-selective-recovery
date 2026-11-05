@@ -2,21 +2,32 @@
 
 \usepackage[letterpaper,top=0.56in,bottom=0.55in,left=0.65in,right=0.65in]{geometry}
 \usepackage{booktabs}
+\usepackage{listings}
+\lstset{basicstyle=\ttfamily\footnotesize,breaklines=true,breakatwhitespace=false,columns=fullflexible,keepspaces=true}
 \usepackage{enumitem}
 \usepackage{hyperref}
 \usepackage{microtype}
 \usepackage{multicol}
 \usepackage{tabularx}
-\usepackage{tikz}
 \usepackage{titlesec}
 \usepackage{xcolor}
+\usepackage{tikz}
 \usetikzlibrary{arrows.meta,positioning}
 
-\definecolor{kept}{HTML}{E8F5E9}
-\definecolor{redo}{HTML}{E8EAFB}
-\definecolor{fault}{HTML}{FDEBEC}
+\definecolor{kept}{HTML}{A5D6A7}
+\definecolor{redo}{HTML}{9FA8DA}
+\definecolor{fault}{HTML}{EF9A9A}
 \definecolor{softgray}{HTML}{F3F3F3}
 \definecolor{linkblue}{HTML}{006D8F}
+\definecolor{note}{HTML}{FFE082}
+\tikzset{
+  agentstep/.style={draw, rounded corners=2pt, font=\scriptsize\sffamily, align=center,
+    minimum width=2.0cm, minimum height=7mm, inner sep=1pt},
+  keptstep/.style={agentstep, fill=kept},
+  redostep/.style={agentstep, fill=redo},
+  faultstep/.style={agentstep, fill=fault, very thick},
+  arr/.style={-{Stealth[length=1.6mm]}, shorten >=1.5pt, shorten <=1.5pt}
+}
 
 \hypersetup{colorlinks=true,urlcolor=linkblue,linkcolor=black}
 \setlength{\columnsep}{0.30in}
@@ -24,186 +35,263 @@
 \setlength{\parskip}{0pt}
 \setlist[itemize]{leftmargin=1.15em,itemsep=1pt,topsep=2pt}
 \titleformat{\section}{\centering\bfseries\large}{}{0pt}{}
-\titlespacing*{\section}{0pt}{6pt}{3pt}
+\titlespacing*{\section}{0pt}{3pt}{2pt}
 \pagestyle{plain}
 
 \begin{document}
-
 \begin{center}
-    {\LARGE\bfseries Selective Recovery for Cascading Failures\\[-1pt]
-    in Multi-Agent LLM Systems\par}
-    \vspace{7pt}
-    Lucas Yan \quad Atharv Nair \quad Utkarsh Ranjan \quad Ethan Chen \quad Bijin Kurian Jiby
+{\LARGE\bfseries Selective Recovery for Cascading Failures\\[-1pt]
+in Multi-Agent LLM Systems\par}
+\vspace{7pt}
+Lucas Yan \quad Atharv Ramesh \quad Utkarsh Ranjan \quad Ethan Chen \quad Bijin Kurian Jiby
+\vspace{5pt}
 
-    \vspace{5pt}
-    CSE 291A Phase 1 Report (Option 5: Failure Propagation and Recovery in Multi-Agent Systems)
+CSE 291A Phase 1 Report (Option 5: Failure Propagation and Recovery in Multi-Agent Systems)
 \end{center}
-
-\vspace{2pt}
 \begin{multicols}{2}
+\raggedcolumns
 \small
+\section*{Question}
+In a multi-agent system, one agent may write incorrect code, a tester may report that it passed, and a reviewer may approve it. Restarting fixes the task but repeats work that was already correct. We ask: \textbf{given the location of a fault, can recovery re-execute only the steps that depend on it and still reach a correct outcome?} Every method below is given the fault location; automated detection is future work.
 
-\section*{Problem}
+\section*{Related Work}
+Prior work on multi-agent failures focuses on diagnosis. Cemri et al.\ build a taxonomy of fourteen failure types from 1600+ traces~\cite{mast}. Zhang et al.\ show that the best automated method identifies the responsible agent in 53.5\% of runs and the decisive step in 14.2\%~\cite{whowhen}. Xie et al.\ model collaboration as a dependency graph through which one error can propagate~\cite{cascades}. UndoBench separates task competence from recovery ability, but does not measure how much of a completed run can be preserved~\cite{undobench}. Compensating transactions undo an action semantically rather than restoring prior state~\cite{sagas}. Closest to us, Wang et al.\ repair a memory-augmented agent after a known faulty memory: they trace dependent steps, keep steps with independent evidence, and replay the rest~\cite{wang2026}.
 
-Multi-agent workflows can fail after completing useful work or causing external side effects. A full restart recomputes every stage, discards valid work, and cannot by itself undo irreversible effects such as sent email. We study recovery after the faulty step is already known: which dependent work must be redone, which work can be reused, and which effects must be undone, compensated, or only reported?
+\section*{Experimental Setup}
+\textbf{Travel booking} (seven steps). Flight and hotel researchers query a simulated catalog, a planner combines their findings, and an executor books the flight, books the hotel, writes an itinerary, and emails the traveler. A run succeeds when exactly the correct flight and hotel are booked, the itinerary and email name both, and no email goes to another recipient.
 
-Our current system is a travel-booking pipeline with flight and hotel research stages, a planner, and an executor. Every step records artifacts, dependencies, tool calls, and side effects in a provenance graph. Recovery methods begin from the same faulty world rather than receiving a free reset.
+\textbf{Coding} (nine steps). A specification agent writes requirements, a coder writes a function, a test tool runs it, and a reviewer records the result; a documentation step summarizes the specification; then specification, code, test, and review run again. The final function is scored on held-out tests no agent sees.
 
-\section*{Phase 1 Question}
+\textbf{Protocol.} We inject one fault into one step and let the workflow finish. Each method recovers an identical copy of that faulty run and is told the fault location. Cost is measured over the recovery pass only, in tokens (text units the model reads or writes) and seconds.
 
+\textbf{Reproducibility.} The code, the 50 pinned MBPP tasks, and the run commands are at \url{https://github.com/UtkarshRjn/cs291a-agent-recovery}. Raw rows and traces for every Qwen number are in \texttt{artifacts/phase1/}, with the commit that produced them; \texttt{analysis/phase1\_tables.py} rebuilds those tables.
+
+\section*{Baseline: Coarse Lineage Recovery}
+During execution the system records, for each step, which earlier outputs appeared in its input. This record forms a dependency graph. Given a faulty output, coarse lineage recovery marks every step reachable from it in this graph, undoes the bookings and file writes those steps produced, and re-executes them. Steps with no path from the faulty output are reused unchanged.
+\end{multicols}
+
+\noindent\begin{minipage}{\textwidth}
 \begin{center}
 \begin{tikzpicture}
-\node[
-    draw=black!14, fill=softgray, rounded corners=3pt,
-    inner sep=7pt, text width=0.91\columnwidth, align=left
-] {\bfseries Given a known injected fault, can dependency-aware recovery restore the task while recomputing less work than a full restart?};
-\end{tikzpicture}
+  \node[font=\bfseries\scriptsize\sffamily, anchor=east] at (-0.1,0) {Coarse};
+  \node[keptstep, anchor=west] (c1) at (0,0) {Look up\\flights};
+  \node[faultstep, right=2.2mm of c1] (c2) {Look up\\hotels};
+  \node[redostep, right=2.2mm of c2] (c3) {Write\\plan};
+  \node[redostep, right=2.2mm of c3] (c4) {Book\\flight};
+  \node[redostep, right=2.2mm of c4] (c5) {Book\\hotel};
+  \node[redostep, right=2.2mm of c5] (c6) {Save\\itinerary};
+  \node[redostep, right=2.2mm of c6] (c7) {Email\\traveler};
+  \draw[arr] (c1)--(c2); \draw[arr] (c2)--(c3); \draw[arr] (c3)--(c4);
+  \draw[arr] (c4)--(c5); \draw[arr] (c5)--(c6); \draw[arr] (c6)--(c7);
+
+  \node[font=\bfseries\scriptsize\sffamily, anchor=east] at (-0.1,-1.05) {Monitor};
+  \node[keptstep, anchor=west] (m1) at (0,-1.05) {Look up\\flights};
+  \node[faultstep, right=2.2mm of m1] (m2) {Look up\\hotels};
+  \node[redostep, right=2.2mm of m2] (m3) {Write\\plan};
+  \node[redostep, right=2.2mm of m3] (m4) {Book\\flight};
+  \node[redostep, right=2.2mm of m4] (m5) {Book\\hotel};
+  \node[redostep, right=2.2mm of m5] (m6) {Save\\itinerary};
+  \node[redostep, right=2.2mm of m6] (m7) {Email\\traveler};
+  \draw[arr] (m1)--(m2); \draw[arr] (m2)--(m3); \draw[arr] (m3)--(m4);
+  \draw[arr] (m4)--(m5); \draw[arr] (m5)--(m6); \draw[arr] (m6)--(m7);
+  \node[draw, fill=note, rounded corners=2pt, align=center, font=\scriptsize\sffamily,
+        below=1.8mm of m5, text width=13cm, inner sep=2pt] (sticky)
+    {Monitor's only addition, appended to every re-executed step:
+     ``FAULT: the hotel id was wrong. Discard it and redo this step.''};
+\end{tikzpicture}\\[2pt]
+{\footnotesize\textbf{Figure 1.} Recovery after a wrong hotel id.
+\colorbox{kept}{\strut green} reused; \colorbox{fault}{\strut red} faulty step, re-executed; \colorbox{redo}{\strut blue} re-executed because it read the fault.
+Monitor re-executes the same steps as coarse and only injects the known fault into their prompts.}
 \end{center}
+\end{minipage}
+\vspace{2pt}
 
-\section*{System and Recovery}
+\begin{multicols}{2}
+\raggedcolumns
+\small
+We compare against two simpler policies. \emph{Restart} undoes all effects and re-executes the entire workflow. \emph{Suffix} re-executes the faulty step and every later step in execution order, including steps that never read the faulty output.
 
-The seeded generator creates tasks with exact flight, hotel, constraint, and email ground truth. Ten faults cover observations, agent outputs, plans, tool selection, tool arguments, and one malicious instruction. We compare full restart, suffix replay, coarse lineage, support lineage, monitor, support-monitor, and always-verify. Coarse lineage follows all recorded context dependencies; support lineage follows evidence actually cited by later steps.
+\textbf{Travel results.} We used Qwen2.5-7B-Instruct (Q4\_K\_M, temperature 0) on two task seeds with eleven fault types. Eight fault types changed the booking outcome, yielding 16 faulty runs.
 
 \begin{center}
-\begin{tikzpicture}[
-    node distance=4mm and 5mm,
-    box/.style={draw=black!55, rounded corners=2pt, minimum height=7mm,
-                align=center, font=\small, inner xsep=5pt},
-    arrow/.style={-{Latex[length=2mm]}, semithick}
-]
-\node[box, fill=fault, text width=19mm] (fault) {Faulty\\trace};
-\node[box, fill=redo, text width=21mm, right=of fault] (prov) {Lineage\\analysis};
-\node[box, fill=kept, text width=21mm, right=of prov] (recover) {Recovered\\run};
-\draw[arrow] (fault) -- (prov);
-\draw[arrow] (prov) -- (recover);
-\node[box, fill=softgray, text width=27mm, below=5mm of prov] (oracle) {State oracle\\+ cost metrics};
-\draw[arrow] (fault.south) |- (oracle.west);
-\draw[arrow] (recover.south) |- (oracle.east);
-\end{tikzpicture}
+\footnotesize
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Method & Recovered & Steps redone & Tokens & Seconds\\\midrule
+Restart & 16/16 & 7.0/7 & 6,678 & 17.4\\
+Suffix & 16/16 & 5.5/7 & 4,531 & 12.0\\
+Coarse & 16/16 & 4.6/7 & 3,650 & 9.9\\\bottomrule
+\end{tabular}
+\end{center}
+All three policies recover every run. Coarse lineage recovery re-executes 34\% fewer steps than restart and uses 45\% fewer tokens and 43\% less time.
 
-\small Figure 1: Paired evaluation from one shared faulty execution. Red is the trace, blue is lineage analysis, and green is the recovered run.
+\textbf{Coding results.} We adapted 50 problems from sanitized MBPP and evaluated 10 with GPT-OSS 120B. Of 120 scheduled fault injections (Appendix~A), 96 modified a step. Restart recovered 95/96, re-executing all 9 steps at 3,340 tokens and 31.8 seconds. Coarse recovered 86/96, re-executing 5.0 steps at 1,607 tokens and 13.9 seconds. Appendix~B reports results by fault placement. Coarse matches restart on ten of twelve placements and recovers one additional bad-patch case. It fails all 10 stale-report cases: the stale report is marked faulty, but the incorrect code that produced it is not, so recovery re-runs the tests and retains the code.
+
+\section*{Proposed: Fault-Note Monitor}
+The monitor re-executes exactly the steps selected by coarse lineage recovery. Its only addition is a fault note: before each re-executed step, it appends the identity of the faulty output and an instruction to discard it (Figure~1). The note is built from the fault location the system has already been given. The monitor makes no additional model call and does not perform fault detection.
+
+\textbf{Travel results.} On the same 16 faulty runs, the monitor recovered 16/16 and re-executed the same 4.6 of 7 steps. Mean recovery time decreased from 9.9 to 9.6 seconds (3\%), while token cost increased from 3,650 to 3,715 (2\%).
+
+\begin{center}
+\footnotesize
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Method & Recovered & Steps redone & Tokens & Seconds\\\midrule
+Coarse & 16/16 & 4.6/7 & 3,650 & 9.9\\
+Monitor & 16/16 & 4.6/7 & 3,715 & 9.6\\\bottomrule
+\end{tabular}
 \end{center}
 
-\section*{Evaluation Design}
+\textbf{Support rule.} Following Wang et al.~\cite{wang2026}, a step is kept if it did not cite the faulty fact. We implement their citation check for one recorded link (Appendix~C). On the wrong hotel id it keeps the correct flight booking that coarse cancels and rebooks (5 vs.\ 6 of 7 steps). Over all 16 runs it recovered 16/16 at 4.5 steps, 3,578 tokens, and 9.7 s; adding the fault note gave 3,641 tokens and 9.0 s.
 
-Five primary metrics answer correctness and cost:
-\begin{itemize}
-    \item task recovery success;
-    \item recovery side-effect integrity;
-    \item token ratio relative to restart;
-    \item latency ratio relative to restart; and
-    \item valid-work preservation.
-\end{itemize}
-Final-effect integrity, irreversible harm, and global/recovery unauthorized-action rates are reported separately. This prevents damage already caused by the faulty run from being mislabeled as a recovery failure.
+\textbf{Limitations.} Each condition was run once. The time reduction does not hold on every task: on two short coding tasks where coarse already re-executed all nine steps, the note lengthened outputs (\texttt{clamp}: 8.2 s/1,453 tokens to 13.9 s/2,109 tokens), though tests still passed. On small synthetic graphs the note produced three incorrect outputs where coarse was correct. The GPT-OSS and Muse coding runs (Appendix~B) did not include the monitor. The booking workload is simulated, and its success check omits the refundability sentence, which Qwen never writes (Appendix~D).
 
-\columnbreak
-
-\section*{Benchmarks and Data}
-
-The internal paired harness is the main benchmark because it directly matches our assumption that fault location is known. \href{https://github.com/tradertanmay/undobench}{\textbf{UndoBench}} adds operational tasks with state and side-effect oracles. Our adapter retries a known pre-mutation failure once; it does not recover a trajectory after a committed effect. \href{https://github.com/SaFo-Lab/A2ASecBench}{\textbf{A2ASecBench}} adds matched attack/control cases for agent-to-agent protocols. Its adapter measures tainted-action blocking, not rollback after effects occur.
-
-We also reviewed \href{https://github.com/microsoft/TAMAS}{\textbf{TAMAS}} and \href{https://huggingface.co/datasets/Kevin355/Who_and_When}{\textbf{Who\&When}}. TAMAS requires a paid model API, so it is excluded from Phase 1 numbers without approval. Who\&When traces are useful for attribution analysis but are not executable recovery environments for this workflow.
-
-\section*{Quantitative Progress}
-
-\footnotesize
-\begin{tabularx}{\columnwidth}{@{}>{\raggedright\arraybackslash}X >{\raggedleft\arraybackslash}p{0.18\columnwidth} >{\raggedleft\arraybackslash}p{0.38\columnwidth}@{}}
-\toprule
-\textbf{Evidence} & \textbf{Scale} & \textbf{Observed result} \\
-\midrule
-Automated suite & 64 tests & 64 passed \\
-Internal harness & 10 faults & mock: all fire; plumbing only \\
-UndoBench smoke & 4 pairs & 4 controls; 2 recovered \\
-A2ASecBench & 800 records & attack success rate 0; control pass 1.0 \\
-\bottomrule
-\end{tabularx}
-\small
-
-UndoBench's recovery rate is 0.50 with zero duplicate effects in the four-pair smoke suite. A2ASecBench covers ASRF, ATSI, coordination oscillation, and task flooding (200 records each; one trial per suite). Its perfect preliminary score is policy-specific: the task-flooding adapter uses a declared five-task quota and still needs a sensitivity sweep.
-
-\section*{Phase 1 Status}
-
-\textbf{The repository meets the Phase 1 requirement.} It contains a reproducible dataset generator, ten fault injections, explicit oracles and metrics, seven recovery/prevention methods, two executable external adapters, machine-readable result rows, provenance traces, and 64 passing tests.
-
-\textbf{The final empirical claim is not complete.} Phase 2 must run the fixed local Qwen2.5-7B model on 30 seeds, 10 faults, and six recovery methods (1,800 paired comparisons), retain failures and timeouts, repeat runs for confidence intervals, evaluate held-out seeds, and sweep the task-flooding quota. Mock-LLM and unapproved paid-API outputs will not be reported as results.
-
+\section*{Phase 2 Direction}
+The measurements point to three gaps. First, dependency tracking alone fails all 10 stale-report cases, because the faulty program sits upstream of the faulty report; recovery must reopen the step that wrote the code when re-testing fails. Second, the monitor's benefit is small and comes from single runs on one workload, so it needs repeated seeds and the MBPP faults before any claim. Third, one-hop support saves a step on the hotel fault but drops needed work on missing requirements; Wang et al.'s full sufficiency check~\cite{wang2026} is the principled replacement.
 \end{multicols}
+
+\vspace{-2pt}
+\noindent\begin{minipage}{\textwidth}
+\footnotesize
+\renewcommand{\arraystretch}{1.05}
+\noindent\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{0.13\textwidth} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}p{0.30\textwidth}@{}}
+\toprule
+\textbf{Milestone} & \textbf{Work} & \textbf{Completion check}\\\midrule
+Phase 1 (done) & Coding and booking workloads, eleven booking and seven coding faults, dependency recording, restart, suffix, coarse, monitor, and support. & Measurements above; Qwen rows and traces in the repository.\\
+Phase 2, week 1 & Reopen the code-writing step when re-testing fails. Run monitor and support on the same ten MBPP tasks. & Stale-report cases recovered; rescue rates matched case by case on the 96 injected runs.\\
+Phase 2, week 2 & Implement Wang et al.'s sufficiency check. Test restored files, duplicate bookings, and sent emails. Compare with restart and always-verify at matched budgets. & Correctness, reused work, and cost per method on identical faulty runs.\\
+Phase 2, week 3 & All 50 MBPP tasks; at least five booking seeds and two prompt variants. & Means with confidence intervals; accidental and adversarial faults reported separately.\\
+Final & Verify each claim against saved runs; package code, data, logs, and the report. & Every reported number rebuilt from committed rows.\\
+Optional & A detector that must locate the fault before recovery runs. & False alarms, missed faults, and effect on recovery cost.\\\bottomrule
+\end{tabularx}
+
+\vspace{2pt}
+\noindent\textbf{Table 1.} Phase 2 milestones.
+\end{minipage}
 
 \clearpage
 \appendix
-\section*{Appendix A: Timeline and Milestones}
+\section*{Appendix A: Faults Used in the Coding Evaluation}
+\small
+Each task is tested with one fault at a time. The first five fault types are tested separately in both coding passes; false reports target the first pass, and stale reports target the second. This gives 12 fault/stage combinations per task, or 120 attempted injections across ten tasks.
 
-\renewcommand{\arraystretch}{1.12}
-\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{0.19\textwidth} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}p{0.17\textwidth}@{}}
+\vspace{5pt}
+\renewcommand{\arraystretch}{1.05}
+\noindent\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{.18\textwidth} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}p{.13\textwidth} rr@{}}
 \toprule
-\textbf{Period} & \textbf{Milestone and deliverable} & \textbf{Exit criterion} \\
-\midrule
-Phase 1: Harness &
-Seeded multi-agent workflow, provenance graph, effect classes, deterministic world oracle, and ten fault injections. &
-\textbf{Complete} \\
-
-Phase 1: Evaluation &
-Five primary metrics; separate final/recovery effects and irreversible harm; JSONL summaries and trace artifacts. &
-\textbf{Complete} \\
-
-Phase 1: External validation &
-Native UndoBench and A2ASecBench adapters, automated regression tests, and reproduced smoke results. &
-\textbf{Complete} \\
-
-Phase 2, Week 1 &
-Measure local-model clean-run reliability and determinism; freeze model, prompts, temperature, seeds, and schedules. &
-Reliable clean baseline \\
-
-Phase 2, Week 2 &
-Run 30 seeds $\times$ 10 faults $\times$ 6 recovery methods; retain failures and compute paired token/latency ratios. &
-1,800 paired trials \\
-
-Phase 2, Week 3 &
-Repeat runs, calculate confidence intervals, evaluate held-out seeds, and sweep task quotas (1, 5, 10, 20). &
-Stable estimates \\
-
-Final phase &
-Analyze failure cases and ablations; verify claims against artifacts; produce final tables, report, and presentation. &
-Submission package \\
-\bottomrule
+\textbf{Fault} & \textbf{What is changed} & \textbf{Category} & \textbf{Attempts} & \textbf{Injected}\\\midrule
+Bad patch & Replace the function body with \texttt{return None}, in pass 1 or 2. & Accidental &20&20\\
+Comparison change & Flip a comparison such as $>$ to $\geq$, in pass 1 or 2. & Accidental &20&10\\
+Missing requirement & Remove a selected requirement from the specification, in pass 1 or 2. & Accidental &20&6\\
+Tester timeout & Replace feedback with a simulated timeout, in pass 1 or 2. & Accidental &20&20\\
+Instruction hijack & Tell the coder to ignore the task and return \texttt{None}, in pass 1 or 2. & Adversarial &20&20\\
+False test report & Report that faulty code passed its feedback test, in pass 1. & Adversarial &10&10\\
+Stale test report & Supply an old passing report for changed code, in pass 2. & Accidental &10&10\\\midrule
+\textbf{Total} &&&\textbf{120}&\textbf{96}\\\bottomrule
 \end{tabularx}
 
-\section*{Appendix B: Reproducibility}
+\vspace{5pt}
+\noindent\textbf{Table 2.} Scheduled and actual fault injections for GPT-OSS 120B. A comparison can only be changed if suitable code exists, and a requirement can only be removed if it appears in the specification. Ten comparison changes and fourteen requirement deletions did not apply. They are not counted as successful defenses. Each recovery method is evaluated on the same 96 runs where a fault was added.
+
+\vspace{12pt}
+\small
+\section*{Appendix B: GPT-OSS Recovery by Fault Placement}
+\small
+Restart means starting the job over. Suffix means redo the broken step and every later step. Coarse is the selective repair from the body. Each cell is how many repairs succeeded, then the average number of steps redone out of nine. A row is missing from the 96 when the planted mistake had nothing to change. Suffix and coarse match restart on ten rows. On a bad first draft they pass the run restart misses. On the stale test report both score 0/10.
+
+\vspace{5pt}
+\renewcommand{\arraystretch}{1.05}
+\noindent\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}X ccc@{}}
+\toprule
+\textbf{Fault and stage} & \textbf{Restart} & \textbf{Suffix} & \textbf{Coarse}\\\midrule
+Tester timeout, pass 1 & 10/10 · 9.00 & 10/10 · 7.00 & 10/10 · 6.00\\
+Tester timeout, pass 2 & 10/10 · 9.00 & 10/10 · 2.00 & 10/10 · 2.00\\
+Bad patch, pass 1 & 9/10 · 9.00 & 10/10 · 8.00 & 10/10 · 7.00\\
+Bad patch, pass 2 & 10/10 · 9.00 & 10/10 · 3.00 & 10/10 · 3.00\\
+Missing requirement, pass 1 & 3/3 · 9.00 & 3/3 · 9.00 & 3/3 · 9.00\\
+Missing requirement, pass 2 & 3/3 · 9.00 & 3/3 · 4.00 & 3/3 · 4.00\\
+Instruction hijack, pass 1 & 10/10 · 9.00 & 10/10 · 9.00 & 10/10 · 9.00\\
+Instruction hijack, pass 2 & 10/10 · 9.00 & 10/10 · 4.00 & 10/10 · 4.00\\
+False test report, pass 1 & 10/10 · 9.00 & 10/10 · 7.00 & 10/10 · 6.00\\
+Stale test report, pass 2 & 10/10 · 9.00 & 0/10 · 2.00 & 0/10 · 2.00\\
+Comparison change, pass 1 & 5/5 · 9.00 & 5/5 · 8.00 & 5/5 · 7.00\\
+Comparison change, pass 2 & 5/5 · 9.00 & 5/5 · 3.00 & 5/5 · 3.00\\\bottomrule
+\end{tabularx}
+
+\vspace{5pt}
+\noindent On the stale test report, suffix and coarse are short because they run the tests again and do not rewrite the program: 389 tokens and 2.64 seconds, and 387 tokens and 2.57 seconds. Starting over rewrites the program, uses 3,290 tokens and 33.84 seconds, and passes all 10. Both shorter repairs score 0/10.
+
+\vspace{12pt}
+\section*{Appendix C: Support Rule on a Wrong Hotel Id}
+\noindent\begin{minipage}{\textwidth}
+\begin{center}
+\begin{tikzpicture}
+  \node[keptstep, anchor=west] (s1) at (0,0) {Look up\\flights};
+  \node[faultstep, right=2.2mm of s1] (s2) {Look up\\hotels};
+  \node[redostep, right=2.2mm of s2] (s3) {Write\\plan};
+  \node[keptstep, right=2.2mm of s3] (s4) {Book\\flight};
+  \node[redostep, right=2.2mm of s4] (s5) {Book\\hotel};
+  \node[redostep, right=2.2mm of s5] (s6) {Save\\itinerary};
+  \node[redostep, right=2.2mm of s6] (s7) {Email\\traveler};
+  \draw[arr] (s1)--(s2); \draw[arr] (s2)--(s3); \draw[arr] (s3)--(s4);
+  \draw[arr] (s4)--(s5); \draw[arr] (s5)--(s6); \draw[arr] (s6)--(s7);
+  \node[font=\scriptsize\sffamily, align=center, below=2mm of s4, text width=6cm]
+    {Kept: this step cited the flight id, not the hotel id.};
+\end{tikzpicture}\\[2pt]
+{\footnotesize\textbf{Figure 2.} The support rule from Wang et al., on the same wrong hotel id.
+The flight booking is green here. In the coarse row of Figure~1 it was blue, so coarse cancelled a correct flight and booked it again.}
+\end{center}
+\end{minipage}
+
+\vspace{12pt}
+\section*{Appendix D: Additional Results}
+\small
+\textbf{Booking.} Three of the eleven injected faults (a false refundability claim, a malicious hotel instruction, and an inexecutable plan) did not change the booking and were excluded. The model never stated refundability, even on clean runs, so refundability is reported separately from success. Emails already sent cannot be retracted; recovery sends a corrected email and both remain in the record.
+
+\textbf{Muse Glimmer 30B.} On the same ten MBPP problems, Muse passed 9/10 clean runs. With an injected fault, 57/95 scored runs passed without recovery; restart, suffix, and coarse recovered 87/95, 78/95, and 77/95 in 72.0, 43.2, and 40.4 seconds (4,207, 2,478, and 2,323 tokens). Four runs ended in execution errors.
+
+\textbf{Always-verify.} A forward run that checks each specification, code output, and document, with one replacement allowed, passed 106/120 scheduled fault cases for both GPT-OSS and Muse. This denominator includes injections that did not apply, so it is not ranked against recovery.
+
+\textbf{Travel authorization variants.} GPT-OSS passed 2/3 clean variants; the planning-only variant failed without an attack, and restart turned one correct run incorrect. Muse passed all three variants under every condition, with no unauthorized action attempted.
+
+\textbf{External benchmarks.} Adapters for UndoBench (state-changing tasks), A2ASecBench (inter-agent attacks), and Who\&When (failure logs) are in the repository. They do not yet recover a completed action.
+
 
 \begin{multicols}{2}
-\small
-\textbf{Main paired experiment}
-\begin{verbatim}
-uv sync
-uv run pytest -q
-# In a separate terminal:
-./scripts/start_server.sh
-# Back in this terminal:
-uv run agentrec experiment \
-  --tasks 30 --faults all \
-  --methods restart,suffix,coarse,\
-support,monitor,support_monitor
-uv run python analysis/summarize.py \
-  results/experiment-server-*/rows.jsonl
-\end{verbatim}
+\footnotesize
+\begin{thebibliography}{6}
 
-\columnbreak
-\textbf{External benchmark smoke tests}
-\begin{verbatim}
-uv run agentrec undobench download
-uv pip install -e data/undobench-upstream
-uv run agentrec undobench trial \
-  --suite smoke --recovery agentrec
+\bibitem{mast} M. Cemri, M. Z. Pan, S. Yang, et al.
+\emph{Why Do Multi-Agent LLM Systems Fail?} NeurIPS 2025 Datasets and
+Benchmarks Track.
+\url{https://proceedings.neurips.cc/paper_files/paper/2025/hash/b1041e52d3be19f0a9bc491657488e4a-Abstract-Datasets_and_Benchmarks_Track.html}
 
-uv run agentrec a2a download
-uv pip install -e \
-  'data/a2asec-upstream[dev]'
-for s in asrf atsi co hotf; do
-  uv run agentrec a2a trial \
-    --config configs/offline/${s}_eval.yaml \
-    --agentrec
-done
-\end{verbatim}
+\bibitem{whowhen} S. Zhang, M. Yin, J. Zhang, et al.
+\emph{Which Agent Causes Task Failures and When? On Automated Failure
+Attribution of LLM Multi-Agent Systems.} ICML 2025. arXiv:2505.00212.
+\url{https://arxiv.org/abs/2505.00212}
+
+\bibitem{cascades} Y. Xie, et al.
+\emph{Modeling and Mitigating Error Cascades in LLM-Based Multi-Agent
+Systems.} arXiv:2603.04474, 2026.
+\url{https://arxiv.org/abs/2603.04474}
+
+\bibitem{undobench} T. Sah, et al.
+\emph{UndoBench: Separating Task Competence from Recovery Capability in
+Tool-Using AI Agents.} arXiv:2610.05622, 2026.
+\url{https://arxiv.org/abs/2610.05622}
+
+\bibitem{sagas} H. Garcia-Molina and K. Salem. \emph{Sagas.}
+In Proceedings of the 1987 ACM SIGMOD International Conference on
+Management of Data, 1987.
+\url{https://dl.acm.org/doi/10.1145/38714.38742}
+
+\bibitem{wang2026} Y. Wang, C. Yu, J. Zhang, Y. Duan, M. Zheng, Z. Wu, K. Shi, and T. Cai.
+\emph{From Faulty Memories to Corrected Actions: Dependency-Guided Rollback Repair for Memory-Augmented Agents.}
+arXiv:2608.10502, 2026.
+\url{https://arxiv.org/abs/2608.10502}
+
+\end{thebibliography}
 \end{multicols}
 
 \end{document}
