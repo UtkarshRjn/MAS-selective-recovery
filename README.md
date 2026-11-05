@@ -2,7 +2,7 @@
 
 An agent's incorrect output can become another agent's input. This project records those dependencies and uses them to decide which steps to repeat after a fault. We compare the correctness and cost of selective recovery with restarting the workflow.
 
-The evaluation covers simulated travel booking, Python programming tasks, and small dependency graphs. Every recovery method receives the fault location and a copy of the same faulty execution. The system records messages, intermediate outputs, tool actions, dependencies, and model usage.
+The two main evaluations cover simulated travel booking and Python programming tasks. Every recovery method receives the fault location and a copy of the same faulty execution. The system records messages, intermediate outputs, tool actions, dependencies, and model usage.
 
 ## Workflows
 
@@ -10,8 +10,6 @@ The evaluation covers simulated travel booking, Python programming tasks, and sm
 |---|---|---|
 | Travel booking | Seven steps research flights and hotels, plan a trip, book both, save an itinerary, and email the traveler. Tools update a simulated world. | Qwen2.5-7B-Instruct on two task seeds and eleven fault types. |
 | Python coding | Nine steps write a specification, code, test results, review, and documentation, followed by a second specification–code–test–review pass. | GPT-OSS 120B and Muse Glimmer 30B on 10 of 50 prepared sanitized MBPP tasks. |
-| Travel authorization | Three cases cover unauthorized email, booking without approval, and cancellation of a protected booking. | GPT-OSS 120B and Muse Glimmer 30B, with clean, injected, verification, and restart conditions. |
-| Coding examples and graphs | Three small programs and four graph shapes exercise different dependency paths. | Qwen2.5-7B-Instruct comparisons of recovery methods. |
 
 Coding agents receive one test for revision feedback. The remaining tests stay hidden and score the final code. Generated code runs in constrained Docker containers. Testing uses tools, and Python computes review decisions from test feedback. The nine-stage workflow makes seven model calls, including the inherited reviewer calls.
 
@@ -51,21 +49,15 @@ These runs scored the flight, hotel, itinerary, and email recipient. Their succe
 
 Coarse repeated fewer steps than restart while preserving the measured booking outcome. The monitor repeated the same steps as coarse and used slightly more tokens. Its small observed time difference comes from one observation per condition.
 
-### Coding and graph checks with Qwen2.5-7B-Instruct
-
-On the wrong-hotel-id booking fault, support retained the correct flight booking and repeated five steps instead of coarse's six. On the small coding examples, the same support rule retained too much work and failed `clamp` and `clip_text` after a requirement was removed.
-
-The fault note also had mixed results. For `clamp` with a missing requirement, monitor used 2,109 tokens and 13.87 seconds, compared with coarse's 1,453 tokens and 8.22 seconds. On the synthetic graphs, monitor produced three incorrect outputs where coarse succeeded. The [table-generation script](analysis/phase1_tables.py) reproduces these comparisons from committed rows.
-
-### MBPP experiment
+### Python coding with MBPP
 
 Both models evaluated the same 10 tasks with seven fault families and 12 fault/stage combinations per task. Faults include bad code, changed comparisons, missing requirements, tester timeouts, instruction hijacks, false test reports, and stale reports. Accidental and adversarial cases are labelled in the [experiment guide](evals/README.md).
 
-False-report and stale-report cases deliberately combine bad code with misleading feedback and include truthful-feedback controls. Each recovery method starts from the same saved faulty run with injection disabled. Monitor and support were evaluated in the Qwen experiments above, while the MBPP comparison covers restart, suffix, and coarse.
+False-report and stale-report cases deliberately combine bad code with misleading feedback and include truthful-feedback controls. Each recovery method starts from the same saved faulty run with injection disabled. Monitor and support were evaluated in the Qwen booking and additional coding experiments, while the MBPP comparison covers restart, suffix, and coarse.
 
 Each task/condition has one observation per model, at temperature 0 and seed 0, with a 2,048-token output limit. Five tasks run in parallel, with conditions within a task executed sequentially.
 
-### Coding correctness
+#### Correctness
 
 | Condition | GPT-OSS 120B | Muse Glimmer 30B |
 |---|---:|---:|
@@ -81,7 +73,7 @@ Each task has 12 scheduled fault/stage combinations, so 10 tasks make 120 attemp
 
 Recovery scores include runs that already passed without recovery. A rescue rate still needs those 33 GPT-OSS failures, and the corresponding Muse failures, matched one by one. The two models do not have the same eligible set. Always-verify uses all 120 scheduled cases and is not ranked directly against the recovery fractions.
 
-### Recovery cost
+#### Cost
 
 Tokens count model input and output. Means include unsuccessful scored reruns. These saved measurements cover replay and exclude the original faulty run, surrounding cleanup, and final correctness audit. Current recovery timing also includes dependency selection and effect cleanup, so reproducing historical timings requires the original source revision.
 
@@ -94,7 +86,7 @@ Tokens count model input and output. Means include unsuccessful scored reruns. T
 | Muse Glimmer 30B | Suffix | 95 | 5.39 | 2,478 | 43.22 |
 | Muse Glimmer 30B | Coarse | 94 | 5.00 | 2,323 | 40.37 |
 
-Forward runs, not recovery reruns:
+The following table reports the cost of complete forward runs.
 
 | Model | Condition | Cost records | Mean tokens | Mean seconds |
 |---|---|---:|---:|---:|
@@ -103,15 +95,25 @@ Forward runs, not recovery reruns:
 | Muse Glimmer 30B | Clean | 10 | 4,172 | 69.44 |
 | Muse Glimmer 30B | Always-verify, fault cases | 119 | 10,121 | 177.03 |
 
+## Additional results
+
 ### Travel authorization cases
 
+Three simulated cases test unauthorized email, booking without approval, and cancellation of a protected booking. Each has clean, injected, verification, and restart conditions.
+
 GPT-OSS passes 2 of 3 clean travel cases. The planning-only task fails with no attack, and restart makes one previously passing case incorrect. Muse passes all 3 cases under clean, no recovery, verification, and restart. Neither model attempts an unauthorized action in these cases.
+
+### Coding and graph checks with Qwen2.5-7B-Instruct
+
+Qwen also evaluated three small coding programs and four synthetic dependency graphs. On the coding examples, the same support rule retained too much work and failed `clamp` and `clip_text` after a requirement was removed.
+
+The fault note also had mixed results. For `clamp` with a missing requirement, monitor used 2,109 tokens and 13.87 seconds, compared with coarse's 1,453 tokens and 8.22 seconds. On the synthetic graphs, monitor produced three incorrect outputs where coarse succeeded. The [table-generation script](analysis/phase1_tables.py) reproduces these comparisons from committed rows.
 
 ## Findings and remaining questions
 
 Suffix and coarse fail all ten GPT-OSS stale-report cases. The report is identified as faulty, but the bad code remains eligible for reuse. Repeating the tests exposes the error without reopening code generation. Recovery needs a rule for responding to errors discovered during replay.
 
-The measurements also show why reuse needs validation. The support rule saves work on a wrong hotel identifier, but fails on two coding examples with missing requirements. The next step is to validate retained outputs, reopen the stages needed to correct newly discovered errors, and test restoration of files and simulated actions. Broader task coverage and repeated runs will measure how consistently these choices help. An independent fault-detection agent can then be evaluated alongside recovery with known fault locations.
+On the wrong-hotel-id booking fault, support retained the correct flight booking and repeated five steps instead of coarse's six. The support rule saves work in this case, but fails on two coding examples with missing requirements. The next step is to validate retained outputs, reopen the stages needed to correct newly discovered errors, and test restoration of files and simulated actions. Broader task coverage and repeated runs will measure how consistently these choices help. An independent fault-detection agent can then be evaluated alongside recovery with known fault locations.
 
 Current results have one observation per condition and no variability estimates. Coding outcomes are pooled across accidental and adversarial faults. Per-category results and rescue rates on initially failing cases require further analysis. Provider load and concurrent workers affect latency.
 
