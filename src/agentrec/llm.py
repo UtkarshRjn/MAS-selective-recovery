@@ -142,6 +142,29 @@ class MockLLM:
     def __init__(self) -> None:
         self.usage = Usage()
 
+    @staticmethod
+    def _graph(messages: Messages) -> dict[str, Any]:
+        user = messages[1]["content"]
+        key = read_field(user, "KEY_JSON")
+        inputs = read_field(user, "INPUTS_JSON") or []
+        if not inputs:
+            return {"value": key}
+        return {"value": f"{key}({','.join(inputs)})"}
+
+
+    def complete(self, messages: Messages, *, json_mode: bool = False, max_tokens: int | None = None) -> str:
+        """Plumbing-only text completion. Not a failure-attribution baseline."""
+        prompt = messages[-1]["content"]
+        if "upper half" in prompt and "lower half" in prompt:
+            text = "upper half"
+        elif "1. Yes/No" in prompt:
+            text = "1. No.\n2. Reason: plumbing check"
+        else:
+            text = "Agent Name: mock\nStep Number: 0\nReason for Mistake: plumbing check"
+        self.usage.calls += 1
+        self.usage.completion_tokens += len(text) // 4
+        return text
+
     def chat(self, agent: str, messages: Messages) -> dict[str, Any]:
         out = getattr(self, f"_{agent}")(messages)
         self.usage.calls += 1

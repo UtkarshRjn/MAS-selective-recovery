@@ -74,6 +74,9 @@ def _run_agents(ctx: RunContext) -> None:
         from .coding import CodingWorkflow
 
         CodingWorkflow().run(ctx)
+    elif kind == "graph":
+        from .graphs import GraphWorkflow
+        GraphWorkflow().run(ctx)
     else:
         TravelWorkflow().run(ctx)
 

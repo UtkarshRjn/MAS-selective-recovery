@@ -105,3 +105,17 @@ The current CLI varies task seeds. Repeat orchestration and confidence-interval 
 The internal harness reports all five shared metrics. External adapters report native correctness and side-effect metrics, not all five cost metrics.
 
 UndoBench currently measures safe pre-mutation call retry. A2ASecBench measures provenance-based action blocking, not post-effect rollback.
+
+## Graph templates
+
+`uv run agentrec graphs` runs these shapes and the coding team on the same model as the booking experiment. A `corrupt` fault replaces one step's output. With `--llm mock` the command prints the tainted sets only. These faults are not in the travel sweep. One return visit is a second log entry (`a:2`); the run does not keep handing work back.
+
+| Template | Call order | Who reads what |
+|---|---|---|
+| chain | `a b c d` | each step reads the previous one |
+| diamond | `a b c d` | `b` and `c` read `a`; `d` reads both |
+| join | `p q r join` | `p`, `q`, and `r` read only the task; `join` reads all three |
+| backedge | `a b c a:2 side` | `a:2` reads `c`; `side` reads only `a` |
+
+Suffix and coarse name the same steps on a chain. They split when a later step never read the fault: `c` on a diamond fault at `b`, `q` and `r` on a join fault at `p`, and `side` on a back-edge fault at `b` or `a:2`. Support follows one evidence hop, so on a longer path it leaves a downstream file stale. Restart, suffix, and coarse restore every file.
+

@@ -150,6 +150,6 @@ travel tools never contact real booking or email services.
 ## Additional workflows
 
 The repository also includes the original travel experiments with support and monitor
-recovery, plus UndoBench, A2ASecBench, TAMAS, and Who&When adapters. See the
+recovery, graph topology sweeps (`agentrec graphs`), plus UndoBench, A2ASecBench, TAMAS, and Who&When adapters. See the
 [travel and external benchmark guide](evals/travel-and-external.md) for their commands
 and metrics. The [coding evaluation guide](evals/README.md) describes the MBPP runs.

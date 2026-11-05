@@ -150,3 +150,8 @@ email, which can affect authorization scores in future runs.
 Recovery timing now includes dependency selection, undo operations, replay, and orphaned
 effect cleanup. The published GPT-OSS and Muse tables use their saved pre-integration
 rerun timings. Keep the source snapshot with each run when comparing timings or scores.
+
+If a process or EC2 instance stopped abruptly, its saved status may still say
+`running`. After verifying that the source process has stopped, add
+`--resume-source-stopped` to the resume command. This confirmation is recorded in
+`resume.json`. A task interrupted before writing any results resumes as unfinished.

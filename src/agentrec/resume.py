@@ -56,7 +56,7 @@ class ResumeRecorder(Recorder):
         return world, prov, injector, copy.deepcopy(row)
 
 
-def import_previous(source, destination, config, manifest, failures=None):
+def import_previous(source, destination, config, manifest, failures=None, *, source_stopped=False):
     """Only explicit legacy failures may supplement rows lacking condition-level errors."""
     source = Path(source)
     old = json.loads((source/'config.json').read_text())
@@ -69,14 +69,18 @@ def import_previous(source, destination, config, manifest, failures=None):
         if old.get(name) != config.get(name):
             raise ValueError(f'Resume configuration differs: {name}')
     source_status = json.loads((source/'run_status.json').read_text())
-    if any(v['status'] == 'running' for v in source_status['tasks'].values()):
-        raise ValueError('Cannot resume an active source run')
+    if any(v['status'] == 'running' for v in source_status['tasks'].values()) and not source_stopped:
+        raise ValueError('Source is marked running. Stop its process, then use --resume-source-stopped to confirm.')
+    (destination/'tasks').mkdir(parents=True, exist_ok=True)
     for task in (source/'tasks').iterdir():
         if not task.is_dir():
             continue
         target = destination/'tasks'/task.name
         target.mkdir(parents=True)
-        shutil.copyfile(task/'rows.jsonl', target/'rows.jsonl')
+        if (task/'rows.jsonl').exists():
+            shutil.copyfile(task/'rows.jsonl', target/'rows.jsonl')
+        else:
+            (target/'rows.jsonl').touch()
         if (task/'traces').exists():
             shutil.copytree(task/'traces', target/'traces')
     additions = json.loads(Path(failures).read_text()) if failures else []
@@ -91,6 +95,7 @@ def import_previous(source, destination, config, manifest, failures=None):
             f.write(json.dumps(row)+'\n')
     (destination/'resume.json').write_text(json.dumps({
         'source_run': str(source.resolve()), 'original_config': old,
+        'source_stopped_confirmed': source_stopped,
         'legacy_failures': additions, 'policy': 'Preserve all existing results; rerun only unfinished conditions.'}, indent=2))
     # Validate row uniqueness and required faulty traces before any model calls.
     for task in (destination/'tasks').iterdir():

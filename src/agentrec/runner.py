@@ -29,6 +29,7 @@ from .a2a import cmd_summary as cmd_a2a_summary
 from .a2a import cmd_trial as cmd_a2a_trial
 from .tamas import cmd_download as cmd_tamas_download
 from .tamas import cmd_summary as cmd_tamas_summary
+from .graphs import evaluate_graphs, format_table, sweep_topologies
 from .tamas import cmd_trial as cmd_tamas_trial
 from .undobench import cmd_download as cmd_undo_download
 from .undobench import cmd_smoke as cmd_undo_smoke
@@ -238,6 +239,21 @@ def cmd_experiment(args: argparse.Namespace) -> None:
     print(f"done -> {rec.out_dir}")
 
 
+def cmd_graphs(args: argparse.Namespace) -> None:
+    if args.llm == "mock":
+        print(format_table(evaluate_graphs()))
+        return
+    llm = make_llm(args)
+    rows = sweep_topologies(llm)
+    out = Path(args.out) / f"topology-{args.llm}-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+    out.mkdir(parents=True, exist_ok=True)
+    path = out / "rows.jsonl"
+    with path.open("w") as fh:
+        for row in rows:
+            fh.write(json.dumps(row) + "\n")
+    print(f"done -> {out}")
+
+
 def main() -> None:
     p = argparse.ArgumentParser(prog="agentrec")
     p.add_argument("--llm", choices=("server", "mock"), default="server")
@@ -263,6 +279,9 @@ def main() -> None:
     e.add_argument("--faults", default="all", help="'all' or comma-separated, e.g. timeout@research_flights")
     e.add_argument("--methods", default="all", help=f"'all' or comma-separated subset of {METHODS}")
     e.set_defaults(fn=cmd_experiment)
+
+    g = sub.add_parser("graphs", help="chain, diamond, join, and back-edge recovery cases")
+    g.set_defaults(fn=cmd_graphs)
 
     w = sub.add_parser("who-when", help="Who&When failure-attribution logs")
     w.add_argument("--data", default="data/who-and-when")

@@ -227,7 +227,8 @@ def cmd_run(args):
     (out / 'config.json').write_text(json.dumps(config, indent=2))
     if getattr(args, 'resume_from', None):
         from .resume import import_previous
-        import_previous(args.resume_from, out, config, manifest, getattr(args, 'resume_errors', None))
+        import_previous(args.resume_from, out, config, manifest, getattr(args, 'resume_errors', None),
+                        source_stopped=getattr(args, 'resume_source_stopped', False))
     execute_cases(manifest['cases'], args.workers, out,
                   lambda case, task_out, stop: run_case(
                       case, args, connection, task_out, stop))
@@ -400,6 +401,8 @@ def add_cli(sub):
             a.add_argument('--report', default='results/mbpp-validation.json')
         if action == 'run':
             a.add_argument('--resume-from', help='Stopped source run; writes a new continuation directory')
+            a.add_argument('--resume-source-stopped', action='store_true',
+                           help='Confirm source process has stopped when saved status still says running')
             a.add_argument('--resume-errors', help='Explicit failed-condition rows missing from a legacy source run')
             a.add_argument('--execute-model', action='store_true')
             a.add_argument('--workers', type=int, default=1, help='Concurrent task examples; stages stay sequential')
