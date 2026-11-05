@@ -12,7 +12,7 @@ the fault location so we can study recovery separately from fault detection.
 
 - Prepared 50 Python programming tasks from sanitized MBPP and three simulated travel cases.
 - Implemented clean runs, seven fault families, intermediate verification, and three recovery baselines.
-- Evaluated 10 coding tasks and all three travel cases with GPT-OSS 120B through NRP and Muse Glimmer 30B through Triton.
+- Evaluated 10 coding tasks and all three travel cases with GPT-OSS 120B and Muse Glimmer 30B.
 - Recorded task outcomes, intermediate errors, dependencies, tool actions, tokens, latency, and repeated stages.
 
 The current results cover 10 of the 50 prepared coding tasks. Each task/condition has
