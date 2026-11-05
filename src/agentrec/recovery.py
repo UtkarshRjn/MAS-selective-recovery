@@ -176,8 +176,12 @@ def selective_recover(
     t0 = time.perf_counter()
     taint = taint_fn(prov)
     steps = prov.of_kind("step")
-    tainted = [s.key for s in steps if s.id in taint]
-    counts = undo_effects(world, prov, [n.id for n in prov.of_kind("effect") if n.id in taint])
+    tainted_steps = [s for s in steps if s.id in taint]
+    tainted = [s.key for s in tainted_steps]
+    # Support edges reach the step, not the effect it caused. Undoing the step's
+    # effects is what cancels a booking when that step is redone.
+    effect_ids = [eid for s in tainted_steps for eid in prov.effects_of(s.id)]
+    counts = undo_effects(world, prov, effect_ids)
 
     reuse: dict[str, dict[str, Any]] = {}
     for s in steps:
