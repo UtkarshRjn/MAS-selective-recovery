@@ -100,13 +100,7 @@ Qwen also evaluated three small coding programs and four synthetic dependency gr
 
 The fault note also had mixed results. For `clamp` with a missing requirement, monitor used 2,109 tokens and 13.87 seconds, compared with coarse's 1,453 tokens and 8.22 seconds. On the synthetic graphs, monitor produced three incorrect outputs where coarse succeeded. The [table-generation script](analysis/phase1_tables.py) reproduces these comparisons from committed rows.
 
-## Findings and remaining questions
-
-Suffix and coarse fail all ten GPT-OSS stale-report cases. The report is identified as faulty, but the bad code remains eligible for reuse. Repeating the tests exposes the error without reopening code generation. Recovery needs a rule for responding to errors discovered during replay.
-
-On the wrong-hotel-id booking fault, support retained the correct flight booking and repeated five steps instead of coarse's six. The support rule saves work in this case, but fails on two coding examples with missing requirements. The next step is to validate retained outputs, reopen the stages needed to correct newly discovered errors, and test restoration of files and simulated actions. Broader task coverage and repeated runs will measure how consistently these choices help. An independent fault-detection agent can then be evaluated alongside recovery with known fault locations.
-
-Current results have one observation per condition and no variability estimates. Coding outcomes are pooled across accidental and adversarial faults. Per-category results and rescue rates on initially failing cases require further analysis. Provider load and concurrent workers affect latency.
+The report discusses the failure cases, limitations, and planned recovery improvements in “Phase 2 Direction” and the appendices. [Phase 1 report (PDF)](output/pdf/phase1_report.pdf)
 
 ## Setup and reproduction
 
