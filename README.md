@@ -1,10 +1,10 @@
-# agent-recovery
+# Selective Recovery for Cascading Failures in Multi-Agent LLM Systems
 
 Fault injection and selective recovery for multi-agent LLM workflows (CS 291A, Option 5).
 
 Agents pass results to one another. An incorrect or malicious result can affect later decisions, and a full restart repeats work that was already correct. This repository records which results depend on which, then compares recovery methods that are all given the same fault location. Detection is not part of the comparison.
 
-The current pilot is the evaluation merged in [#10](https://github.com/UtkarshRjn/cs291a-agent-recovery/pull/10): 10 of 50 pinned MBPP coding tasks, plus 3 simulated travel cases, run on GPT-OSS 120B and Muse Glimmer 30B. The same repository still contains the travel booking harness, graph topologies, and the external benchmark adapters.
+The current pilot is the evaluation merged in [#10](https://github.com/UtkarshRjn/multi-agent-selective-recovery/pull/10): 10 of 50 pinned MBPP coding tasks, plus 3 simulated travel cases, run on GPT-OSS 120B and Muse Glimmer 30B. The same repository still contains the travel booking harness, graph topologies, and the external benchmark adapters.
 
 The Phase 1 writeup is in [docs/phase1_report.tex](docs/phase1_report.tex) ([PDF](output/pdf/phase1_report.pdf)). Commands and fault definitions for the coding pilot are in [evals/README.md](evals/README.md). The travel harness and external benchmarks are in [evals/travel-and-external.md](evals/travel-and-external.md).
 

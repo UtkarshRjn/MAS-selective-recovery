@@ -13,7 +13,7 @@ uv run python analysis/phase1_tables.py     # rebuilds the tables below from the
 
 To reproduce a row, check out the listed revision, start the model server with `./scripts/start_server.sh`, and run the command. The two task seeds are 0 and 1. Results are written to `results/`, which is not tracked.
 
-Pin the revision. The booking rows score success as the correct flight, hotel, itinerary, and confirmation email. After PR [#9](https://github.com/UtkarshRjn/cs291a-agent-recovery/pull/9), `main` also requires the refundability sentence. Qwen never writes that sentence, so a rerun on `main` reports every booking as failed.
+Pin the revision. The booking rows score success as the correct flight, hotel, itinerary, and confirmation email. After PR [#9](https://github.com/UtkarshRjn/multi-agent-selective-recovery/pull/9), `main` also requires the refundability sentence. Qwen never writes that sentence, so a rerun on `main` reports every booking as failed.
 
 ## What the rows show
 
@@ -32,6 +32,6 @@ Coding programs: one run per program and fault. On `clamp` with a dropped requir
 
 ## Not in this folder
 
-The GPT-OSS 120B and Muse Glimmer 30B coding numbers come from the MBPP pilot merged in [#10](https://github.com/UtkarshRjn/cs291a-agent-recovery/pull/10). Its commands are in [evals/README.md](../../evals/README.md). Its `rows.jsonl` and traces are still in that run's local `results/` directories and must be added here before submission.
+The GPT-OSS 120B and Muse Glimmer 30B coding numbers come from the MBPP pilot merged in [#10](https://github.com/UtkarshRjn/multi-agent-selective-recovery/pull/10). Its commands are in [evals/README.md](../../evals/README.md). Its `rows.jsonl` and traces are still in that run's local `results/` directories and must be added here before submission.
 
 Mock-model runs check the code paths only and are not reported.
