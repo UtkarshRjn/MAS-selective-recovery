@@ -6,6 +6,8 @@ This is a custom subset/test partition, not an official MBPP score.
 
 ## Run
 
+Run these commands from the repository root.
+
 Requires Python 3.11+, uv, and Docker. Model inference uses an external API; generated
 code runs in fresh Docker containers with no network or host mounts, non-root execution,
 a read-only filesystem, resource caps, and a 15-second timeout.
@@ -63,7 +65,9 @@ reviewer LLM call is still counted. These experiments do not test LLM reviewer p
 | false_test_report | Adversarial | First tester: forge passing feedback for fixed bad code |
 | stale_report | Accidental | Second tester: reuse passing feedback for an older code version |
 
-Report cases are labelled **controlled compound scenarios**. Feedback tests qualify a
+Report cases are labelled **controlled compound scenarios**. These cases pair
+deliberately buggy code with a misleading test report. The control uses the same
+code with an accurate report. Feedback tests qualify a
 constant-returning bad implementation. The stale scenario uses a reference first version
 and bad final version. Truthful and tampered conditions share those fixed artifacts;
 reference code is not verifier ground truth. Later model continuations are independent.
