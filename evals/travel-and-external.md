@@ -118,4 +118,3 @@ UndoBench currently measures safe pre-mutation call retry. A2ASecBench measures 
 | backedge | `a b c a:2 side` | `a:2` reads `c`; `side` reads only `a` |
 
 Suffix and coarse name the same steps on a chain. They split when a later step never read the fault: `c` on a diamond fault at `b`, `q` and `r` on a join fault at `p`, and `side` on a back-edge fault at `b` or `a:2`. Support follows one evidence hop, so on a longer path it leaves a downstream file stale. Restart, suffix, and coarse restore every file.
-
