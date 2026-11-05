@@ -128,31 +128,7 @@ The saved batches contain 579 GPT-OSS rows and 580 Muse rows across all conditio
 GPT-OSS retains one execution error. Muse retains four execution errors and three
 skipped recovery rows. Independent conditions continue after an error.
 
-## What we learned and what comes next
 
-Suffix and coarse replay reduce repeated work in both evaluations. Restart achieves
-higher pooled correctness. In GPT-OSS, suffix and coarse each fail on the same ten
-stale-report cases. Those cases mark the report as faulty while retaining bad code.
-Replaying the tester reveals the error, but the current rule never reopens code generation.
-
-The next mechanism will validate saved work and trigger another revision when replay
-reveals an error. We also plan to track file versions and simulated actions so recovery
-can restore affected state and account for irreversible effects. Stronger cases will
-adapt message attacks from TAMAS/A2ASecBench and state-changing tasks from UndoBench.
-
-The immediate analysis work is to separate rescued failures from regressions, break down
-accidental/adversarial outcomes, and compare verification on matched cases. Traces expose
-which stages consumed faulty results and record intermediate code errors. Establishing
-causal propagation requires additional checks. Repeated trials will measure uncertainty
-as coverage expands to the remaining coding tasks.
-
-## Reading order
-
-Start with `evals/README.md` for the experiment and method definitions. Then read
-`src/agentrec/phase1.py` for the condition schedule, `coding.py` for stage execution,
-and `benchmark_faults.py` for the mutations. `authorization.py` contains the three
-travel variants. Dataset loading, Docker execution, and parallel scheduling are in
-`mbpp.py`.
 
 ## Code map
 
