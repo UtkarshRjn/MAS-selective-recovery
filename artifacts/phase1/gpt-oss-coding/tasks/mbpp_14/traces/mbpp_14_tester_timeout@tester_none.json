@@ -1,0 +1,690 @@
+{
+ "provenance": {
+  "model_calls": [
+   {
+    "agent": "spec",
+    "messages": [
+     {
+      "role": "system",
+      "content": "Reply with {\"contract\": \"...\"}. Do not write Python. Copy every requirement sentence from the user request. On visit 2, keep those sentences and answer the review note."
+     },
+     {
+      "role": "user",
+      "content": "VISIT_JSON: 1\nTASK_JSON: {\"kind\": \"coding\", \"name\": \"mbpp_14\", \"request\": \"Write a python function to find the volume of a triangular prism.\", \"signature\": \"find_Volume(l, b, h)\", \"entry\": \"find_Volume\", \"draft_path\": \"mbpp_14_draft.py\", \"path\": \"mbpp_14.py\", \"doc_path\": \"README.md\"}"
+     }
+    ],
+    "raw_response": "{\"contract\": \"Write a python function to find the volume of a triangular prism.\"}",
+    "parsed_response": {
+     "contract": "Write a python function to find the volume of a triangular prism."
+    },
+    "usage": {
+     "calls": 1,
+     "prompt_tokens": 206,
+     "completion_tokens": 258,
+     "latency_s": 4.4858
+    }
+   },
+   {
+    "agent": "coder",
+    "messages": [
+     {
+      "role": "system",
+      "content": "Reply with {\"content\": \"...\"}. content is one complete Python function. Encode newlines as \\n. The function name and parameters are the signature in the task. Implement every sentence in the contract and nothing else."
+     },
+     {
+      "role": "user",
+      "content": "VISIT_JSON: 1\nTASK_JSON: {\"kind\": \"coding\", \"name\": \"mbpp_14\", \"signature\": \"find_Volume(l, b, h)\"}\nCONTRACT_JSON: {\"text\": \"Write a python function to find the volume of a triangular prism.\"}"
+     }
+    ],
+    "raw_response": "{\"content\":\"def find_Volume(l, b, h):\\n    \\\"\\\"\\\"Calculate the volume of a triangular prism.\\n    The volume is (1/2 * b * h) * l.\\n    \\\"\\\"\\\"\\n    return (l * b * h) / 2\"}",
+    "parsed_response": {
+     "content": "def find_Volume(l, b, h):\n    \"\"\"Calculate the volume of a triangular prism.\n    The volume is (1/2 * b * h) * l.\n    \"\"\"\n    return (l * b * h) / 2"
+    },
+    "usage": {
+     "calls": 1,
+     "prompt_tokens": 180,
+     "completion_tokens": 367,
+     "latency_s": 6.1452
+    }
+   },
+   {
+    "agent": "reviewer",
+    "messages": [
+     {
+      "role": "system",
+      "content": "Reply with {\"decision\": \"revise\" or \"approve\", \"note\": \"...\"}. Describe any failing checks in the report."
+     },
+     {
+      "role": "user",
+      "content": "VISIT_JSON: 1\nTASK_JSON: {\"kind\": \"coding\", \"name\": \"mbpp_14\", \"request\": \"Write a python function to find the volume of a triangular prism.\", \"signature\": \"find_Volume(l, b, h)\", \"entry\": \"find_Volume\", \"draft_path\": \"mbpp_14_draft.py\", \"path\": \"mbpp_14.py\", \"doc_path\": \"README.md\"}\nREPORT_JSON: {\"passed\": false, \"n\": 1, \"n_passed\": 0, \"failures\": [{\"error\": \"simulated_tester_timeout\"}], \"source_sha256\": \"ebc9d1c44daad2f79e0ff84a479d0f20871744b7dfce94fe4a8c0f6403aa8d79\", \"available\": false}"
+     }
+    ],
+    "raw_response": "{\n  \"decision\": \"revise\",\n  \"note\": \"The submission failed due to a simulated tester timeout, and the source file is not available for inspection. The test harness could not complete execution, indicating potential issues such as infinite loops, excessive computation, or missing implementation. The code needs to be reviewed, corrected for efficiency or completeness, and re\u2011tested to ensure it passes within the allowed time.\"\n}",
+    "parsed_response": {
+     "decision": "revise",
+     "note": "The submission failed due to a simulated tester timeout, and the source file is not available for inspection. The test harness could not complete execution, indicating potential issues such as infinite loops, excessive computation, or missing implementation. The code needs to be reviewed, corrected for efficiency or completeness, and re\u2011tested to ensure it passes within the allowed time."
+    },
+    "usage": {
+     "calls": 1,
+     "prompt_tokens": 287,
+     "completion_tokens": 233,
+     "latency_s": 3.9474
+    }
+   },
+   {
+    "agent": "docs",
+    "messages": [
+     {
+      "role": "system",
+      "content": "Reply with {\"content\": \"...\"}. Write a short README from the contract only."
+     },
+     {
+      "role": "user",
+      "content": "VISIT_JSON: 1\nTASK_JSON: {\"kind\": \"coding\", \"name\": \"mbpp_14\", \"request\": \"Write a python function to find the volume of a triangular prism.\", \"signature\": \"find_Volume(l, b, h)\", \"entry\": \"find_Volume\", \"draft_path\": \"mbpp_14_draft.py\", \"path\": \"mbpp_14.py\", \"doc_path\": \"README.md\"}\nCONTRACT_JSON: {\"text\": \"Write a python function to find the volume of a triangular prism.\"}"
+     }
+    ],
+    "raw_response": "{\"content\":\"# README\\n\\n## Problem Statement\\nWrite a Python function `find_Volume(l, b, h)` that computes the volume of a triangular prism.\\n\\n## Formula\\nThe volume of a triangular prism is the area of the triangular base multiplied by the length of the prism:\\n\\n```\\nBase Area = 0.5 * b * h\\nVolume   = Base Area * l = 0.5 * b * h * l\\n```\\nwhere:\\n- `l` \u2013 length of the prism (the distance between the two triangular faces)\\n- `b` \u2013 base length of the triangular face\\n- `h` \u2013 height of the triangular face\\n\\n## Usage Example\\n```python\\nfrom mbpp_14 import find_Volume\\n\\n# Example: l=10, b=5, h=4\\nprint(find_Volume(10, 5, 4))  # Output: 100.0\\n```\\n\\n## Function Signature\\n```python\\ndef find_Volume(l, b, h):\\n    \\\"\\\"\\\"Return the volume of a triangular prism given length l, base b, and height h.\\\"\\\"\\\"\\n```\\n\\nThe function should return a numeric value (int or float) representing the volume.\\n\"}",
+    "parsed_response": {
+     "content": "# README\n\n## Problem Statement\nWrite a Python function `find_Volume(l, b, h)` that computes the volume of a triangular prism.\n\n## Formula\nThe volume of a triangular prism is the area of the triangular base multiplied by the length of the prism:\n\n```\nBase Area = 0.5 * b * h\nVolume   = Base Area * l = 0.5 * b * h * l\n```\nwhere:\n- `l` \u2013 length of the prism (the distance between the two triangular faces)\n- `b` \u2013 base length of the triangular face\n- `h` \u2013 height of the triangular face\n\n## Usage Example\n```python\nfrom mbpp_14 import find_Volume\n\n# Example: l=10, b=5, h=4\nprint(find_Volume(10, 5, 4))  # Output: 100.0\n```\n\n## Function Signature\n```python\ndef find_Volume(l, b, h):\n    \"\"\"Return the volume of a triangular prism given length l, base b, and height h.\"\"\"\n```\n\nThe function should return a numeric value (int or float) representing the volume.\n"
+    },
+    "usage": {
+     "calls": 1,
+     "prompt_tokens": 209,
+     "completion_tokens": 429,
+     "latency_s": 7.2892
+    }
+   },
+   {
+    "agent": "spec",
+    "messages": [
+     {
+      "role": "system",
+      "content": "Reply with {\"contract\": \"...\"}. Do not write Python. Copy every requirement sentence from the user request. On visit 2, keep those sentences and answer the review note."
+     },
+     {
+      "role": "user",
+      "content": "VISIT_JSON: 2\nTASK_JSON: {\"kind\": \"coding\", \"name\": \"mbpp_14\", \"request\": \"Write a python function to find the volume of a triangular prism.\", \"signature\": \"find_Volume(l, b, h)\", \"entry\": \"find_Volume\", \"draft_path\": \"mbpp_14_draft.py\", \"path\": \"mbpp_14.py\", \"doc_path\": \"README.md\"}\nREVIEW_JSON: {\"decision\": \"revise\", \"note\": \"simulated_tester_timeout\"}"
+     }
+    ],
+    "raw_response": "{\"contract\":\"Write a python function to find the volume of a triangular prism. signature: find_Volume(l, b, h). entry: find_Volume. draft_path: mbpp_14_draft.py. path: mbpp_14.py. doc_path: README.md. Review note: simulated_tester_timeout. Response: The implementation will be optimized for performance to avoid timeouts, ensuring the function computes the volume efficiently within the allowed time limits.\"}",
+    "parsed_response": {
+     "contract": "Write a python function to find the volume of a triangular prism. signature: find_Volume(l, b, h). entry: find_Volume. draft_path: mbpp_14_draft.py. path: mbpp_14.py. doc_path: README.md. Review note: simulated_tester_timeout. Response: The implementation will be optimized for performance to avoid timeouts, ensuring the function computes the volume efficiently within the allowed time limits."
+    },
+    "usage": {
+     "calls": 1,
+     "prompt_tokens": 227,
+     "completion_tokens": 486,
+     "latency_s": 8.1469
+    }
+   },
+   {
+    "agent": "coder",
+    "messages": [
+     {
+      "role": "system",
+      "content": "Reply with {\"content\": \"...\"}. content is one complete Python function. Encode newlines as \\n. The function name and parameters are the signature in the task. Implement every sentence in the contract and nothing else."
+     },
+     {
+      "role": "user",
+      "content": "VISIT_JSON: 2\nTASK_JSON: {\"kind\": \"coding\", \"name\": \"mbpp_14\", \"signature\": \"find_Volume(l, b, h)\"}\nCONTRACT_JSON: {\"text\": \"Write a python function to find the volume of a triangular prism. signature: find_Volume(l, b, h). entry: find_Volume. draft_path: mbpp_14_draft.py. path: mbpp_14.py. doc_path: README.md. Review note: simulated_tester_timeout. Response: The implementation will be optimized for performance to avoid timeouts, ensuring the function computes the volume efficiently within the allowed time limits.\"}"
+     }
+    ],
+    "raw_response": "{\"content\":\"def find_Volume(l, b, h):\\n    \\\"\\\"\\\"Calculate the volume of a triangular prism.\\n    Parameters:\\n        l (float): length of the prism.\\n        b (float): base length of the triangular face.\\n        h (float): height of the triangular face.\\n    Returns:\\n        float: volume of the prism.\\n    \\\"\\\"\\\"\\n    return 0.5 * b * h * l\"}",
+    "parsed_response": {
+     "content": "def find_Volume(l, b, h):\n    \"\"\"Calculate the volume of a triangular prism.\n    Parameters:\n        l (float): length of the prism.\n        b (float): base length of the triangular face.\n        h (float): height of the triangular face.\n    Returns:\n        float: volume of the prism.\n    \"\"\"\n    return 0.5 * b * h * l"
+    },
+    "usage": {
+     "calls": 1,
+     "prompt_tokens": 259,
+     "completion_tokens": 419,
+     "latency_s": 7.1437
+    }
+   },
+   {
+    "agent": "reviewer",
+    "messages": [
+     {
+      "role": "system",
+      "content": "Reply with {\"decision\": \"revise\" or \"approve\", \"note\": \"...\"}. Describe any failing checks in the report."
+     },
+     {
+      "role": "user",
+      "content": "VISIT_JSON: 2\nTASK_JSON: {\"kind\": \"coding\", \"name\": \"mbpp_14\", \"request\": \"Write a python function to find the volume of a triangular prism.\", \"signature\": \"find_Volume(l, b, h)\", \"entry\": \"find_Volume\", \"draft_path\": \"mbpp_14_draft.py\", \"path\": \"mbpp_14.py\", \"doc_path\": \"README.md\"}\nREPORT_JSON: {\"passed\": true, \"n\": 1, \"n_passed\": 1, \"failures\": [], \"source_sha256\": \"1470758777b527651ed9c603ccf5414927e281bddcf0cf60d487f3fc4f3e97d1\"}"
+     }
+    ],
+    "raw_response": "{\"decision\": \"approve\", \"note\": \"All checks passed; no issues detected.\"}",
+    "parsed_response": {
+     "decision": "approve",
+     "note": "All checks passed; no issues detected."
+    },
+    "usage": {
+     "calls": 1,
+     "prompt_tokens": 266,
+     "completion_tokens": 53,
+     "latency_s": 1.0315
+    }
+   }
+  ],
+  "nodes": [
+   {
+    "id": "step:1:spec",
+    "seq": 1,
+    "kind": "step",
+    "key": "spec",
+    "data": {
+     "agent": "spec",
+     "usage": {
+      "calls": 1,
+      "prompt_tokens": 206,
+      "completion_tokens": 258,
+      "latency_s": 4.4858
+     },
+     "wall_s": 4.48588928800018
+    }
+   },
+   {
+    "id": "artifact:2:spec",
+    "seq": 2,
+    "kind": "artifact",
+    "key": "spec",
+    "data": {
+     "value": {
+      "text": "Write a python function to find the volume of a triangular prism."
+     },
+     "injection": null,
+     "faulty": false,
+     "fault": null
+    }
+   },
+   {
+    "id": "step:3:coder",
+    "seq": 3,
+    "kind": "step",
+    "key": "coder",
+    "data": {
+     "agent": "coder",
+     "usage": {
+      "calls": 1,
+      "prompt_tokens": 180,
+      "completion_tokens": 367,
+      "latency_s": 6.1452
+     },
+     "wall_s": 6.145355890999781
+    }
+   },
+   {
+    "id": "artifact:4:coder",
+    "seq": 4,
+    "kind": "artifact",
+    "key": "coder",
+    "data": {
+     "value": {
+      "path": "mbpp_14_draft.py",
+      "content": "def find_Volume(l, b, h):\n    \"\"\"Calculate the volume of a triangular prism.\n    The volume is (1/2 * b * h) * l.\n    \"\"\"\n    return (l * b * h) / 2"
+     },
+     "injection": null,
+     "faulty": false,
+     "fault": null
+    }
+   },
+   {
+    "id": "effect:5:write_file",
+    "seq": 5,
+    "kind": "effect",
+    "key": "write_file",
+    "data": {
+     "status": "applied",
+     "tool": "write_file",
+     "args": {
+      "path": "mbpp_14_draft.py"
+     },
+     "class": "reversible",
+     "undo": {
+      "op": "restore_file",
+      "path": "mbpp_14_draft.py",
+      "before": null
+     }
+    }
+   },
+   {
+    "id": "step:6:tester",
+    "seq": 6,
+    "kind": "step",
+    "key": "tester",
+    "data": {
+     "agent": "tester",
+     "usage": {
+      "calls": 0,
+      "prompt_tokens": 0,
+      "completion_tokens": 0,
+      "latency_s": 0.0
+     },
+     "wall_s": 0.29990030600129103
+    }
+   },
+   {
+    "id": "artifact:7:tester",
+    "seq": 7,
+    "kind": "artifact",
+    "key": "tester",
+    "data": {
+     "value": {
+      "passed": false,
+      "n": 1,
+      "n_passed": 0,
+      "failures": [
+       {
+        "error": "simulated_tester_timeout"
+       }
+      ],
+      "source_sha256": "ebc9d1c44daad2f79e0ff84a479d0f20871744b7dfce94fe4a8c0f6403aa8d79",
+      "available": false
+     },
+     "injection": {
+      "type": "tester_timeout",
+      "target": "tester",
+      "eligible": true,
+      "fired": true,
+      "boundary": "response_delivery",
+      "simulated": true,
+      "before": {
+       "passed": true,
+       "n": 1,
+       "n_passed": 1,
+       "failures": [],
+       "source_sha256": "ebc9d1c44daad2f79e0ff84a479d0f20871744b7dfce94fe4a8c0f6403aa8d79"
+      },
+      "after": {
+       "passed": false,
+       "n": 1,
+       "n_passed": 0,
+       "failures": [
+        {
+         "error": "simulated_tester_timeout"
+        }
+       ],
+       "source_sha256": "ebc9d1c44daad2f79e0ff84a479d0f20871744b7dfce94fe4a8c0f6403aa8d79",
+       "available": false
+      }
+     },
+     "faulty": true,
+     "fault": "tester_timeout@tester"
+    }
+   },
+   {
+    "id": "step:8:reviewer",
+    "seq": 8,
+    "kind": "step",
+    "key": "reviewer",
+    "data": {
+     "agent": "reviewer",
+     "usage": {
+      "calls": 1,
+      "prompt_tokens": 287,
+      "completion_tokens": 233,
+      "latency_s": 3.9474
+     },
+     "wall_s": 3.9475529299998016
+    }
+   },
+   {
+    "id": "artifact:9:reviewer",
+    "seq": 9,
+    "kind": "artifact",
+    "key": "reviewer",
+    "data": {
+     "value": {
+      "decision": "revise",
+      "note": "simulated_tester_timeout"
+     }
+    }
+   },
+   {
+    "id": "step:10:docs",
+    "seq": 10,
+    "kind": "step",
+    "key": "docs",
+    "data": {
+     "agent": "docs",
+     "usage": {
+      "calls": 1,
+      "prompt_tokens": 209,
+      "completion_tokens": 429,
+      "latency_s": 7.2892
+     },
+     "wall_s": 7.28936896200139
+    }
+   },
+   {
+    "id": "artifact:11:docs",
+    "seq": 11,
+    "kind": "artifact",
+    "key": "docs",
+    "data": {
+     "value": {
+      "path": "README.md",
+      "content": "# README\n\n## Problem Statement\nWrite a Python function `find_Volume(l, b, h)` that computes the volume of a triangular prism.\n\n## Formula\nThe volume of a triangular prism is the area of the triangular base multiplied by the length of the prism:\n\n```\nBase Area = 0.5 * b * h\nVolume   = Base Area * l = 0.5 * b * h * l\n```\nwhere:\n- `l` \u2013 length of the prism (the distance between the two triangular faces)\n- `b` \u2013 base length of the triangular face\n- `h` \u2013 height of the triangular face\n\n## Usage Example\n```python\nfrom mbpp_14 import find_Volume\n\n# Example: l=10, b=5, h=4\nprint(find_Volume(10, 5, 4))  # Output: 100.0\n```\n\n## Function Signature\n```python\ndef find_Volume(l, b, h):\n    \"\"\"Return the volume of a triangular prism given length l, base b, and height h.\"\"\"\n```\n\nThe function should return a numeric value (int or float) representing the volume.\n"
+     }
+    }
+   },
+   {
+    "id": "effect:12:write_file",
+    "seq": 12,
+    "kind": "effect",
+    "key": "write_file",
+    "data": {
+     "status": "applied",
+     "tool": "write_file",
+     "args": {
+      "path": "README.md"
+     },
+     "class": "reversible",
+     "undo": {
+      "op": "restore_file",
+      "path": "README.md",
+      "before": null
+     }
+    }
+   },
+   {
+    "id": "step:13:spec:2",
+    "seq": 13,
+    "kind": "step",
+    "key": "spec:2",
+    "data": {
+     "agent": "spec",
+     "usage": {
+      "calls": 1,
+      "prompt_tokens": 227,
+      "completion_tokens": 486,
+      "latency_s": 8.1469
+     },
+     "wall_s": 8.147032706001482
+    }
+   },
+   {
+    "id": "artifact:14:spec:2",
+    "seq": 14,
+    "kind": "artifact",
+    "key": "spec:2",
+    "data": {
+     "value": {
+      "text": "Write a python function to find the volume of a triangular prism. signature: find_Volume(l, b, h). entry: find_Volume. draft_path: mbpp_14_draft.py. path: mbpp_14.py. doc_path: README.md. Review note: simulated_tester_timeout. Response: The implementation will be optimized for performance to avoid timeouts, ensuring the function computes the volume efficiently within the allowed time limits."
+     },
+     "injection": null,
+     "faulty": false,
+     "fault": null
+    }
+   },
+   {
+    "id": "step:15:coder:2",
+    "seq": 15,
+    "kind": "step",
+    "key": "coder:2",
+    "data": {
+     "agent": "coder",
+     "usage": {
+      "calls": 1,
+      "prompt_tokens": 259,
+      "completion_tokens": 419,
+      "latency_s": 7.1437
+     },
+     "wall_s": 7.143816115998561
+    }
+   },
+   {
+    "id": "artifact:16:coder:2",
+    "seq": 16,
+    "kind": "artifact",
+    "key": "coder:2",
+    "data": {
+     "value": {
+      "path": "mbpp_14.py",
+      "content": "def find_Volume(l, b, h):\n    \"\"\"Calculate the volume of a triangular prism.\n    Parameters:\n        l (float): length of the prism.\n        b (float): base length of the triangular face.\n        h (float): height of the triangular face.\n    Returns:\n        float: volume of the prism.\n    \"\"\"\n    return 0.5 * b * h * l"
+     },
+     "injection": null,
+     "faulty": false,
+     "fault": null
+    }
+   },
+   {
+    "id": "effect:17:write_file",
+    "seq": 17,
+    "kind": "effect",
+    "key": "write_file",
+    "data": {
+     "status": "applied",
+     "tool": "write_file",
+     "args": {
+      "path": "mbpp_14.py"
+     },
+     "class": "reversible",
+     "undo": {
+      "op": "restore_file",
+      "path": "mbpp_14.py",
+      "before": null
+     }
+    }
+   },
+   {
+    "id": "step:18:tester:2",
+    "seq": 18,
+    "kind": "step",
+    "key": "tester:2",
+    "data": {
+     "agent": "tester",
+     "usage": {
+      "calls": 0,
+      "prompt_tokens": 0,
+      "completion_tokens": 0,
+      "latency_s": 0.0
+     },
+     "wall_s": 0.27870186399923114
+    }
+   },
+   {
+    "id": "artifact:19:tester:2",
+    "seq": 19,
+    "kind": "artifact",
+    "key": "tester:2",
+    "data": {
+     "value": {
+      "passed": true,
+      "n": 1,
+      "n_passed": 1,
+      "failures": [],
+      "source_sha256": "1470758777b527651ed9c603ccf5414927e281bddcf0cf60d487f3fc4f3e97d1"
+     },
+     "injection": null,
+     "faulty": false,
+     "fault": null
+    }
+   },
+   {
+    "id": "step:20:reviewer:2",
+    "seq": 20,
+    "kind": "step",
+    "key": "reviewer:2",
+    "data": {
+     "agent": "reviewer",
+     "usage": {
+      "calls": 1,
+      "prompt_tokens": 266,
+      "completion_tokens": 53,
+      "latency_s": 1.0315
+     },
+     "wall_s": 1.0316400960000465
+    }
+   },
+   {
+    "id": "artifact:21:reviewer:2",
+    "seq": 21,
+    "kind": "artifact",
+    "key": "reviewer:2",
+    "data": {
+     "value": {
+      "decision": "approve",
+      "note": ""
+     }
+    }
+   }
+  ],
+  "edges": [
+   {
+    "src": "step:1:spec",
+    "dst": "artifact:2:spec",
+    "type": "output"
+   },
+   {
+    "src": "artifact:2:spec",
+    "dst": "step:3:coder",
+    "type": "input"
+   },
+   {
+    "src": "artifact:2:spec",
+    "dst": "step:3:coder",
+    "type": "support"
+   },
+   {
+    "src": "step:3:coder",
+    "dst": "artifact:4:coder",
+    "type": "output"
+   },
+   {
+    "src": "step:3:coder",
+    "dst": "effect:5:write_file",
+    "type": "effect"
+   },
+   {
+    "src": "artifact:4:coder",
+    "dst": "step:6:tester",
+    "type": "input"
+   },
+   {
+    "src": "artifact:4:coder",
+    "dst": "step:6:tester",
+    "type": "support"
+   },
+   {
+    "src": "step:6:tester",
+    "dst": "artifact:7:tester",
+    "type": "output"
+   },
+   {
+    "src": "artifact:2:spec",
+    "dst": "step:8:reviewer",
+    "type": "input"
+   },
+   {
+    "src": "artifact:7:tester",
+    "dst": "step:8:reviewer",
+    "type": "input"
+   },
+   {
+    "src": "artifact:7:tester",
+    "dst": "step:8:reviewer",
+    "type": "support"
+   },
+   {
+    "src": "step:8:reviewer",
+    "dst": "artifact:9:reviewer",
+    "type": "output"
+   },
+   {
+    "src": "artifact:2:spec",
+    "dst": "step:10:docs",
+    "type": "input"
+   },
+   {
+    "src": "step:10:docs",
+    "dst": "artifact:11:docs",
+    "type": "output"
+   },
+   {
+    "src": "step:10:docs",
+    "dst": "effect:12:write_file",
+    "type": "effect"
+   },
+   {
+    "src": "artifact:9:reviewer",
+    "dst": "step:13:spec:2",
+    "type": "input"
+   },
+   {
+    "src": "artifact:9:reviewer",
+    "dst": "step:13:spec:2",
+    "type": "support"
+   },
+   {
+    "src": "step:13:spec:2",
+    "dst": "artifact:14:spec:2",
+    "type": "output"
+   },
+   {
+    "src": "artifact:14:spec:2",
+    "dst": "step:15:coder:2",
+    "type": "input"
+   },
+   {
+    "src": "artifact:14:spec:2",
+    "dst": "step:15:coder:2",
+    "type": "support"
+   },
+   {
+    "src": "step:15:coder:2",
+    "dst": "artifact:16:coder:2",
+    "type": "output"
+   },
+   {
+    "src": "step:15:coder:2",
+    "dst": "effect:17:write_file",
+    "type": "effect"
+   },
+   {
+    "src": "artifact:16:coder:2",
+    "dst": "step:18:tester:2",
+    "type": "input"
+   },
+   {
+    "src": "artifact:16:coder:2",
+    "dst": "step:18:tester:2",
+    "type": "support"
+   },
+   {
+    "src": "step:18:tester:2",
+    "dst": "artifact:19:tester:2",
+    "type": "output"
+   },
+   {
+    "src": "artifact:14:spec:2",
+    "dst": "step:20:reviewer:2",
+    "type": "input"
+   },
+   {
+    "src": "artifact:19:tester:2",
+    "dst": "step:20:reviewer:2",
+    "type": "input"
+   },
+   {
+    "src": "artifact:19:tester:2",
+    "dst": "step:20:reviewer:2",
+    "type": "support"
+   },
+   {
+    "src": "step:20:reviewer:2",
+    "dst": "artifact:21:reviewer:2",
+    "type": "output"
+   }
+  ]
+ },
+ "world": {
+  "bookings": {},
+  "outbox": [],
+  "files": {
+   "mbpp_14_draft.py": "def find_Volume(l, b, h):\n    \"\"\"Calculate the volume of a triangular prism.\n    The volume is (1/2 * b * h) * l.\n    \"\"\"\n    return (l * b * h) / 2",
+   "README.md": "# README\n\n## Problem Statement\nWrite a Python function `find_Volume(l, b, h)` that computes the volume of a triangular prism.\n\n## Formula\nThe volume of a triangular prism is the area of the triangular base multiplied by the length of the prism:\n\n```\nBase Area = 0.5 * b * h\nVolume   = Base Area * l = 0.5 * b * h * l\n```\nwhere:\n- `l` \u2013 length of the prism (the distance between the two triangular faces)\n- `b` \u2013 base length of the triangular face\n- `h` \u2013 height of the triangular face\n\n## Usage Example\n```python\nfrom mbpp_14 import find_Volume\n\n# Example: l=10, b=5, h=4\nprint(find_Volume(10, 5, 4))  # Output: 100.0\n```\n\n## Function Signature\n```python\ndef find_Volume(l, b, h):\n    \"\"\"Return the volume of a triangular prism given length l, base b, and height h.\"\"\"\n```\n\nThe function should return a numeric value (int or float) representing the volume.\n",
+   "mbpp_14.py": "def find_Volume(l, b, h):\n    \"\"\"Calculate the volume of a triangular prism.\n    Parameters:\n        l (float): length of the prism.\n        b (float): base length of the triangular face.\n        h (float): height of the triangular face.\n    Returns:\n        float: volume of the prism.\n    \"\"\"\n    return 0.5 * b * h * l"
+  },
+  "action_history": []
+ }
+}

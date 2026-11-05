@@ -1,0 +1,659 @@
+{
+ "provenance": {
+  "model_calls": [
+   {
+    "agent": "spec",
+    "messages": [
+     {
+      "role": "system",
+      "content": "Reply with {\"contract\": \"...\"}. Do not write Python. Copy every requirement sentence from the user request. On visit 2, keep those sentences and answer the review note."
+     },
+     {
+      "role": "user",
+      "content": "VISIT_JSON: 1\nTASK_JSON: {\"kind\": \"coding\", \"name\": \"mbpp_4\", \"request\": \"Write a function to find the n largest integers from a given list of numbers, returned in descending order.\", \"signature\": \"heap_queue_largest(nums, n)\", \"entry\": \"heap_queue_largest\", \"draft_path\": \"mbpp_4_draft.py\", \"path\": \"mbpp_4.py\", \"doc_path\": \"README.md\"}"
+     }
+    ],
+    "raw_response": "{\"contract\": \"Write a function to find the n largest integers from a given list of numbers, returned in descending order.\"}",
+    "parsed_response": {
+     "contract": "Write a function to find the n largest integers from a given list of numbers, returned in descending order."
+    },
+    "usage": {
+     "calls": 1,
+     "prompt_tokens": 212,
+     "completion_tokens": 216,
+     "latency_s": 3.7357
+    }
+   },
+   {
+    "agent": "coder",
+    "messages": [
+     {
+      "role": "system",
+      "content": "Reply with {\"content\": \"...\"}. content is one complete Python function. Encode newlines as \\n. The function name and parameters are the signature in the task. Implement every sentence in the contract and nothing else."
+     },
+     {
+      "role": "user",
+      "content": "VISIT_JSON: 1\nTASK_JSON: {\"kind\": \"coding\", \"name\": \"mbpp_4\", \"signature\": \"heap_queue_largest(nums, n)\"}\nCONTRACT_JSON: {\"text\": \"Write a function to find the n largest integers from a given list of numbers, returned in descending order.\"}"
+     }
+    ],
+    "raw_response": "{\"content\":\"def heap_queue_largest(nums, n):\\n    \\\"\\\"\\\"Return the n largest integers from nums in descending order.\\n    If n is greater than the length of nums, return all numbers sorted descending.\\n    If n is non\u2011positive, return an empty list.\\n    \\\"\\\"\\\"\\n    import heapq\\n    # Guard against non\u2011positive n\\n    if n <= 0:\\n        return []\\n    # If n exceeds list length, return the whole list sorted descending\\n    if n >= len(nums):\\n        return sorted(nums, reverse=True)\\n    # Use heapq.nlargest which returns the n largest elements in descending order\\n    return heapq.nlargest(n, nums)\\n\"}",
+    "parsed_response": {
+     "content": "def heap_queue_largest(nums, n):\n    \"\"\"Return the n largest integers from nums in descending order.\n    If n is greater than the length of nums, return all numbers sorted descending.\n    If n is non\u2011positive, return an empty list.\n    \"\"\"\n    import heapq\n    # Guard against non\u2011positive n\n    if n <= 0:\n        return []\n    # If n exceeds list length, return the whole list sorted descending\n    if n >= len(nums):\n        return sorted(nums, reverse=True)\n    # Use heapq.nlargest which returns the n largest elements in descending order\n    return heapq.nlargest(n, nums)\n"
+    },
+    "usage": {
+     "calls": 1,
+     "prompt_tokens": 186,
+     "completion_tokens": 715,
+     "latency_s": 11.6796
+    }
+   },
+   {
+    "agent": "reviewer",
+    "messages": [
+     {
+      "role": "system",
+      "content": "Reply with {\"decision\": \"revise\" or \"approve\", \"note\": \"...\"}. Describe any failing checks in the report."
+     },
+     {
+      "role": "user",
+      "content": "VISIT_JSON: 1\nTASK_JSON: {\"kind\": \"coding\", \"name\": \"mbpp_4\", \"request\": \"Write a function to find the n largest integers from a given list of numbers, returned in descending order.\", \"signature\": \"heap_queue_largest(nums, n)\", \"entry\": \"heap_queue_largest\", \"draft_path\": \"mbpp_4_draft.py\", \"path\": \"mbpp_4.py\", \"doc_path\": \"README.md\"}\nREPORT_JSON: {\"passed\": true, \"n\": 1, \"n_passed\": 1, \"failures\": [], \"source_sha256\": \"d58b370975803ce3ae701404cf90276c60947c3d24392f759adc7b1418cc8b91\"}"
+     }
+    ],
+    "raw_response": "{\"decision\": \"approve\", \"note\": \"All checks passed; the implementation meets the task requirements.\"}",
+    "parsed_response": {
+     "decision": "approve",
+     "note": "All checks passed; the implementation meets the task requirements."
+    },
+    "usage": {
+     "calls": 1,
+     "prompt_tokens": 270,
+     "completion_tokens": 56,
+     "latency_s": 1.0648
+    }
+   },
+   {
+    "agent": "docs",
+    "messages": [
+     {
+      "role": "system",
+      "content": "Reply with {\"content\": \"...\"}. Write a short README from the contract only."
+     },
+     {
+      "role": "user",
+      "content": "VISIT_JSON: 1\nTASK_JSON: {\"kind\": \"coding\", \"name\": \"mbpp_4\", \"request\": \"Write a function to find the n largest integers from a given list of numbers, returned in descending order.\", \"signature\": \"heap_queue_largest(nums, n)\", \"entry\": \"heap_queue_largest\", \"draft_path\": \"mbpp_4_draft.py\", \"path\": \"mbpp_4.py\", \"doc_path\": \"README.md\"}\nCONTRACT_JSON: {\"text\": \"Write a function to find the n largest integers from a given list of numbers, returned in descending order.\"}"
+     }
+    ],
+    "raw_response": "{\"content\":\"# mbpp_4\\n\\n## Description\\nImplements a function that returns the **n largest integers** from a given list, sorted in **descending order**.\\n\\n## Function Signature\\n```python\\nheap_queue_largest(nums: List[int], n: int) -> List[int]\\n```\\n- `nums`: List of integers (may contain duplicates).\\n- `n`: Number of largest elements to retrieve.\\n- Returns a list of the `n` largest values, ordered from largest to smallest.\\n\\n## Usage Example\\n```python\\n>>> heap_queue_largest([3, 1, 5, 2, 4], 3)\\n[5, 4, 3]\\n```\\n\\nThe implementation should handle edge cases such as `n` greater than the list length (return the whole list sorted descending) and empty inputs.\\n\"}",
+    "parsed_response": {
+     "content": "# mbpp_4\n\n## Description\nImplements a function that returns the **n largest integers** from a given list, sorted in **descending order**.\n\n## Function Signature\n```python\nheap_queue_largest(nums: List[int], n: int) -> List[int]\n```\n- `nums`: List of integers (may contain duplicates).\n- `n`: Number of largest elements to retrieve.\n- Returns a list of the `n` largest values, ordered from largest to smallest.\n\n## Usage Example\n```python\n>>> heap_queue_largest([3, 1, 5, 2, 4], 3)\n[5, 4, 3]\n```\n\nThe implementation should handle edge cases such as `n` greater than the list length (return the whole list sorted descending) and empty inputs.\n"
+    },
+    "usage": {
+     "calls": 1,
+     "prompt_tokens": 223,
+     "completion_tokens": 274,
+     "latency_s": 4.5061
+    }
+   },
+   {
+    "agent": "spec",
+    "messages": [
+     {
+      "role": "system",
+      "content": "Reply with {\"contract\": \"...\"}. Do not write Python. Copy every requirement sentence from the user request. On visit 2, keep those sentences and answer the review note."
+     },
+     {
+      "role": "user",
+      "content": "VISIT_JSON: 2\nTASK_JSON: {\"kind\": \"coding\", \"name\": \"mbpp_4\", \"request\": \"Write a function to find the n largest integers from a given list of numbers, returned in descending order.\", \"signature\": \"heap_queue_largest(nums, n)\", \"entry\": \"heap_queue_largest\", \"draft_path\": \"mbpp_4_draft.py\", \"path\": \"mbpp_4.py\", \"doc_path\": \"README.md\"}\nREVIEW_JSON: {\"decision\": \"approve\", \"note\": \"\"}"
+     }
+    ],
+    "raw_response": "{\"contract\": \"Write a function to find the n largest integers from a given list of numbers, returned in descending order.\"}",
+    "parsed_response": {
+     "contract": "Write a function to find the n largest integers from a given list of numbers, returned in descending order."
+    },
+    "usage": {
+     "calls": 1,
+     "prompt_tokens": 227,
+     "completion_tokens": 257,
+     "latency_s": 4.4476
+    }
+   },
+   {
+    "agent": "coder",
+    "messages": [
+     {
+      "role": "system",
+      "content": "Reply with {\"content\": \"...\"}. content is one complete Python function. Encode newlines as \\n. The function name and parameters are the signature in the task. Implement every sentence in the contract and nothing else."
+     },
+     {
+      "role": "user",
+      "content": "VISIT_JSON: 2\nTASK_JSON: {\"kind\": \"coding\", \"name\": \"mbpp_4\", \"signature\": \"heap_queue_largest(nums, n)\"}\nCONTRACT_JSON: {\"text\": \"Write a function to find the n largest integers from a given list of numbers, returned in descending order.\"}"
+     }
+    ],
+    "raw_response": "{\"content\":\"def heap_queue_largest(nums, n):\\n    \\\"\\\"\\\"Return the n largest integers from nums in descending order.\\\"\\\"\\\"\\n    if n <= 0:\\n        return []\\n    import heapq\\n    return heapq.nlargest(n, nums)\"}",
+    "parsed_response": {
+     "content": "def heap_queue_largest(nums, n):\n    \"\"\"Return the n largest integers from nums in descending order.\"\"\"\n    if n <= 0:\n        return []\n    import heapq\n    return heapq.nlargest(n, nums)"
+    },
+    "usage": {
+     "calls": 1,
+     "prompt_tokens": 186,
+     "completion_tokens": 271,
+     "latency_s": 4.5564
+    }
+   },
+   {
+    "agent": "reviewer",
+    "messages": [
+     {
+      "role": "system",
+      "content": "Reply with {\"decision\": \"revise\" or \"approve\", \"note\": \"...\"}. Describe any failing checks in the report."
+     },
+     {
+      "role": "user",
+      "content": "VISIT_JSON: 2\nTASK_JSON: {\"kind\": \"coding\", \"name\": \"mbpp_4\", \"request\": \"Write a function to find the n largest integers from a given list of numbers, returned in descending order.\", \"signature\": \"heap_queue_largest(nums, n)\", \"entry\": \"heap_queue_largest\", \"draft_path\": \"mbpp_4_draft.py\", \"path\": \"mbpp_4.py\", \"doc_path\": \"README.md\"}\nREPORT_JSON: {\"passed\": true, \"n\": 1, \"n_passed\": 1, \"failures\": [], \"source_sha256\": \"067c0a9ce1fdfe71d81b5e58ce29851a5b1a3d290ce3202c8a241ba83fe3871c\"}"
+     }
+    ],
+    "raw_response": "{\"decision\": \"approve\", \"note\": \"All checks passed; the solution meets the required specifications.\"}",
+    "parsed_response": {
+     "decision": "approve",
+     "note": "All checks passed; the solution meets the required specifications."
+    },
+    "usage": {
+     "calls": 1,
+     "prompt_tokens": 277,
+     "completion_tokens": 56,
+     "latency_s": 1.0555
+    }
+   }
+  ],
+  "nodes": [
+   {
+    "id": "step:1:spec",
+    "seq": 1,
+    "kind": "step",
+    "key": "spec",
+    "data": {
+     "agent": "spec",
+     "usage": {
+      "calls": 1,
+      "prompt_tokens": 212,
+      "completion_tokens": 216,
+      "latency_s": 3.7357
+     },
+     "wall_s": 3.735813749999579
+    }
+   },
+   {
+    "id": "artifact:2:spec",
+    "seq": 2,
+    "kind": "artifact",
+    "key": "spec",
+    "data": {
+     "value": {
+      "text": "Write a function to find the n largest integers from a given list of numbers, returned in descending order."
+     },
+     "injection": null,
+     "faulty": false,
+     "fault": null
+    }
+   },
+   {
+    "id": "step:3:coder",
+    "seq": 3,
+    "kind": "step",
+    "key": "coder",
+    "data": {
+     "agent": "coder",
+     "usage": {
+      "calls": 1,
+      "prompt_tokens": 186,
+      "completion_tokens": 715,
+      "latency_s": 11.6796
+     },
+     "wall_s": 11.679680212000676
+    }
+   },
+   {
+    "id": "artifact:4:coder",
+    "seq": 4,
+    "kind": "artifact",
+    "key": "coder",
+    "data": {
+     "value": {
+      "path": "mbpp_4_draft.py",
+      "content": "def heap_queue_largest(nums, n):\n    \"\"\"Return the n largest integers from nums in descending order.\n    If n is greater than the length of nums, return all numbers sorted descending.\n    If n is non\u2011positive, return an empty list.\n    \"\"\"\n    import heapq\n    # Guard against non\u2011positive n\n    if n <= 0:\n        return []\n    # If n exceeds list length, return the whole list sorted descending\n    if n >= len(nums):\n        return sorted(nums, reverse=True)\n    # Use heapq.nlargest which returns the n largest elements in descending order\n    return heapq.nlargest(n, nums)\n"
+     },
+     "injection": null,
+     "faulty": false,
+     "fault": null
+    }
+   },
+   {
+    "id": "effect:5:write_file",
+    "seq": 5,
+    "kind": "effect",
+    "key": "write_file",
+    "data": {
+     "status": "applied",
+     "tool": "write_file",
+     "args": {
+      "path": "mbpp_4_draft.py"
+     },
+     "class": "reversible",
+     "undo": {
+      "op": "restore_file",
+      "path": "mbpp_4_draft.py",
+      "before": null
+     }
+    }
+   },
+   {
+    "id": "step:6:tester",
+    "seq": 6,
+    "kind": "step",
+    "key": "tester",
+    "data": {
+     "agent": "tester",
+     "usage": {
+      "calls": 0,
+      "prompt_tokens": 0,
+      "completion_tokens": 0,
+      "latency_s": 0.0
+     },
+     "wall_s": 0.2734225990006962
+    }
+   },
+   {
+    "id": "artifact:7:tester",
+    "seq": 7,
+    "kind": "artifact",
+    "key": "tester",
+    "data": {
+     "value": {
+      "passed": true,
+      "n": 1,
+      "n_passed": 1,
+      "failures": [],
+      "source_sha256": "d58b370975803ce3ae701404cf90276c60947c3d24392f759adc7b1418cc8b91"
+     },
+     "injection": null,
+     "faulty": false,
+     "fault": null
+    }
+   },
+   {
+    "id": "step:8:reviewer",
+    "seq": 8,
+    "kind": "step",
+    "key": "reviewer",
+    "data": {
+     "agent": "reviewer",
+     "usage": {
+      "calls": 1,
+      "prompt_tokens": 270,
+      "completion_tokens": 56,
+      "latency_s": 1.0648
+     },
+     "wall_s": 1.0648723790000076
+    }
+   },
+   {
+    "id": "artifact:9:reviewer",
+    "seq": 9,
+    "kind": "artifact",
+    "key": "reviewer",
+    "data": {
+     "value": {
+      "decision": "approve",
+      "note": ""
+     }
+    }
+   },
+   {
+    "id": "step:10:docs",
+    "seq": 10,
+    "kind": "step",
+    "key": "docs",
+    "data": {
+     "agent": "docs",
+     "usage": {
+      "calls": 1,
+      "prompt_tokens": 223,
+      "completion_tokens": 274,
+      "latency_s": 4.5061
+     },
+     "wall_s": 4.506233928999791
+    }
+   },
+   {
+    "id": "artifact:11:docs",
+    "seq": 11,
+    "kind": "artifact",
+    "key": "docs",
+    "data": {
+     "value": {
+      "path": "README.md",
+      "content": "# mbpp_4\n\n## Description\nImplements a function that returns the **n largest integers** from a given list, sorted in **descending order**.\n\n## Function Signature\n```python\nheap_queue_largest(nums: List[int], n: int) -> List[int]\n```\n- `nums`: List of integers (may contain duplicates).\n- `n`: Number of largest elements to retrieve.\n- Returns a list of the `n` largest values, ordered from largest to smallest.\n\n## Usage Example\n```python\n>>> heap_queue_largest([3, 1, 5, 2, 4], 3)\n[5, 4, 3]\n```\n\nThe implementation should handle edge cases such as `n` greater than the list length (return the whole list sorted descending) and empty inputs.\n"
+     }
+    }
+   },
+   {
+    "id": "effect:12:write_file",
+    "seq": 12,
+    "kind": "effect",
+    "key": "write_file",
+    "data": {
+     "status": "applied",
+     "tool": "write_file",
+     "args": {
+      "path": "README.md"
+     },
+     "class": "reversible",
+     "undo": {
+      "op": "restore_file",
+      "path": "README.md",
+      "before": null
+     }
+    }
+   },
+   {
+    "id": "step:13:spec:2",
+    "seq": 13,
+    "kind": "step",
+    "key": "spec:2",
+    "data": {
+     "agent": "spec",
+     "usage": {
+      "calls": 1,
+      "prompt_tokens": 227,
+      "completion_tokens": 257,
+      "latency_s": 4.4476
+     },
+     "wall_s": 4.447692364999966
+    }
+   },
+   {
+    "id": "artifact:14:spec:2",
+    "seq": 14,
+    "kind": "artifact",
+    "key": "spec:2",
+    "data": {
+     "value": {
+      "text": "Write a function to find the n largest integers from a given list of numbers, returned in descending order."
+     },
+     "injection": null,
+     "faulty": false,
+     "fault": null
+    }
+   },
+   {
+    "id": "step:15:coder:2",
+    "seq": 15,
+    "kind": "step",
+    "key": "coder:2",
+    "data": {
+     "agent": "coder",
+     "usage": {
+      "calls": 1,
+      "prompt_tokens": 186,
+      "completion_tokens": 271,
+      "latency_s": 4.5564
+     },
+     "wall_s": 4.556545311999798
+    }
+   },
+   {
+    "id": "artifact:16:coder:2",
+    "seq": 16,
+    "kind": "artifact",
+    "key": "coder:2",
+    "data": {
+     "value": {
+      "path": "mbpp_4.py",
+      "content": "def heap_queue_largest(nums, n):\n    \"\"\"Return the n largest integers from nums in descending order.\"\"\"\n    if n <= 0:\n        return []\n    import heapq\n    return heapq.nlargest(n, nums)"
+     },
+     "injection": null,
+     "faulty": false,
+     "fault": null
+    }
+   },
+   {
+    "id": "effect:17:write_file",
+    "seq": 17,
+    "kind": "effect",
+    "key": "write_file",
+    "data": {
+     "status": "applied",
+     "tool": "write_file",
+     "args": {
+      "path": "mbpp_4.py"
+     },
+     "class": "reversible",
+     "undo": {
+      "op": "restore_file",
+      "path": "mbpp_4.py",
+      "before": null
+     }
+    }
+   },
+   {
+    "id": "step:18:tester:2",
+    "seq": 18,
+    "kind": "step",
+    "key": "tester:2",
+    "data": {
+     "agent": "tester",
+     "usage": {
+      "calls": 0,
+      "prompt_tokens": 0,
+      "completion_tokens": 0,
+      "latency_s": 0.0
+     },
+     "wall_s": 0.3060688299992762
+    }
+   },
+   {
+    "id": "artifact:19:tester:2",
+    "seq": 19,
+    "kind": "artifact",
+    "key": "tester:2",
+    "data": {
+     "value": {
+      "passed": true,
+      "n": 1,
+      "n_passed": 1,
+      "failures": [],
+      "source_sha256": "067c0a9ce1fdfe71d81b5e58ce29851a5b1a3d290ce3202c8a241ba83fe3871c"
+     },
+     "injection": null,
+     "faulty": false,
+     "fault": null
+    }
+   },
+   {
+    "id": "step:20:reviewer:2",
+    "seq": 20,
+    "kind": "step",
+    "key": "reviewer:2",
+    "data": {
+     "agent": "reviewer",
+     "usage": {
+      "calls": 1,
+      "prompt_tokens": 277,
+      "completion_tokens": 56,
+      "latency_s": 1.0555
+     },
+     "wall_s": 1.0556386660009593
+    }
+   },
+   {
+    "id": "artifact:21:reviewer:2",
+    "seq": 21,
+    "kind": "artifact",
+    "key": "reviewer:2",
+    "data": {
+     "value": {
+      "decision": "approve",
+      "note": ""
+     }
+    }
+   }
+  ],
+  "edges": [
+   {
+    "src": "step:1:spec",
+    "dst": "artifact:2:spec",
+    "type": "output"
+   },
+   {
+    "src": "artifact:2:spec",
+    "dst": "step:3:coder",
+    "type": "input"
+   },
+   {
+    "src": "artifact:2:spec",
+    "dst": "step:3:coder",
+    "type": "support"
+   },
+   {
+    "src": "step:3:coder",
+    "dst": "artifact:4:coder",
+    "type": "output"
+   },
+   {
+    "src": "step:3:coder",
+    "dst": "effect:5:write_file",
+    "type": "effect"
+   },
+   {
+    "src": "artifact:4:coder",
+    "dst": "step:6:tester",
+    "type": "input"
+   },
+   {
+    "src": "artifact:4:coder",
+    "dst": "step:6:tester",
+    "type": "support"
+   },
+   {
+    "src": "step:6:tester",
+    "dst": "artifact:7:tester",
+    "type": "output"
+   },
+   {
+    "src": "artifact:2:spec",
+    "dst": "step:8:reviewer",
+    "type": "input"
+   },
+   {
+    "src": "artifact:7:tester",
+    "dst": "step:8:reviewer",
+    "type": "input"
+   },
+   {
+    "src": "artifact:7:tester",
+    "dst": "step:8:reviewer",
+    "type": "support"
+   },
+   {
+    "src": "step:8:reviewer",
+    "dst": "artifact:9:reviewer",
+    "type": "output"
+   },
+   {
+    "src": "artifact:2:spec",
+    "dst": "step:10:docs",
+    "type": "input"
+   },
+   {
+    "src": "step:10:docs",
+    "dst": "artifact:11:docs",
+    "type": "output"
+   },
+   {
+    "src": "step:10:docs",
+    "dst": "effect:12:write_file",
+    "type": "effect"
+   },
+   {
+    "src": "artifact:9:reviewer",
+    "dst": "step:13:spec:2",
+    "type": "input"
+   },
+   {
+    "src": "artifact:9:reviewer",
+    "dst": "step:13:spec:2",
+    "type": "support"
+   },
+   {
+    "src": "step:13:spec:2",
+    "dst": "artifact:14:spec:2",
+    "type": "output"
+   },
+   {
+    "src": "artifact:14:spec:2",
+    "dst": "step:15:coder:2",
+    "type": "input"
+   },
+   {
+    "src": "artifact:14:spec:2",
+    "dst": "step:15:coder:2",
+    "type": "support"
+   },
+   {
+    "src": "step:15:coder:2",
+    "dst": "artifact:16:coder:2",
+    "type": "output"
+   },
+   {
+    "src": "step:15:coder:2",
+    "dst": "effect:17:write_file",
+    "type": "effect"
+   },
+   {
+    "src": "artifact:16:coder:2",
+    "dst": "step:18:tester:2",
+    "type": "input"
+   },
+   {
+    "src": "artifact:16:coder:2",
+    "dst": "step:18:tester:2",
+    "type": "support"
+   },
+   {
+    "src": "step:18:tester:2",
+    "dst": "artifact:19:tester:2",
+    "type": "output"
+   },
+   {
+    "src": "artifact:14:spec:2",
+    "dst": "step:20:reviewer:2",
+    "type": "input"
+   },
+   {
+    "src": "artifact:19:tester:2",
+    "dst": "step:20:reviewer:2",
+    "type": "input"
+   },
+   {
+    "src": "artifact:19:tester:2",
+    "dst": "step:20:reviewer:2",
+    "type": "support"
+   },
+   {
+    "src": "step:20:reviewer:2",
+    "dst": "artifact:21:reviewer:2",
+    "type": "output"
+   }
+  ]
+ },
+ "world": {
+  "bookings": {},
+  "outbox": [],
+  "files": {
+   "mbpp_4_draft.py": "def heap_queue_largest(nums, n):\n    \"\"\"Return the n largest integers from nums in descending order.\n    If n is greater than the length of nums, return all numbers sorted descending.\n    If n is non\u2011positive, return an empty list.\n    \"\"\"\n    import heapq\n    # Guard against non\u2011positive n\n    if n <= 0:\n        return []\n    # If n exceeds list length, return the whole list sorted descending\n    if n >= len(nums):\n        return sorted(nums, reverse=True)\n    # Use heapq.nlargest which returns the n largest elements in descending order\n    return heapq.nlargest(n, nums)\n",
+   "README.md": "# mbpp_4\n\n## Description\nImplements a function that returns the **n largest integers** from a given list, sorted in **descending order**.\n\n## Function Signature\n```python\nheap_queue_largest(nums: List[int], n: int) -> List[int]\n```\n- `nums`: List of integers (may contain duplicates).\n- `n`: Number of largest elements to retrieve.\n- Returns a list of the `n` largest values, ordered from largest to smallest.\n\n## Usage Example\n```python\n>>> heap_queue_largest([3, 1, 5, 2, 4], 3)\n[5, 4, 3]\n```\n\nThe implementation should handle edge cases such as `n` greater than the list length (return the whole list sorted descending) and empty inputs.\n",
+   "mbpp_4.py": "def heap_queue_largest(nums, n):\n    \"\"\"Return the n largest integers from nums in descending order.\"\"\"\n    if n <= 0:\n        return []\n    import heapq\n    return heapq.nlargest(n, nums)"
+  },
+  "action_history": []
+ }
+}
