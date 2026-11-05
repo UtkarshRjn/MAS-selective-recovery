@@ -13,7 +13,7 @@ uv run python analysis/phase1_tables.py     # rebuilds the tables below from the
 
 To reproduce a row, check out the listed revision, start the model server with `./scripts/start_server.sh`, and run the command. The two task seeds are 0 and 1. Results are written to `results/`, which is not tracked.
 
-Pin the revision. The booking rows score success as the correct flight, hotel, itinerary, and confirmation email. After PR [#9](https://github.com/UtkarshRjn/multi-agent-selective-recovery/pull/9), `main` also requires the refundability sentence. Qwen never writes that sentence, so a rerun on `main` reports every booking as failed.
+Pin the revision. The booking rows score success as the correct flight, hotel, itinerary, and confirmation email. The current checker also requires the refundability sentence. Qwen never writes that sentence, so a rerun on `main` reports every booking as failed.
 
 ## What the rows show
 
@@ -30,8 +30,25 @@ Booking: 2 clean runs, both correct. Of 22 scheduled faults, 16 changed the outc
 
 Coding programs: one run per program and fault. On `clamp` with a dropped requirement, monitor passes in 13.87 s and 2,109 tokens, compared with 8.22 s and 1,453 tokens for coarse. Support redoes 2 of 9 steps and fails the hidden suite on `clamp` and `clip_text`.
 
-## Not in this folder
+## Coding and authorization logs
 
-The GPT-OSS 120B and Muse Glimmer 30B coding numbers come from the MBPP pilot merged in [#10](https://github.com/UtkarshRjn/multi-agent-selective-recovery/pull/10). Its commands are in [evals/README.md](../../evals/README.md). Its `rows.jsonl` and traces are still in that run's local `results/` directories and must be added here before submission.
+| Directory | Saved rows | Coverage |
+|---|---:|---|
+| `muse-coding/` | 580 | Complete saved Muse batch, including four execution errors and three skipped recovery conditions. |
+| `gpt-oss-coding/` | 506 | Interrupted GPT-OSS batch copied locally before continuation. The completed 579-row batch used by the README tables still needs to be retrieved. |
 
-Mock-model runs check the code paths only and are not reported.
+Each directory contains readable `rows.jsonl`, a `run-artifacts.tar.gz` archive, and `SHA256SUMS`. The archives preserve the downloaded run directories, including model exchanges and provenance traces under `tasks/`, configuration, task manifests, status, and source snapshots. The Muse archive also contains resume lineage. Model endpoint names and deployment paths remain in the saved configuration for reproducibility. Credentials are supplied separately at execution time.
+
+Verify and extract an archive from the repository root.
+
+```bash
+(cd artifacts/phase1/muse-coding && shasum -a 256 -c SHA256SUMS)
+mkdir -p results/saved-evidence
+tar -xzf artifacts/phase1/muse-coding/run-artifacts.tar.gz -C results/saved-evidence
+```
+
+For GPT-OSS, substitute `gpt-oss-coding` in both paths. The top-level `rows.jsonl` is also present inside each archive. Count it once when aggregating results. Within a run, per-task rows repeat the same conditions as the top-level file. Muse continuation rows also include copied earlier results.
+
+The partial GPT-OSS batch must be analyzed as its own subset. Its 506 rows cannot reproduce all statistics from the final 579-row batch. Keep its saved interrupted status and missing conditions visible in any analysis.
+
+The source snapshots capture deployed code, which predates the current timing and checker changes. Run commands and model options are documented in the [coding experiment guide](../../evals/README.md). `analysis/phase1_tables.py` rebuilds the Qwen tables only.

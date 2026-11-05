@@ -110,26 +110,114 @@ Current results have one observation per condition and no variability estimates.
 
 ## Setup and reproduction
 
-Install Python 3.11+, uv, and Docker for coding evaluation. Local model runs also require llama.cpp.
+Use Python 3.11+, [uv](https://docs.astral.sh/uv/), and Docker for coding evaluation. Local Qwen experiments also require llama.cpp. Run commands from the repository root.
 
 ```bash
 uv sync --locked
 uv run pytest -q
-
-# Rebuild the Qwen result tables from committed rows.
-uv run python analysis/phase1_tables.py
-
-# Inspect the coding evaluation options.
-uv run agentrec mbpp run --help
 ```
 
-The [coding experiment guide](evals/README.md) contains dataset setup, model endpoint configuration, full run commands, fault definitions, and resume instructions. The [travel and external benchmark guide](evals/travel-and-external.md) covers booking runs and graph sweeps. Recorded source revisions and commands for the published Qwen results are listed with the [result artifacts](artifacts/phase1/README.md).
+### Travel booking
 
-The repository contains the Qwen rows and traces. The GPT-OSS and Muse tables summarize saved batches of 579 and 580 rows respectively, whose raw artifacts have yet to be included in the repository. GPT-OSS retains one execution error. Muse retains four execution errors and three skipped recovery rows.
+Start the local model server in one terminal. On macOS, install llama.cpp with Homebrew. The first server launch downloads Qwen2.5-7B-Instruct Q4_K_M (about 4.7 GB).
+
+```bash
+brew install llama.cpp
+./scripts/start_server.sh
+```
+
+In another terminal, run the clean baseline and the two-seed booking experiment.
+
+```bash
+uv run agentrec clean --tasks 2
+uv run agentrec experiment --tasks 2 --faults all \
+  --methods restart,suffix,coarse,support,monitor,support_monitor
+```
+
+The CLI writes each experiment under `results/`. Summarize a run using its printed output directory.
+
+```bash
+uv run python analysis/summarize.py results/<run-directory>/rows.jsonl
+```
+
+The server uses temperature 0, seed 0, and one inference slot. Historical booking scores use the checker recorded with their artifacts. To reproduce those scores, use the source revisions and commands listed in the [artifact guide](artifacts/phase1/README.md).
+
+### Python coding
+
+Download the pinned dataset and container image. Docker must be running.
+
+```bash
+mkdir -p data/mbpp
+curl -fL https://raw.githubusercontent.com/google-research/google-research/83f1e7b59e762648c953de751d31f75720683622/mbpp/sanitized-mbpp.json \
+  -o data/mbpp/sanitized-mbpp.json
+docker pull python@sha256:db20d8506e2f15b6db39b40b6015ca46bae855dec6dd326d462cfe79ae972893
+```
+
+Set `MODEL_API_URL` to your OpenAI-compatible endpoint (including `/v1`), `MODEL_API_KEY` to its key, and `MODEL_ID` to its model identifier. Then run the ten-task evaluation.
+
+```bash
+uv run agentrec mbpp run --provider custom \
+  --api-base-url "$MODEL_API_URL" --api-key-env MODEL_API_KEY \
+  --model "$MODEL_ID" --limit 10 --workers 5 \
+  --trial-out results/coding-10 --execute-model
+```
+
+This runs clean, injected, verification, and recovery conditions. Add `--include-authorization` to include the three travel authorization cases used in the reported batches. Use `--phase clean` for a clean-only coding run. Omit `--limit` to schedule all 50 prepared tasks. Each output directory must be new.
+
+To continue an interrupted batch, repeat the same model, task, and worker settings with `--resume-from results/coding-10` and a new `--trial-out` directory. If the saved status still says `running`, first verify the old process has stopped, then add `--resume-source-stopped`. Completed results are copied into the continuation. Failed conditions remain recorded.
+
+Model-specific configuration and the complete fault schedule are documented in the [coding experiment guide](evals/README.md).
+
+### Additional coding and graph experiments
+
+With the local model server running, evaluate the small programs and graph templates.
+
+```bash
+uv run agentrec graphs
+```
+
+For a mock-only harness check, use `uv run agentrec --llm mock graphs`. The [travel and external benchmark guide](evals/travel-and-external.md) describes the graph shapes and adapter commands.
+
+### Rebuild report tables and PDF
+
+Rebuild the Qwen tables directly from the committed rows.
+
+```bash
+uv run python analysis/phase1_tables.py
+```
+
+The compiled report is available as a [PDF](output/pdf/phase1_report.pdf). To rebuild it locally, install a TeX distribution with `latexmk` and run the following command.
+
+```bash
+latexmk -pdf -interaction=nonstopmode -halt-on-error \
+  -outdir=output/pdf docs/phase1_report.tex
+```
+
+## Results and logs
+
+| Evidence | Available files | Coverage |
+|---|---|---|
+| Qwen booking and graph experiments | [Rows, traces, and reproduction instructions](artifacts/phase1/README.md) | Source revisions and logs supporting the Qwen tables. |
+| Muse coding and authorization | [580 result rows](artifacts/phase1/muse-coding/rows.jsonl), [run archive](artifacts/phase1/muse-coding/run-artifacts.tar.gz) | Complete saved batch, including four execution errors and three skipped recovery rows. |
+| GPT-OSS coding and authorization | [Result rows](artifacts/phase1/gpt-oss-coding/rows.jsonl), [run archive](artifacts/phase1/gpt-oss-coding/run-artifacts.tar.gz) | Saved run files and [artifact notes](artifacts/phase1/gpt-oss-coding/README.md). |
+
+Each coding archive contains per-task traces, configuration, the selected task manifest, run status, and a deployed source snapshot. SHA-256 checksums accompany both archives. The [artifact guide](artifacts/phase1/README.md) provides extraction instructions and notes for each run.
 
 ## External benchmarks
 
 Adapters provide additional workloads and failure records. UndoBench exercises a retry before a state-changing action. A2ASecBench checks whether untrusted agent messages lead to blocked actions. TAMAS supplies attack scenarios, and Who&When supplies failure traces for attribution. These adapters are described in the [external benchmark guide](evals/travel-and-external.md). Recovery after completed external actions remains future work.
+
+Fetch and inspect the external datasets with the following commands. Adapter-specific dependencies and trial settings are listed in the external benchmark guide.
+
+```bash
+uv run agentrec tamas download
+uv run agentrec tamas summary
+uv run agentrec a2a download
+uv run agentrec a2a summary
+uv run agentrec undobench download
+uv run agentrec who-when download
+uv run agentrec who-when summary
+```
 
 ## Repository guide
 
