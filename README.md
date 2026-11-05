@@ -34,8 +34,7 @@ passing all final tests. Model stages use separate API calls with context assemb
 previous outputs. Tests execute in Docker, and Python determines review decisions from
 test feedback. A normal workflow makes seven model calls.
 
-Dependencies record the inputs used by each stage. They can differ from execution order,
-so a later stage may be reusable when it does not depend on the faulty result.
+We build the dependency graph during execution using the inputs declared by each workflow stage. Each node represents a stage execution, and an edge connects an earlier stage to a later stage that consumes its output. Dependencies can differ from execution order, so a later stage may be reusable when it does not depend on the faulty result.
 
 We first run a clean baseline, then inject one fault per condition. Faults model incorrect
 code, a missing requirement, a changed comparison, a tester timeout, malicious instructions,
