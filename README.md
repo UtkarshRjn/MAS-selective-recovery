@@ -172,16 +172,6 @@ uv run agentrec graphs
 
 For a mock-only harness check, use `uv run agentrec --llm mock graphs`. The [travel and external benchmark guide](evals/travel-and-external.md) describes the graph shapes and adapter commands.
 
-### Rebuild report tables
-
-Rebuild the Qwen tables directly from the committed rows.
-
-```bash
-uv run python analysis/phase1_tables.py
-```
-
-Read the [Phase 1 report (PDF)](docs/phase1_report.pdf).
-
 ## Results and logs
 
 | Evidence | Available files | Coverage |
