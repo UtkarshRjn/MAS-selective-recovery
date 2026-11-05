@@ -11,24 +11,15 @@ The two main evaluations cover simulated travel booking and Python programming t
 | Travel booking | Seven steps research flights and hotels, plan a trip, book both, save an itinerary, and email the traveler. Tools update a simulated world. | Qwen2.5-7B-Instruct on two task seeds and eleven fault types. |
 | Python coding | Nine steps write a specification, code, test results, review, and documentation, followed by a second specification–code–test–review pass. | GPT-OSS 120B and Muse Glimmer 30B on 10 of 50 prepared sanitized MBPP tasks. |
 
-Coding agents receive one test for revision feedback. The remaining tests stay hidden and score the final code. Generated code runs in constrained Docker containers. Testing uses tools, and Python computes review decisions from test feedback. The nine-stage workflow makes seven model calls, including the inherited reviewer calls.
+Coding uses one test for revision feedback and hidden tests to score the final code. Generated code runs in Docker. Workflow details appear in the report’s Experimental Setup section. [Report, page 1](output/pdf/phase1_report.pdf#page=1)
 
 ## Recovery methods
 
-The dependency graph is built during execution. Nodes represent stage executions, and edges record which earlier outputs each stage consumes. Coarse lineage follows dependencies on whole outputs. Support lineage uses recorded citations to individual claims.
+We compare restarting the whole workflow, replaying its remaining suffix, and selecting steps through recorded dependencies (coarse). Support uses citations to retain independent work. Monitor and support-monitor add a known-fault note to the selected steps. Always-verify checks intermediate outputs during the forward run.
 
-| Method | Recovery behavior |
-|---|---|
-| Restart | Undo supported effects and rerun every stage. |
-| Suffix | Rerun the faulty stage and every later stage in execution order. |
-| Coarse | Rerun the faulty stage and stages reachable from it in the dependency graph. |
-| Support | Use the implemented one-hop citation rule to retain steps with independent cited evidence. |
-| Monitor | Select the same stages as coarse and append a note identifying the known fault to each replayed agent prompt. |
-| Support-monitor | Apply the same fault note to the stages selected by support. |
+The report explains graph construction, replay, and the fault-note monitor in “Baseline: Coarse Lineage Recovery” and “Proposed: Fault-Note Monitor.” [Report, page 1](output/pdf/phase1_report.pdf#page=1)
 
-The fault-note monitor makes no additional model call. Automated fault detection is a planned extension. Clean runs, injected runs without recovery, and always-verify provide additional comparisons. Always-verify checks intermediate outputs during execution and recomputes test feedback.
-
-Travel recovery restores file contents and cancels supported bookings. Sent emails remain in the history, including when recovery sends a correction. Task correctness and irreversible effects therefore need separate checks.
+A worked example shows how support retains a correct flight booking after a hotel fault. [Appendix C, page 3](output/pdf/phase1_report.pdf#page=3)
 
 ## Results
 
@@ -151,4 +142,4 @@ Adapters provide additional workloads and failure records. UndoBench exercises a
 | [evals/travel-and-external.md](evals/travel-and-external.md) | Travel, graph, and external benchmark instructions. |
 | [artifacts/phase1/](artifacts/phase1/) | Committed Qwen results, traces, and source revisions. |
 | [analysis/phase1_tables.py](analysis/phase1_tables.py) | Rebuilds the Qwen tables from saved rows. |
-| [docs/phase1_report.tex](docs/phase1_report.tex) | Repository copy of the Phase 1 report. |
+| [Phase 1 report (PDF)](output/pdf/phase1_report.pdf) | Design, experiments, results, and limitations. |
