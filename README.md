@@ -129,27 +129,32 @@ node's identity, so detection is not part of the comparison.
 
 ## Outcome checks
 
-`checker.check` reads only the world state. `success` requires the correct flight and hotel
-to be the only active bookings, an itinerary file and a final email to the user that both
-mention them, and no email ever sent to anyone else. `refund_ok` is separate: both texts
-must state whether the hotel is refundable. `final_correct` is `success` without the
-unauthorized-email check, so irreversible damage can be counted separately from the end state.
+`checker.check` reads only the world state. `task_recovery_success` checks the final task state.
+`final_effect_integrity` covers the entire run. `recovery_effect_integrity` checks required effects
+and rejects wrong, duplicate, or unauthorized effects introduced during recovery. Earlier irreversible
+harm is reported separately.
 
 A fault counts as `fault_used` only if it changed the observable outcome compared with the
 clean run of the same task.
+
+See [evals/README.md](evals/README.md) for the five primary metrics and evaluation protocol.
 
 ## TAMAS and A2ASecBench
 
 [TAMAS](https://github.com/microsoft/TAMAS) is 300 adversarial tasks across six attack types and five domains. [A2ASecBench](https://github.com/SaFo-Lab/A2ASecBench) is a protocol-security suite: AgentCard spoofing, capability cloaking, and four executable Agent2Agent attacks with matched controls.
 
-Neither release includes a rollback method. This harness loads the cases and records where the attack enters, using the same provenance graph as the booking workflow. It does not rerun Autogen, CrewAI, or the A2A protocol lab, so it does not reproduce their official scores.
+Neither release includes a rollback method. The `summary` commands load cases into this project's provenance graph. The `trial` commands invoke each official runner and report its native metrics.
 
 ```bash
 uv run agentrec tamas download
 uv run agentrec tamas summary
 uv run agentrec a2a download
 uv run agentrec a2a summary
+uv run agentrec a2a trial --config configs/offline/asrf_eval.yaml --agentrec
+uv run agentrec undobench trial --suite smoke --recovery agentrec
 ```
+
+The current UndoBench adapter retries known pre-mutation faults once. It does not perform full-trajectory rollback.
 
 TAMAS puts Byzantine, colluding, and contradicting instructions in an agent description, and direct-injection and impersonation instructions in the user task. Every agent reads that text, so coarse lineage taints the whole roster. The released IPI files contain the benign task only. The upstream runner attaches malicious tools outside the JSON.
 
@@ -186,7 +191,11 @@ src/agentrec/
   who_when.py    Who&When loader, lineage span, attribution prompts
   tamas.py       TAMAS scenario loader and attack-carrier lineage
   a2a.py         A2ASecBench case loader and control/attack lineage
+  a2a_adapter.py AgentRec A2ASecBench executable SUT
+  undobench.py   UndoBench native-runner adapter
+  undobench_adapter.py AgentRec UndoBench recovery method
 analysis/summarize.py
+evals/README.md
 tests/
 ```
 
