@@ -1,13 +1,14 @@
-# GPT-OSS saved run files
+# GPT-OSS experiment evidence
 
-This directory contains the completed 579-row GPT-OSS batch used in the reported results. It includes 568 coding records and 11 travel authorization records. One execution error is retained.
+The completed batch contains 579 result rows and 578 saved execution traces. It retains 1 execution errors and 0 skipped conditions. Errors or skipped conditions can lack a trace.
 
-- `rows.jsonl` contains the aggregate result records.
-- `tasks/` contains per-task rows and execution traces.
-- `config.json`, `manifest.json`, and `run_status.json` record settings, selected tasks, and final status.
-- `resume.json` records the continuation from the interrupted batch.
-- `source-snapshot/` preserves the deployed source files. `source-manifest.json` records their original hashes.
+| File | Contents |
+|---|---|
+| `rows.jsonl` | One aggregate record per condition. Use this file for analysis. |
+| `traces/` | Agent messages, intermediate outputs, dependencies, and simulated state. Filenames identify the task, fault, and method. |
+| `config.json` | Model and execution settings. |
+| `manifest.json` | Selected task definitions and dataset metadata. |
 
-The continuation includes completed records copied from the earlier run. Use the top-level rows once for aggregation. Per-task rows duplicate those records.
+The batch resumed an interrupted run and includes earlier completed records once. Historical deployment paths in configuration refer to the original machine.
 
-Among 96 coding cases with confirmed injections, 63 pass without recovery. Restart, suffix, and coarse produce correct results in 95, 86, and 86 cases respectively. These totals include cases that already passed before recovery.
+The exact deployed source snapshot and original run/resume metadata are preserved at commit `aec632102fd172d7ba432ddb357743d03d31a5ff`. Use that snapshot when reproducing historical scoring and timing. [Source snapshot](https://github.com/UtkarshRjn/MAS-selective-recovery/tree/aec632102fd172d7ba432ddb357743d03d31a5ff/artifacts/phase1/gpt-oss-coding/source-snapshot) · [Run and resume metadata](https://github.com/UtkarshRjn/MAS-selective-recovery/tree/aec632102fd172d7ba432ddb357743d03d31a5ff/artifacts/phase1/gpt-oss-coding)

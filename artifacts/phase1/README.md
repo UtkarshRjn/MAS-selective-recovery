@@ -37,8 +37,8 @@ Coding programs: one run per program and fault. On `clamp` with a dropped requir
 | `muse-coding/` | 580 | Complete saved Muse batch, including four execution errors and three skipped recovery conditions. |
 | `gpt-oss-coding/` | 579 | Complete saved GPT-OSS batch, including one execution error. |
 
-Each directory contains `rows.jsonl`, per-task model exchanges and provenance traces under `tasks/`, configuration, the task manifest, and run status. Deployed code is preserved as ordinary files under `source-snapshot/`. Both coding directories include `resume.json` with continuation lineage. Model endpoint names and deployment paths remain in the configuration for reproducibility. Credentials are supplied separately at execution time.
+Each coding directory contains `rows.jsonl`, `traces/`, `config.json`, `manifest.json`, and a short README. Trace filenames identify the task, fault, and method. Use the aggregate rows once when analyzing results.
 
-Use the top-level `rows.jsonl` for aggregation. Per-task rows repeat those records. Continuation rows also include copied earlier results. All files can be read directly after cloning the repository.
+The per-model READMEs link to the exact deployed source snapshots and original continuation metadata preserved in Git history. Those versions predate the current timing and checker changes. Model endpoint names and deployment paths remain in the configuration for reproducibility.
 
-The source snapshots capture deployed code, which predates the current timing and checker changes. Run commands and model options are documented in the [coding experiment guide](../../evals/README.md). `analysis/phase1_tables.py` rebuilds the Qwen tables only.
+Run commands and model options are documented in the [coding experiment guide](../../evals/README.md). `analysis/phase1_tables.py` rebuilds the Qwen tables only.
