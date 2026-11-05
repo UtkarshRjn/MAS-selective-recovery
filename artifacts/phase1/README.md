@@ -8,8 +8,8 @@ uv run python analysis/phase1_tables.py     # rebuilds the tables below from the
 
 | Directory | Report claim | Model | Code revision | Command |
 |---|---|---|---|---|
-| `qwen-booking/` | Travel booking tables: coarse lineage against restart and suffix, the fault-note monitor against coarse, and the support rule on `wrong_hotel_id` (Appendix C) | Qwen2.5-7B-Instruct Q4_K_M, llama.cpp, temperature 0, seed 0 | `d85ed9c` | `uv run agentrec experiment --tasks 2 --faults all --methods restart,suffix,coarse,support,monitor,support_monitor` |
-| `qwen-coding-and-graphs/` | Monitor limitation on `clamp` and `clip_text`, support failures on dropped requirements, and the three wrong graph outputs | same | `a889670` | `uv run agentrec graphs` |
+| `qwen-booking/` | Travel booking in Table 1 (section 5.1): coarse lineage against restart and suffix, the fault-note monitor against coarse, and the support rule on `wrong_hotel_id` (section 5.3 and Figure 1). Support-plus-note is the last row of Appendix C. | Qwen2.5-7B-Instruct Q4_K_M, llama.cpp, temperature 0, seed 0 | `d85ed9c` | `uv run agentrec experiment --tasks 2 --faults all --methods restart,suffix,coarse,support,monitor,support_monitor` |
+| `qwen-coding-and-graphs/` | Appendix C: monitor cost on `clamp`, support failures on `clamp` and `clip_text`, and monitor’s three incorrect synthetic-graph outputs | same | `a889670` | `uv run agentrec graphs` |
 
 To reproduce a row, check out the listed revision, start the model server with `./scripts/start_server.sh`, and run the command. The two task seeds are 0 and 1. Results are written to `results/`, which is not tracked.
 

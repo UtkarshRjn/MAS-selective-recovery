@@ -11,15 +11,15 @@ The two main evaluations cover simulated travel booking and Python programming t
 | Travel booking | Seven steps research flights and hotels, plan a trip, book both, save an itinerary, and email the traveler. Tools update a simulated world. | Qwen2.5-7B-Instruct on two task seeds and eleven fault types. |
 | Python coding | Nine steps write a specification, code, test results, review, and documentation, followed by a second specification–code–test–review pass. | GPT-OSS 120B and Muse Glimmer 30B on 10 of 50 prepared sanitized MBPP tasks. |
 
-Coding uses one test for revision feedback and hidden tests to score the final code. Generated code runs in Docker. Workflow details appear in the report’s Experimental Setup section. [Report, page 1](docs/phase1_report.pdf#page=1)
+Coding uses one test for revision feedback and hidden tests to score the final code. Generated code runs in Docker. Workflow details appear in the report’s Experimental Setup section. [Report, section 4, page 1](docs/phase1_report.pdf#page=1)
 
 ## Recovery methods
 
 We compare restarting the whole workflow, replaying its remaining suffix, and selecting steps through recorded dependencies (coarse). Support uses citations to retain independent work. Monitor and support-monitor add a known-fault note to the selected steps. Always-verify checks intermediate outputs during the forward run.
 
-The report explains graph construction, replay, and the fault-note monitor in “Baseline: Coarse Lineage Recovery” and “Proposed: Fault-Note Monitor.” [Report, page 1](docs/phase1_report.pdf#page=1)
+The report explains graph construction, replay, and the fault-note monitor in “Dependency recording and replay” and “Monitor prototype.” [Report, sections 3.1–3.2, page 1](docs/phase1_report.pdf#page=1)
 
-A worked example shows how support retains a correct flight booking after a hotel fault. [Appendix C, page 3](docs/phase1_report.pdf#page=3)
+Figure 1(b) shows which steps are reused after a wrong hotel ID. Section 5.3 reports that the support rule keeps the correct flight booking in that example. [Figure 1, page 1](docs/phase1_report.pdf#page=1) [Section 5.3, page 2](docs/phase1_report.pdf#page=2)
 
 ## Results
 
@@ -98,9 +98,9 @@ GPT-OSS passes 2 of 3 clean travel cases. The planning-only task fails with no a
 
 Qwen also evaluated three small coding programs and four synthetic dependency graphs. On the coding examples, the same support rule retained too much work and failed `clamp` and `clip_text` after a requirement was removed.
 
-The fault note also had mixed results. For `clamp` with a missing requirement, monitor used 2,109 tokens and 13.87 seconds, compared with coarse's 1,453 tokens and 8.22 seconds. On the synthetic graphs, monitor produced three incorrect outputs where coarse succeeded. The [table-generation script](analysis/phase1_tables.py) reproduces these comparisons from committed rows.
+The fault note also had mixed results. For `clamp` with a missing requirement, monitor used 2,109 tokens and 13.87 seconds, compared with coarse's 1,453 tokens and 8.22 seconds. On the synthetic graphs, monitor produced three incorrect outputs where coarse succeeded. Those cases are in Appendix C. [Appendix, page 4](docs/phase1_report.pdf#page=4) The [table-generation script](analysis/phase1_tables.py) reproduces these comparisons from committed rows.
 
-The report discusses the failure cases, limitations, and planned recovery improvements in “Phase 2 Direction” and the appendices. [Phase 1 report (PDF)](docs/phase1_report.pdf)
+The report discusses the failure cases, limitations, and planned recovery improvements in “Limitations and Phase 2” and Appendices A–C. [Section 6, page 2](docs/phase1_report.pdf#page=2) [Appendix, page 4](docs/phase1_report.pdf#page=4)
 
 ## Setup and reproduction
 
@@ -209,4 +209,5 @@ uv run agentrec who-when summary
 | [evals/travel-and-external.md](evals/travel-and-external.md) | Travel, graph, and external benchmark instructions. |
 | [artifacts/phase1/](artifacts/phase1/) | Committed Qwen results, traces, and source revisions. |
 | [analysis/phase1_tables.py](analysis/phase1_tables.py) | Rebuilds the Qwen tables from saved rows. |
+| [docs/phase1_report.tex](docs/phase1_report.tex) | Report source. From `docs/`, run `pdflatex` twice. The figure is `monitor_compact.pdf`. |
 | [Phase 1 report (PDF)](docs/phase1_report.pdf) | Design, experiments, results, and limitations. |
