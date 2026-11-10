@@ -342,3 +342,52 @@ def test_limit_selects_prefix_without_mutating_dataset():
     for limit in (0, -1, 51):
         with pytest.raises(ValueError, match='limit'):
             mbpp.select_tasks(manifest, limit)
+
+
+def _local_failures(source, imports, tests):
+    import contextlib
+    import io
+    failures = []
+    namespace = {}
+    try:
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            exec(source, namespace)  # noqa: S102
+            exec('\n'.join(imports), namespace)  # noqa: S102
+    except BaseException as exc:
+        return [{'error': type(exc).__name__}]
+    for index, test in enumerate(tests):
+        try:
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                exec(test, namespace)  # noqa: S102
+        except BaseException as exc:
+            failures.append({'test_index': index, 'error': type(exc).__name__})
+    return failures
+
+
+def test_held_out_tasks_are_prepared_and_qualify(monkeypatch):
+    """The 40 tasks outside the pilot can be scheduled later without a model call."""
+    from agentrec.phase1 import qualify_report_fixture
+    manifest = json.loads(MANIFEST.read_text())
+    pilot = mbpp.select_tasks(manifest, split='pilot')
+    held = mbpp.select_tasks(manifest, split='held_out')
+    assert [c['task_id'] for c in pilot['cases']] == [2, 3, 4, 7, 8, 9, 11, 12, 14, 16]
+    assert len(held['cases']) == 40
+    assert {c['task_id'] for c in held['cases']} == {c['task_id'] for c in manifest['cases']} - {
+        c['task_id'] for c in pilot['cases']}
+    assert mbpp.select_tasks(manifest, split='all') is manifest
+    assert [c['task_id'] for c in mbpp.select_tasks(held, 3)['cases']] == [
+        c['task_id'] for c in held['cases'][:3]]
+
+    def evaluate(source, program, split):
+        tests = program[f'{split}_tests']
+        failures = _local_failures(source, program['imports'], tests)
+        return {'passed': not failures, 'n': len(tests), 'n_passed': len(tests) - len(failures),
+                'failures': failures}
+    monkeypatch.setattr(mbpp, 'evaluate', evaluate)
+    for case in manifest['cases']:
+        monkeypatch.setitem(PROGRAMS, case['name'], {**copy.deepcopy(case), 'benchmark': 'mbpp', 'image': 'unused'})
+        for split in ('feedback', 'final'):
+            assert evaluate(case['reference'], case, split)['passed'], case['task_id']
+        mutant = qualify_report_fixture(case)
+        assert mutant.startswith(f"def {case['signature']}:")
+        assert 'return ' in mutant

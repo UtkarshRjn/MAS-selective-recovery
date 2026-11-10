@@ -184,12 +184,36 @@ def resolve_connection(args):
     return {'endpoint': endpoint.rstrip('/'), 'key': key, 'key_env': key_env}
 
 
-def select_tasks(manifest, limit):
+# Phase 1 reported this prefix. The rest of the pinned manifest is held out.
+PILOT_TASKS = 10
+
+
+def select_tasks(manifest, limit=None, split=None):
+    """Choose a cohort, then optionally keep its first `limit` tasks.
+
+    `pilot` is the reported prefix. `held_out` is every later prepared task.
+    `all` and None keep the manifest order. The manifest object is not mutated.
+    """
+    cases = manifest['cases']
+    if split in (None, 'all'):
+        chosen = cases
+    elif split == 'pilot':
+        chosen = cases[:PILOT_TASKS]
+    elif split == 'held_out':
+        chosen = cases[PILOT_TASKS:]
+    else:
+        raise ValueError('split must be pilot, held_out, or all')
+    if not chosen:
+        raise ValueError('selected split is empty')
     if limit is None:
+        selected = chosen
+    elif 1 <= limit <= len(chosen):
+        selected = chosen[:limit]
+    else:
+        raise ValueError('limit must be between 1 and the selected dataset size')
+    if selected is cases:
         return manifest
-    if not 1 <= limit <= len(manifest['cases']):
-        raise ValueError('limit must be between 1 and the dataset size')
-    return {**manifest, 'cases': manifest['cases'][:limit]}
+    return {**manifest, 'cases': selected}
 
 
 def cmd_run(args):
@@ -200,7 +224,7 @@ def cmd_run(args):
         raise ValueError('workers must be positive')
     manifest = load_manifest(Path(args.manifest), Path(args.source))
     limit = getattr(args, 'limit', None)
-    manifest = select_tasks(manifest, limit)
+    manifest = select_tasks(manifest, limit, getattr(args, 'split', None))
     connection = resolve_connection(args)
     args.stateful_task_id = manifest['cases'][0]['task_id']
     if getattr(args, 'include_authorization', False) and args.phase != 'full':
@@ -408,7 +432,9 @@ def add_cli(sub):
             a.add_argument('--workers', type=int, default=1, help='Concurrent task examples; stages stay sequential')
             a.add_argument('--phase', choices=['clean', 'full'], default='full')
             a.add_argument('--include-authorization', action='store_true', help='Add three travel authorization cases')
-            a.add_argument('--limit', type=int, help='Run only the first N examples from the validated dataset')
+            a.add_argument('--split', choices=['pilot', 'held_out', 'all'], default='all',
+                           help='pilot is the reported first 10; held_out is the other prepared tasks')
+            a.add_argument('--limit', type=int, help='Run only the first N examples from the selected split')
             a.add_argument('--provider', choices=list(PROVIDERS), default='local')
             a.add_argument('--api-base-url', '--base-url', dest='api_base_url',
                            help='OpenAI-compatible base URL, including /v1 when required')
