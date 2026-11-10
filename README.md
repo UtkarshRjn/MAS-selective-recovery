@@ -156,7 +156,7 @@ uv run agentrec mbpp run --provider custom \
   --trial-out results/coding-10 --execute-model
 ```
 
-This runs clean, injected, verification, and recovery conditions. Add `--include-authorization` to include the three travel authorization cases used in the reported batches. Use `--phase clean` for a clean-only coding run. Omit `--limit` to schedule all 50 prepared tasks. Each output directory must be new.
+This runs clean, injected, verification, and recovery conditions. Add `--include-authorization` to include the three travel authorization cases used in the reported batches. Use `--phase clean` for a clean-only coding run. `--from 11 --to 50` schedules prepared tasks 11 through 50. Omit `--limit`, `--from`, and `--to` to schedule all 50. Each output directory must be new.
 
 To continue an interrupted batch, repeat the same model, task, and worker settings with `--resume-from results/coding-10` and a new `--trial-out` directory. If the saved status still says `running`, first verify the old process has stopped, then add `--resume-source-stopped`. Completed results are copied into the continuation. Failed conditions remain recorded.
 
