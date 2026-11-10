@@ -280,7 +280,10 @@ def main() -> None:
     e.add_argument("--methods", default="all", help=f"'all' or comma-separated subset of {METHODS}")
     e.set_defaults(fn=cmd_experiment)
 
-    g = sub.add_parser("graphs", help="chain, diamond, join, and back-edge recovery cases")
+    g = sub.add_parser(
+        "graphs",
+        help="chain, diamond, join, back-edge, collaborative, and hierarchical recovery cases",
+    )
     g.set_defaults(fn=cmd_graphs)
 
     w = sub.add_parser("who-when", help="Who&When failure-attribution logs")
