@@ -57,12 +57,43 @@ def test_graph_cases_split_where_the_edges_and_the_log_disagree():
     assert "side" in _cell(rows, "backedge", "a:2", "suffix")["tainted"]
     assert _cell(rows, "backedge", "a:2", "coarse")["tainted"] == ["a:2"]
 
+    # Collaborative: a:2 reads b and c, so a fault at a misses that turn.
+    assert _cell(rows, "collaborative", "a", "coarse")["tainted"] == ["a", "b:2", "c:2", "a:3", "b:3", "c:3"]
+    assert "a:2" in _cell(rows, "collaborative", "a", "suffix")["tainted"]
+    assert "a:2" not in _cell(rows, "collaborative", "a", "coarse")["tainted"]
+    # a:3 reads b:2 and c:2, not a:2.
+    assert _cell(rows, "collaborative", "a:2", "coarse")["tainted"] == ["a:2", "b:3", "c:3"]
+    assert "a:3" in _cell(rows, "collaborative", "a:2", "suffix")["tainted"]
+    assert "a:3" not in _cell(rows, "collaborative", "a:2", "coarse")["tainted"]
+
+    # Hierarchical: the assignment is upstream of a debate fault. c and b:2 never read b.
+    assert "a" not in _cell(rows, "hierarchical", "b", "suffix")["tainted"]
+    assert _cell(rows, "hierarchical", "b", "coarse")["tainted"] == ["b", "c:2", "judge"]
+    for peer in ("c", "b:2"):
+        assert peer in _cell(rows, "hierarchical", "b", "suffix")["tainted"]
+        assert peer not in _cell(rows, "hierarchical", "b", "coarse")["tainted"]
+    assert _cell(rows, "hierarchical", "judge", "coarse")["tainted"] == ["judge"]
+    assert _cell(rows, "hierarchical", "judge", "suffix")["tainted"] == ["judge"]
+    assert _cell(rows, "hierarchical", "a", "coarse")["tainted"] == _cell(rows, "hierarchical", "a", "suffix")["tainted"]
+
     for row in rows:
         if row["method"] in ("restart", "suffix", "coarse"):
             assert row["success"]
     # Support follows one evidence hop, so a longer path keeps a stale file.
     stale = {(r["template"], r["fault"]) for r in rows if r["method"] == "support" and not r["success"]}
-    assert stale == {("chain", "a"), ("chain", "b"), ("diamond", "a"), ("backedge", "a"), ("backedge", "b")}
+    assert stale == {
+        ("chain", "a"),
+        ("chain", "b"),
+        ("diamond", "a"),
+        ("backedge", "a"),
+        ("backedge", "b"),
+        ("collaborative", "a"),
+        ("collaborative", "b"),
+        ("collaborative", "c"),
+        ("hierarchical", "a"),
+        ("hierarchical", "b"),
+        ("hierarchical", "c"),
+    }
 
 
 def test_corrupt_fault_is_outside_the_travel_sweep():
