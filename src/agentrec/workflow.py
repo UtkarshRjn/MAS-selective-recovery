@@ -22,11 +22,11 @@ from .world import World
 
 MAX_RESEARCH_ITERS = 4
 MAX_EXEC_ITERS = 3
-MAX_PLAN_STEPS = 8
+MAX_PLAN_STEPS = 12  # a 4-step plan plus the six-email fan-out fault
 VERIFY_RETRIES = 1
 
 RESEARCH_TOOLS = {"research_flights": "search_flights", "research_hotels": "search_hotels"}
-EXEC_TOOLS = {"book_flight", "book_hotel", "write_file", "send_email"}
+EXEC_TOOLS = {"book_flight", "book_hotel", "write_file", "send_email", "fetch_resource"}
 # Evidence each executor action cites. Bookings do not cite the refundable claim.
 CLAIM_SUPPORT = {
     "book_flight": ("claim:flight_id",),
@@ -319,6 +319,8 @@ class TravelWorkflow:
                 obs, effect = ctx.world.cancel_booking(str(args["booking_id"]))
             elif action == "write_file":
                 obs, effect = ctx.world.write_file(str(args["path"]), str(args["content"]))
+            elif action == "fetch_resource":
+                obs, effect = ctx.world.fetch_resource(str(args["uri"]))
             else:
                 obs, effect = ctx.world.send_email(str(args["to"]), str(args.get("subject", "")), str(args["body"]))
         except (KeyError, TypeError, ValueError) as e:

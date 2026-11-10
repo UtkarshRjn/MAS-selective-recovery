@@ -65,6 +65,25 @@ def test_graph_cases_split_where_the_edges_and_the_log_disagree():
     assert stale == {("chain", "a"), ("chain", "b"), ("diamond", "a"), ("backedge", "a"), ("backedge", "b")}
 
 
+def test_delegation_cycle_points_the_return_visit_at_an_earlier_agent():
+    from agentrec.faults import DEFAULT_FAULTS
+    from agentrec.recovery import coarse_lineage
+
+    assert all(spec.type != "delegation_cycle" for spec in DEFAULT_FAULTS)
+    task = make_graph_task("backedge")
+    world, prov, inj, _ = run_workflow(
+        task, ([], []), MockLLM(), FaultSpec("delegation_cycle", "a:2", persistent=False)
+    )
+    assert inj.fired == 1
+    assert world.files["a:2.txt"].endswith("->a")
+    assert not check_graph(world, "backedge")["success"]
+    assert [prov.nodes[nid].key for nid in prov.faulty_nodes()] == ["a:2"]
+
+    report = coarse_lineage(task, world, MockLLM(), prov)
+    assert report.tainted_steps == ["a:2"]
+    assert check_graph(world, "backedge")["success"]
+
+
 def test_corrupt_fault_is_outside_the_travel_sweep():
     from agentrec.faults import DEFAULT_FAULTS
 
