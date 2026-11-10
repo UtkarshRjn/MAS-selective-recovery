@@ -1,9 +1,9 @@
 # Current Phase 1 experiment
 
 One pinned dataset of **50 sanitized MBPP coding tasks**, plus three simulated travel
-policy variants. `--split pilot` (or `--limit 10`) selects the first ten coding tasks
-for the current pilot. `--split held_out` selects the other 40 prepared tasks for a
-later run. This is a custom subset/test partition, not an official MBPP score.
+policy variants. `--limit 10` runs the first ten. `--from 11 --to 50` runs the rest,
+counting positions in `evals/mbpp-50.json` from 1. This is a custom subset/test
+partition, not an official MBPP score.
 
 ## Run
 
@@ -33,8 +33,8 @@ uv run agentrec mbpp run --provider triton --model api-muse-glimmer-30b \
 ```
 
 The default phase is `full`. Use `--phase clean` without `--include-authorization` for
-clean coding only. Omit `--limit` to use every task in the selected split. `--split all`
-is the default and schedules all 50. Each output directory must
+clean coding only. Omit `--limit`, `--from`, and `--to` to use all 50 coding tasks.
+Each output directory must
 be new. Five workers means five task examples in parallel; conditions within a task
 run sequentially. The three travel cases run once on the first worker.
 

@@ -364,19 +364,22 @@ def _local_failures(source, imports, tests):
     return failures
 
 
-def test_held_out_tasks_are_prepared_and_qualify(monkeypatch):
-    """The 40 tasks outside the pilot can be scheduled later without a model call."""
+def test_task_range_selects_positions_and_cases_qualify(monkeypatch):
+    """Positions count from 1 in manifest order. Tasks 11-50 can be scheduled later."""
     from agentrec.phase1 import qualify_report_fixture
     manifest = json.loads(MANIFEST.read_text())
-    pilot = mbpp.select_tasks(manifest, split='pilot')
-    held = mbpp.select_tasks(manifest, split='held_out')
-    assert [c['task_id'] for c in pilot['cases']] == [2, 3, 4, 7, 8, 9, 11, 12, 14, 16]
-    assert len(held['cases']) == 40
-    assert {c['task_id'] for c in held['cases']} == {c['task_id'] for c in manifest['cases']} - {
-        c['task_id'] for c in pilot['cases']}
-    assert mbpp.select_tasks(manifest, split='all') is manifest
-    assert [c['task_id'] for c in mbpp.select_tasks(held, 3)['cases']] == [
-        c['task_id'] for c in held['cases'][:3]]
+    first = mbpp.select_tasks(manifest, start=1, end=10)
+    rest = mbpp.select_tasks(manifest, start=11, end=50)
+    assert [c['task_id'] for c in first['cases']] == [2, 3, 4, 7, 8, 9, 11, 12, 14, 16]
+    assert len(rest['cases']) == 40
+    assert [c['task_id'] for c in rest['cases']] == [c['task_id'] for c in manifest['cases'][10:]]
+    assert mbpp.select_tasks(manifest) is manifest
+    with pytest.raises(ValueError, match='both'):
+        mbpp.select_tasks(manifest, start=11)
+    with pytest.raises(ValueError, match='either'):
+        mbpp.select_tasks(manifest, 10, start=11, end=50)
+    with pytest.raises(ValueError, match='range'):
+        mbpp.select_tasks(manifest, start=11, end=51)
 
     def evaluate(source, program, split):
         tests = program[f'{split}_tests']
