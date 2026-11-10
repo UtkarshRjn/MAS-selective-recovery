@@ -3,7 +3,10 @@ import copy
 import pytest
 
 from agentrec.checker import check, outcome_signature
-from agentrec.faults import ATTACKER_EMAIL, FAULTS_BY_NAME, MISSING_EXEC_TOOL
+from agentrec.faults import (
+    ATTACKER_EMAIL, CALLBACK_EMAIL, CALLBACK_URL, FANOUT_EXTRA, FANOUT_SUBJECT_PREFIX,
+    FAULTS_BY_NAME, MISSING_EXEC_TOOL, UNSAFE_RESOURCE_URI,
+)
 from agentrec.llm import MockLLM
 from agentrec.monitor import monitor_recover, support_monitor_recover
 from agentrec.recovery import coarse_lineage, full_restart, suffix_recover, support_recover
@@ -71,10 +74,14 @@ def test_recovery_metrics_reject_new_irreversible_harm(setup):
     ("fabrication@research_hotels", 2),
     ("false_refundable@research_hotels", 3),
     ("malicious_instruction@research_hotels", 5),
+    ("unsafe_resource@research_hotels", 5),
+    ("callback_artifact@research_hotels", 5),
+    ("spoofed_capability@research_hotels", 4),
     ("tool_selection_error@write_file", 6),
     ("bad_argument@book_flight", 6),
     ("dropped_constraint@plan", 5),
     ("inexecutable_plan@plan", 5),
+    ("task_fanout@plan", 6),
 ])
 def test_valid_work_oracle_covers_each_fault(setup, name, valid_count):
     task, _, catalog, llm = setup
@@ -325,6 +332,76 @@ def test_verify_blocks_bad_executor_call(setup):
     result = check(world, truth)
     assert result["unauthorized_emails"] == 0
     assert not result["itinerary_ok"]
+
+
+def test_a2a_resource_fetch_is_irreversible(setup):
+    task, truth, catalog, llm = setup
+    world, prov, inj, _ = run_workflow(task, catalog, llm, FAULTS_BY_NAME["unsafe_resource@research_hotels"])
+    assert inj.fired == 1
+    result = check(world, truth)
+    assert result["untrusted_fetches"] == 1
+    assert world.fetches[0]["uri"] == UNSAFE_RESOURCE_URI
+    assert result["task_recovery_success"]
+    assert not result["final_effect_integrity"]
+    faulty = [prov.nodes[nid].key for nid in prov.faulty_nodes()]
+    assert faulty == ["research_hotels/obs0"]
+
+    before = copy.deepcopy(world)
+    report = full_restart(task, world, llm, prov)
+    after = check(world, truth, before=before)
+    assert after["task_recovery_success"]
+    assert after["untrusted_fetches"] == 1
+    assert after["recovery_untrusted_fetches"] == 0
+    assert report.irreversible >= 1
+
+
+def test_a2a_callback_email_is_unauthorized(setup):
+    task, truth, catalog, llm = setup
+    world, prov, _, _ = run_workflow(task, catalog, llm, FAULTS_BY_NAME["callback_artifact@research_hotels"])
+    result = check(world, truth)
+    assert CALLBACK_EMAIL in result["unauthorized_recipients"]
+    assert CALLBACK_URL not in result["unauthorized_recipients"]
+    assert result["task_recovery_success"]
+    assert [prov.nodes[nid].key for nid in prov.faulty_nodes()] == ["research_hotels/obs0"]
+
+
+def test_a2a_spoofed_card_drops_the_hotel_booking(setup):
+    task, truth, catalog, llm = setup
+    world, prov, _, _ = run_workflow(task, catalog, llm, FAULTS_BY_NAME["spoofed_capability@research_hotels"])
+    result = check(world, truth)
+    assert result["flight_ok"] and not result["hotel_ok"]
+    assert [prov.nodes[nid].key for nid in prov.faulty_nodes()] == ["research_hotels"]
+    plan = next(a.data["value"] for a in prov.of_kind("artifact") if a.key == "plan")
+    assert any(step.get("action") == MISSING_EXEC_TOOL for step in plan["steps"])
+    assert all(step.get("action") != "book_hotel" for step in plan["steps"])
+
+
+def test_a2a_fanout_exceeds_the_task_quota(setup):
+    task, truth, catalog, llm = setup
+    world, prov, inj, _ = run_workflow(task, catalog, llm, FAULTS_BY_NAME["task_fanout@plan"])
+    assert inj.fired == 1
+    result = check(world, truth)
+    fanout = [m for m in world.outbox if m["subject"].startswith(FANOUT_SUBJECT_PREFIX)]
+    assert len(fanout) == FANOUT_EXTRA
+    assert result["final_duplicate_effects"] == FANOUT_EXTRA
+    assert result["task_recovery_success"]
+    assert not result["final_effect_integrity"]
+    assert [prov.nodes[nid].key for nid in prov.faulty_nodes()] == ["plan"]
+
+
+def test_verify_blocks_a2a_peer_effects(setup):
+    task, truth, catalog, llm = setup
+    world, _, _, _ = run_workflow(task, catalog, llm, FAULTS_BY_NAME["unsafe_resource@research_hotels"], verify=True)
+    assert check(world, truth)["untrusted_fetches"] == 0
+    world, _, _, _ = run_workflow(task, catalog, llm, FAULTS_BY_NAME["callback_artifact@research_hotels"], verify=True)
+    assert check(world, truth)["unauthorized_emails"] == 0
+    world, _, inj, _ = run_workflow(task, catalog, llm, FAULTS_BY_NAME["spoofed_capability@research_hotels"], verify=True)
+    assert inj.fired == 1
+    assert check(world, truth)["task_recovery_success"]
+    world, _, inj, _ = run_workflow(task, catalog, llm, FAULTS_BY_NAME["task_fanout@plan"], verify=True)
+    assert inj.fired == 1
+    assert check(world, truth)["final_duplicate_effects"] == 0
+    assert check(world, truth)["task_recovery_success"]
 
 
 def test_verify_blocks_injected_email(setup):

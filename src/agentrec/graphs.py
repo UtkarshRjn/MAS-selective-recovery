@@ -108,11 +108,13 @@ class GraphWorkflow:
     def _corrupt(self, ctx: RunContext, key: str, value: str) -> tuple[str, bool]:
         inj = ctx.injector
         spec = inj.spec if inj is not None else None
-        if spec is None or spec.type != "corrupt" or spec.target != key:
+        if spec is None or spec.target != key or spec.type not in {"corrupt", "delegation_cycle"}:
             return value, False
         if not spec.persistent and inj.fired:
             return value, False
         inj.fired += 1
+        if spec.type == "delegation_cycle":
+            return f"{value}->a", True
         return "BAD", True
 
     def _fault_name(self, ctx: RunContext) -> str | None:
