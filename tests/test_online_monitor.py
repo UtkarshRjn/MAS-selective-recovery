@@ -20,7 +20,7 @@ from agentrec.contract import (
     transition_evidence,
 )
 from agentrec.faults import FAULTS_BY_NAME
-from agentrec.forward_recovery import select_suspects
+from agentrec.forward_recovery import decide_recovery, select_suspects
 from agentrec.llm import MockLLM
 from agentrec.monitor_runtime import MonitorRuntime, Rejected
 from agentrec.online import attempt_rows, evidence_rows, initial_plan, run_case, run_comparison
@@ -120,6 +120,86 @@ def test_online_case_preserves_independent_work_and_rejects_the_late_plan():
     assert report.required_goals == ("flight_booked", "trip_planned")
     assert attempt_rows(report, "research_restaurant")[0]["status"] == "obsolete"
     assert report.transport_calls == 1
+
+
+def test_recovery_revision_follows_the_suspect_cone():
+    plan = initial_plan()
+    date = decide_recovery(
+        policy="online",
+        budget_remaining=1,
+        roots=(_ref("claim:restaurant_date"),),
+        corrections={"claim:restaurant_date": {"date": "2024-01-03"}},
+        base_version=1,
+        goals=plan.required_goals,
+        tasks=plan.task_nodes,
+        edges=plan.dependency_edges,
+        evidence_versions=(),
+    )
+    assert date.revision is not None
+    assert set(date.revision.remove_tasks) == {"research_restaurant", "transfer", "planner", "book_flight"}
+    assert [node.task_id for node in date.revision.add_tasks] == ["planner:2", "book_flight:2"]
+    assert date.revision.carry_forward == ("research_flights", "restaurant_notes")
+    assert date.publish == (("claim:restaurant_date", {"date": "2024-01-03"}),)
+    apply_revision(plan, date.revision)
+
+    flight = decide_recovery(
+        policy="online",
+        budget_remaining=1,
+        roots=(_ref("claim:flight_id"),),
+        corrections={"claim:flight_id": {"flight_id": "FL1"}},
+        base_version=1,
+        goals=plan.required_goals,
+        tasks=plan.task_nodes,
+        edges=plan.dependency_edges,
+        evidence_versions=(),
+    )
+    assert flight.revision is not None
+    assert "research_flights" in flight.revision.remove_tasks
+    assert "research_restaurant" in flight.revision.carry_forward
+    assert "planner" in flight.revision.carry_forward
+    assert all(node.task_id != "research_flights:2" for node in flight.revision.add_tasks)
+    assert any(node.task_id == "book_flight:2" for node in flight.revision.add_tasks)
+    apply_revision(plan, flight.revision)
+
+    tasks = (
+        TaskNode("source", "s", (), (), ("claim:good", "claim:bad")),
+        TaskNode("reader", "r", ("done",), ("claim:bad",), ("claim:out",)),
+        TaskNode("notes", "n", (), ("claim:good",), ("claim:note",)),
+    )
+    edges = (("source", "reader"), ("source", "notes"))
+    other = decide_recovery(
+        policy="online",
+        budget_remaining=1,
+        roots=(_ref("claim:bad"),),
+        corrections={"claim:bad": {"ok": True}},
+        base_version=1,
+        goals=("done",),
+        tasks=tasks,
+        edges=edges,
+        evidence_versions=(),
+    )
+    assert other.revision is not None
+    assert set(other.revision.remove_tasks) == {"source", "reader"}
+    assert [node.task_id for node in other.revision.add_tasks] == ["reader:2"]
+    assert other.revision.carry_forward == ("notes",)
+    apply_revision(Plan(1, tasks, edges, ("done",)), other.revision)
+
+
+def test_flight_fault_keeps_the_restaurant_side():
+    report = asyncio.run(run_case("online", fault="flight_id"))
+    assert report.correct and report.transport_calls == 1
+    for task_id in ("research_restaurant", "transfer", "restaurant_notes", "planner"):
+        rows = attempt_rows(report, task_id)
+        assert len(rows) == 1 and rows[0]["status"] == "completed"
+    flight = attempt_rows(report, "research_flights")
+    assert len(flight) == 1 and flight[0]["status"] == "obsolete"
+    assert "research_flights" not in report.active_tasks
+    assert "research_restaurant" in report.active_tasks
+    versions = evidence_rows(report, "claim:flight_id")
+    assert versions[0]["status"] == "invalid" and versions[0]["value"]["flight_id"] == "FL9"
+    verified = [row for row in versions if row["status"] == "verified"]
+    assert verified[-1]["value"]["flight_id"] == "FL1"
+    assert verified[-1]["producer"].startswith("correct:")
 
 
 def test_baselines_repeat_more_and_block_more_than_the_online_monitor():

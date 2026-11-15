@@ -1,9 +1,9 @@
-"""Fixed-graph online monitor case and the baselines it is measured against.
+"""Fixed-graph online monitor cases and the baselines they are measured against.
 
-The case is the restaurant-date example. Flight research and address-only notes
-are independent of the bad date. Transfer and the first planner consume that
-date. Recovery is supplied: the monitor does not ask a model for the correction
-or for the revised graph.
+`restaurant_date` spoils the date and leaves flight research and address notes
+independent. `flight_id` spoils the flight id and leaves the restaurant side
+independent. Corrections are supplied. The revised graph is derived from the
+suspect cone, not from a hand-written task list.
 """
 
 from __future__ import annotations
@@ -29,6 +29,8 @@ TRUTH: dict[str, Any] = {
 }
 
 CORRECTION = {"claim:restaurant_date": {"date": "2024-01-03"}}
+FLIGHT_CORRECTION = {"claim:flight_id": {"flight_id": "FL1"}}
+FAULTS = ("restaurant_date", "flight_id")
 
 
 def initial_plan() -> Plan:
@@ -49,12 +51,14 @@ def initial_plan() -> Plan:
     return Plan(1, nodes, edges, ("flight_booked", "trip_planned"))
 
 
-def _produce_flight(_monitor: MonitorRuntime, _snapshot: dict[str, Any], _attempt: object) -> dict[str, Any]:
-    return {"claim:flight_id": {"flight_id": "FL1"}}
+def _produce_flight(monitor: MonitorRuntime, _snapshot: dict[str, Any], _attempt: object) -> dict[str, Any]:
+    bad = monitor.faults_enabled and monitor.fault_name == "flight_id"
+    return {"claim:flight_id": {"flight_id": "FL9" if bad else "FL1"}}
 
 
 def _produce_restaurant(monitor: MonitorRuntime, _snapshot: dict[str, Any], _attempt: object) -> dict[str, Any]:
-    date = "2024-01-02" if monitor.faults_enabled else "2024-01-03"
+    bad = monitor.faults_enabled and monitor.fault_name == "restaurant_date"
+    date = "2024-01-02" if bad else "2024-01-03"
     return {
         "claim:restaurant_address": {"address": "1 Market St"},
         "claim:restaurant_date": {"date": date},
@@ -128,6 +132,24 @@ def _verified(monitor: MonitorRuntime, claim_id: str) -> bool:
         item.claim_id == claim_id and item.verification_status.value == "verified"
         for item in monitor.graph.evidence.values()
     )
+
+
+async def _drive_flight(monitor: MonitorRuntime, holds: Holds, policy: str) -> None:
+    """Let the restaurant side finish, then release the bad flight id."""
+    await asyncio.wait_for(holds.entered["research_flights"].wait(), 5)
+    assert monitor.verification_gate is not None
+    monitor.verification_gate.set()
+    await monitor.wait_until(
+        lambda item: _status(item, "restaurant_notes") == "completed" and _status(item, "planner") == "completed"
+    )
+    holds.release["research_flights"].set()
+    await monitor.wait_until(lambda item: item.recovery_applied or item.unresolved is not None)
+    if monitor.unresolved is not None:
+        return
+    if policy == "restart":
+        await monitor.wait_until(lambda item: _verified(item, "claim:plan") and _verified(item, "claim:flight_id"))
+        return
+    await monitor.wait_until(lambda item: item.final_answer is not None)
 
 
 async def _drive(monitor: MonitorRuntime, holds: Holds, policy: str) -> None:
@@ -220,21 +242,26 @@ async def run_case(
     concurrency: int = 4,
     correction_budget: int = 2,
     corrections: dict[str, Any] | None = None,
+    fault: str = "restaurant_date",
 ) -> OnlineReport:
     if policy not in POLICIES:
         raise ValueError(f"unknown policy {policy}")
+    if fault not in FAULTS:
+        raise ValueError(f"unknown fault {fault}")
+    supplied = CORRECTION if fault == "restaurant_date" else FLIGHT_CORRECTION
     monitor = MonitorRuntime(
         initial_plan(),
         worker_count=2,
         policy=policy,
         correction_budget=correction_budget,
         truth=TRUTH,
-        corrections=CORRECTION if corrections is None else corrections,
+        corrections=supplied if corrections is None else corrections,
         allow_provisional=policy != "verify_before",
         required_action={"flight_id": "FL1"},
     )
+    monitor.fault_name = fault
     held = {"research_flights"}
-    if policy in {"online", "support", "restart"}:
+    if fault == "restaurant_date" and policy in {"online", "support", "restart"}:
         held.update({"transfer", "planner"})
     holds = Holds(held)
     clock = OverlapClock()
@@ -254,7 +281,8 @@ async def run_case(
     await monitor.start()
     schedule = asyncio.create_task(scheduler.run())
     try:
-        await asyncio.wait_for(_drive(monitor, holds, policy), 5)
+        drive = _drive_flight if fault == "flight_id" else _drive
+        await asyncio.wait_for(drive(monitor, holds, policy), 5)
         await asyncio.wait_for(schedule, 5)
     finally:
         if monitor.verification_gate is not None:
