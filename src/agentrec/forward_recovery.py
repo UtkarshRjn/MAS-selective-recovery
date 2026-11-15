@@ -77,6 +77,73 @@ def _successor_id(task_id: str, taken: set[str]) -> str:
         number += 1
 
 
+def coarse_claims(tasks: tuple[TaskNode, ...], roots: Iterable[str]) -> tuple[str, ...]:
+    """Every claim written by a producer of a suspect, including siblings."""
+    root_ids = set(roots)
+    expanded: list[str] = []
+    for node in tasks:
+        if not (set(node.writes) & root_ids):
+            continue
+        for claim_id in node.writes:
+            if claim_id not in expanded:
+                expanded.append(claim_id)
+    for claim_id in roots:
+        if claim_id not in expanded:
+            expanded.append(claim_id)
+    return tuple(expanded)
+
+
+def revise_suffix(
+    *,
+    tasks: tuple[TaskNode, ...],
+    edges: tuple[tuple[str, str], ...],
+    goals: tuple[str, ...],
+    roots: tuple[str, ...],
+    base_version: int,
+    evidence_versions: tuple[EvidenceRef, ...],
+) -> PlanRevisionProposed:
+    """Relaunch the faulty task and every task after it in plan order.
+
+    A later task is included even when it never read the faulty claim.
+    """
+    root_ids = set(roots)
+    fault_at = 0
+    for index, node in enumerate(tasks):
+        if set(node.writes) & root_ids:
+            fault_at = index
+            break
+    kept = tasks[:fault_at]
+    tainted = tasks[fault_at:]
+    taken = {node.task_id for node in tasks}
+    added = [
+        TaskNode(_successor_id(node.task_id, taken), node.agent_id, node.goals, node.reads, node.writes)
+        for node in tainted
+    ]
+    carry = tuple(node.task_id for node in kept)
+    carry_ids = set(carry)
+    rebuilt = [*kept, *added]
+    new_edges: set[tuple[str, str]] = set()
+    for src, dst in edges:
+        if src in carry_ids and dst in carry_ids:
+            new_edges.add((src, dst))
+    for node in added:
+        for claim_id in node.reads:
+            for writer in rebuilt:
+                if claim_id in writer.writes and writer.task_id != node.task_id:
+                    new_edges.add((writer.task_id, node.task_id))
+    return PlanRevisionProposed(
+        attempt_id="monitor:recovery",
+        evidence_versions=evidence_versions,
+        base_version=base_version,
+        add_tasks=tuple(added),
+        remove_tasks=tuple(node.task_id for node in tainted),
+        add_edges=tuple(sorted(new_edges)),
+        remove_edges=(),
+        required_goals=goals,
+        carry_forward=carry,
+    )
+
+
 def revise_from_cone(
     *,
     tasks: tuple[TaskNode, ...],
@@ -205,6 +272,27 @@ def decide_recovery(
             goals=goals,
             roots=tuple(claim_ids),
             replaced=(),
+            base_version=base_version,
+            evidence_versions=evidence_versions,
+        )
+        return RecoveryDecision((), revision, False, False)
+    if policy == "coarse":
+        revision = revise_from_cone(
+            tasks=tasks,
+            edges=edges,
+            goals=goals,
+            roots=coarse_claims(tasks, claim_ids),
+            replaced=(),
+            base_version=base_version,
+            evidence_versions=evidence_versions,
+        )
+        return RecoveryDecision((), revision, False, False)
+    if policy == "suffix":
+        revision = revise_suffix(
+            tasks=tasks,
+            edges=edges,
+            goals=goals,
+            roots=tuple(claim_ids),
             base_version=base_version,
             evidence_versions=evidence_versions,
         )
