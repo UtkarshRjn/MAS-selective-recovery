@@ -184,12 +184,27 @@ def resolve_connection(args):
     return {'endpoint': endpoint.rstrip('/'), 'key': key, 'key_env': key_env}
 
 
-def select_tasks(manifest, limit):
-    if limit is None:
-        return manifest
-    if not 1 <= limit <= len(manifest['cases']):
-        raise ValueError('limit must be between 1 and the dataset size')
-    return {**manifest, 'cases': manifest['cases'][:limit]}
+def select_tasks(manifest, limit=None, start=None, end=None):
+    """Keep a 1-based inclusive slice of the prepared tasks, in manifest order.
+
+    `start` and `end` count positions in the manifest, from 1. Passing neither
+    slice, and no limit, returns the same manifest object. The manifest is not mutated.
+    """
+    cases = manifest['cases']
+    count = len(cases)
+    if limit is not None and (start is not None or end is not None):
+        raise ValueError('pass either --limit or --from/--to')
+    if start is None and end is None:
+        if limit is None:
+            return manifest
+        if not 1 <= limit <= count:
+            raise ValueError('limit must be between 1 and the dataset size')
+        return {**manifest, 'cases': cases[:limit]}
+    if start is None or end is None:
+        raise ValueError('pass both --from and --to')
+    if not 1 <= start <= end <= count:
+        raise ValueError('task range must satisfy 1 <= from <= to <= dataset size')
+    return {**manifest, 'cases': cases[start - 1:end]}
 
 
 def cmd_run(args):
@@ -200,7 +215,8 @@ def cmd_run(args):
         raise ValueError('workers must be positive')
     manifest = load_manifest(Path(args.manifest), Path(args.source))
     limit = getattr(args, 'limit', None)
-    manifest = select_tasks(manifest, limit)
+    manifest = select_tasks(
+        manifest, limit, getattr(args, 'range_from', None), getattr(args, 'range_to', None))
     connection = resolve_connection(args)
     args.stateful_task_id = manifest['cases'][0]['task_id']
     if getattr(args, 'include_authorization', False) and args.phase != 'full':
@@ -408,7 +424,11 @@ def add_cli(sub):
             a.add_argument('--workers', type=int, default=1, help='Concurrent task examples; stages stay sequential')
             a.add_argument('--phase', choices=['clean', 'full'], default='full')
             a.add_argument('--include-authorization', action='store_true', help='Add three travel authorization cases')
-            a.add_argument('--limit', type=int, help='Run only the first N examples from the validated dataset')
+            a.add_argument('--from', dest='range_from', type=int, metavar='N',
+                           help='First prepared task to run, counting from 1 in manifest order')
+            a.add_argument('--to', dest='range_to', type=int, metavar='N',
+                           help='Last prepared task to run, counting from 1 in manifest order')
+            a.add_argument('--limit', type=int, help='Run only the first N prepared tasks')
             a.add_argument('--provider', choices=list(PROVIDERS), default='local')
             a.add_argument('--api-base-url', '--base-url', dest='api_base_url',
                            help='OpenAI-compatible base URL, including /v1 when required')
