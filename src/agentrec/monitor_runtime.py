@@ -140,6 +140,7 @@ class MonitorRuntime:
         self.allow_provisional = allow_provisional
         self.required_action = required_action or {"flight_id": "FL1"}
         self.faults_enabled = True
+        self.fault_name = "restaurant_date"
         self.verification_gate: asyncio.Event | None = asyncio.Event()
         self.verification_blocked = asyncio.Event()
         self.gate = BarrierGate()
@@ -573,8 +574,8 @@ class MonitorRuntime:
                 corrections=self.corrections,
                 base_version=self.plan.version,
                 goals=self.plan.required_goals,
-                planner=_replacement_planner(),
-                relaunch=_support_relaunch(self.plan),
+                tasks=self.plan.task_nodes,
+                edges=self.plan.dependency_edges,
                 evidence_versions=(),
             )
             notifies = [f"evidence:{ref.claim_id}" for ref in affected.evidence]
@@ -799,21 +800,6 @@ class MonitorRuntime:
                     if predicate(self):
                         return
                 await asyncio.wait_for(cond.wait(), timeout)
-
-
-def _replacement_planner() -> TaskNode:
-    return TaskNode(
-        "planner:2",
-        "planner",
-        ("trip_planned",),
-        ("claim:flight_id", "claim:restaurant_address", "claim:restaurant_date"),
-        ("claim:plan",),
-    )
-
-
-def _support_relaunch(plan: Plan) -> tuple[TaskNode, ...]:
-    wanted = ("research_restaurant", "transfer", "planner")
-    return tuple(node for task_id in wanted if (node := plan.node(task_id)) is not None)
 
 
 async def _default_transport(action: ProposedAction) -> dict[str, Any]:
