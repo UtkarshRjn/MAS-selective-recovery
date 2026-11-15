@@ -525,8 +525,42 @@ class MonitorRuntime:
         if wait_for_gate and self.verification_gate is not None:
             self.verification_blocked.set()
             await self.verification_gate.wait()
+        if self.policy == "coarse":
+            await self._verify_coarse(attempt_id, refs)
+            return
         for ref in refs:
             await self._submit_verdict(attempt_id, ref)
+
+    async def _verify_coarse(self, attempt_id: str, refs: tuple[EvidenceRef, ...]) -> None:
+        """Judge every output, then discard the producer's provisional siblings together."""
+        judged: list[tuple[EvidenceRef, object, int]] = []
+        for ref in refs:
+            async with self.lock:
+                evidence = self.graph.get(ref)
+                if evidence is None or evidence.verification_status != EvidenceStatus.PROVISIONAL:
+                    continue
+                snapshot = self._copy(evidence)
+                plan_version = self.plan.version
+            judged.append((ref, verify_claim(snapshot, self.truth), plan_version))
+        failed = [item for item in judged if not item[1].ok]
+        if not failed:
+            for ref, _verdict, _plan_version in judged:
+                await self._submit_verdict(attempt_id, ref)
+            return
+        async with self.lock:
+            self.verification_cost += len(judged)
+        ref, verdict, plan_version = failed[0]
+        await self.submit(VerificationCompleted(
+            attempt_id=self.verifier_id,
+            evidence_versions=tuple(item[0] for item in judged),
+            target_attempt=attempt_id,
+            target_evidence=(ref,),
+            ok=False,
+            reason=verdict.reason,
+            suspect_claims=tuple(item[0] for item in judged),
+            ambiguous=False,
+            plan_version=plan_version,
+        ))
 
     async def _submit_verdict(self, attempt_id: str, ref: EvidenceRef) -> None:
         async with self.lock:
