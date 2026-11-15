@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import copy
 import json
 import time
@@ -268,6 +269,13 @@ def cmd_graphs(args: argparse.Namespace) -> None:
     print(f"done -> {out}")
 
 
+def cmd_online_monitor(args: argparse.Namespace) -> None:
+    from .online import format_comparison, run_comparison
+
+    reports = asyncio.run(run_comparison(concurrency=args.concurrency, budget=args.budget))
+    print(format_comparison(reports))
+
+
 def main() -> None:
     p = argparse.ArgumentParser(prog="agentrec")
     p.add_argument("--llm", choices=("server", "mock"), default="server")
@@ -299,6 +307,11 @@ def main() -> None:
         help="chain, diamond, join, back-edge, collaborative, and hierarchical recovery cases",
     )
     g.set_defaults(fn=cmd_graphs)
+
+    om = sub.add_parser("online-monitor", help="speculative monitor with supplied corrections")
+    om.add_argument("--concurrency", type=int, default=4)
+    om.add_argument("--budget", type=int, default=2)
+    om.set_defaults(fn=cmd_online_monitor)
 
     w = sub.add_parser("who-when", help="Who&When failure-attribution logs")
     w.add_argument("--data", default="data/who-and-when")
