@@ -17,7 +17,7 @@ from .contract import Plan, TaskNode
 from .monitor_runtime import MonitorRuntime
 from .scheduler import Holds, OverlapClock, Scheduler, run_mock
 
-POLICIES = ("online", "verify_before", "restart", "support")
+POLICIES = ("online", "verify_before", "restart", "support", "coarse", "suffix")
 
 TRUTH: dict[str, Any] = {
     "date": "2024-01-03",
@@ -155,7 +155,7 @@ async def _drive_flight(monitor: MonitorRuntime, holds: Holds, policy: str) -> N
 async def _drive(monitor: MonitorRuntime, holds: Holds, policy: str) -> None:
     await asyncio.wait_for(holds.entered["research_flights"].wait(), 5)
     await asyncio.wait_for(monitor.verification_blocked.wait(), 5)
-    if policy in {"online", "support", "restart"}:
+    if policy in {"online", "support", "coarse", "suffix", "restart"}:
         await asyncio.wait_for(holds.entered["transfer"].wait(), 5)
         await asyncio.wait_for(holds.entered["planner"].wait(), 5)
         await monitor.wait_until(lambda item: _status(item, "restaurant_notes") == "completed")
@@ -168,7 +168,7 @@ async def _drive(monitor: MonitorRuntime, holds: Holds, policy: str) -> None:
     holds.release["research_flights"].set()
     if monitor.unresolved is None and policy == "online":
         await monitor.wait_until(lambda item: _status(item, "planner:2") == "completed")
-    elif monitor.unresolved is None and policy == "support":
+    elif monitor.unresolved is None and policy in {"support", "coarse", "suffix"}:
         await monitor.wait_until(lambda item: _verified(item, "claim:plan"))
     elif monitor.unresolved is None and policy == "restart":
         await monitor.wait_until(lambda item: _verified(item, "claim:plan") and _verified(item, "claim:flight_id"))
@@ -261,7 +261,7 @@ async def run_case(
     )
     monitor.fault_name = fault
     held = {"research_flights"}
-    if fault == "restaurant_date" and policy in {"online", "support", "restart"}:
+    if fault == "restaurant_date" and policy in {"online", "support", "coarse", "suffix", "restart"}:
         held.update({"transfer", "planner"})
     holds = Holds(held)
     clock = OverlapClock()

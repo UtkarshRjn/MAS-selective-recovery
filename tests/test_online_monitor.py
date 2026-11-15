@@ -185,6 +185,52 @@ def test_recovery_revision_follows_the_suspect_cone():
     apply_revision(Plan(1, tasks, edges, ("done",)), other.revision)
 
 
+def test_coarse_discards_the_sibling_and_suffix_reruns_the_tail():
+    plan = initial_plan()
+    shared = dict(
+        budget_remaining=1,
+        roots=(_ref("claim:restaurant_date"),),
+        corrections={"claim:restaurant_date": {"date": "2024-01-03"}},
+        base_version=1,
+        goals=plan.required_goals,
+        tasks=plan.task_nodes,
+        edges=plan.dependency_edges,
+        evidence_versions=(),
+    )
+    coarse = decide_recovery(policy="coarse", **shared)
+    suffix = decide_recovery(policy="suffix", **shared)
+    assert coarse.revision is not None and suffix.revision is not None
+    assert coarse.publish == () and suffix.publish == ()
+    assert "restaurant_notes" in coarse.revision.remove_tasks
+    assert coarse.revision.carry_forward == ("research_flights",)
+    assert "restaurant_notes:2" not in {node.task_id for node in coarse.revision.add_tasks}
+    assert set(suffix.revision.remove_tasks) == {
+        "research_restaurant", "transfer", "restaurant_notes", "planner", "book_flight",
+    }
+    assert suffix.revision.carry_forward == ("research_flights",)
+    assert "restaurant_notes:2" in {node.task_id for node in suffix.revision.add_tasks}
+    apply_revision(plan, coarse.revision)
+    apply_revision(plan, suffix.revision)
+
+    online = asyncio.run(run_case("online"))
+    coarse_run = asyncio.run(run_case("coarse"))
+    suffix_run = asyncio.run(run_case("suffix"))
+    assert online.correct and coarse_run.correct and suffix_run.correct
+    assert evidence_rows(online, "claim:restaurant_address")[0]["status"] == "verified"
+    assert evidence_rows(coarse_run, "claim:restaurant_address")[0]["status"] == "invalid"
+    assert evidence_rows(suffix_run, "claim:restaurant_address")[0]["status"] == "verified"
+    assert len(attempt_rows(online, "restaurant_notes")) == 1
+    assert attempt_rows(online, "restaurant_notes")[0]["status"] == "completed"
+    assert "restaurant_notes" not in coarse_run.independent_preserved
+    notes = [row for row in suffix_run.attempts if row["agent_id"] == "notes"]
+    assert [row["task_id"] for row in notes] == ["restaurant_notes", "restaurant_notes:2"]
+    assert notes[0]["status"] == "obsolete" and notes[1]["status"] == "completed"
+    assert "research_flights" in online.independent_preserved
+    assert "research_flights" in coarse_run.independent_preserved
+    assert "research_flights" in suffix_run.independent_preserved
+    assert suffix_run.repeated_work > coarse_run.repeated_work > online.repeated_work
+
+
 def test_flight_fault_keeps_the_restaurant_side():
     report = asyncio.run(run_case("online", fault="flight_id"))
     assert report.correct and report.transport_calls == 1
