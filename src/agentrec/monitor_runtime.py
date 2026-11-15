@@ -141,6 +141,8 @@ class MonitorRuntime:
         self.required_action = required_action or {"flight_id": "FL1"}
         self.faults_enabled = True
         self.fault_name = "restaurant_date"
+        self.defer_input_verification = False
+        self.graph_fault = ""
         self.verification_gate: asyncio.Event | None = asyncio.Event()
         self.verification_blocked = asyncio.Event()
         self.gate = BarrierGate()
@@ -525,11 +527,35 @@ class MonitorRuntime:
         if wait_for_gate and self.verification_gate is not None:
             self.verification_blocked.set()
             await self.verification_gate.wait()
+        if self.defer_input_verification and not await self._inputs_settled(attempt_id):
+            return
         if self.policy == "coarse":
             await self._verify_coarse(attempt_id, refs)
             return
         for ref in refs:
             await self._submit_verdict(attempt_id, ref)
+
+    async def _inputs_settled(self, attempt_id: str) -> bool:
+        """Wait until each consumed claim is verified, or stop when one is invalid."""
+        async with self.lock:
+            attempt = self.graph.attempts.get(attempt_id)
+            if attempt is None:
+                return False
+            consumed = tuple(attempt.consumed_evidence_versions)
+        for ref in consumed:
+            cond = self._cond(f"evidence:{ref.claim_id}")
+            async with cond:
+                while True:
+                    async with self.lock:
+                        if attempt_id in self.graph.obsolete_attempts:
+                            return False
+                        evidence = self.graph.get(ref)
+                        if evidence is None or evidence.verification_status == EvidenceStatus.INVALID:
+                            return False
+                        if evidence.verification_status == EvidenceStatus.VERIFIED:
+                            break
+                    await asyncio.wait_for(cond.wait(), 5)
+        return True
 
     async def _verify_coarse(self, attempt_id: str, refs: tuple[EvidenceRef, ...]) -> None:
         """Judge every output, then discard the producer's provisional siblings together."""
