@@ -196,6 +196,8 @@ async def run_mock(
                 plan_version=attempt.plan_version,
             ))
         action_for = actions.get(node.task_id)
+        if action_for is None and ":" in node.task_id:
+            action_for = actions.get(node.task_id.rsplit(":", 1)[0])
         if action_for is not None and not monitor.is_cancelled(attempt.attempt_id):
             await monitor.submit(ActionProposed(
                 attempt_id=attempt.attempt_id,
