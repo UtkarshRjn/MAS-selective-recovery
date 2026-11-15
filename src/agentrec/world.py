@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from typing import Any
+from urllib.parse import urlparse
 
 Effect = dict[str, Any]
 
@@ -42,6 +43,7 @@ class World:
         self.bookings: dict[str, dict[str, Any]] = {}
         self.outbox: list[dict[str, str]] = []
         self.files: dict[str, str] = {}
+        self.fetches: list[dict[str, Any]] = []
         self._next_booking = 1
         self.action_history: list[dict[str, Any]] = []
 
@@ -100,6 +102,18 @@ class World:
         effect = {"tool": "send_email", "args": {"to": to}, "class": "irreversible", "undo": None}
         return {"status": "sent"}, effect
 
+    def fetch_resource(self, uri: str) -> tuple[dict[str, Any], Effect]:
+        """Dereference a URI. An untrusted fetch has already left the sandbox."""
+        trusted = trusted_resource(uri)
+        self.fetches.append({"uri": str(uri), "trusted": trusted})
+        effect = {
+            "tool": "fetch_resource",
+            "args": {"uri": str(uri)},
+            "class": "reversible" if trusted else "irreversible",
+            "undo": {"op": "drop_fetch", "uri": str(uri)} if trusted else None,
+        }
+        return {"status": "fetched", "uri": str(uri), "trusted": trusted}, effect
+
     def cancel_booking(self, booking_id: str) -> tuple[dict[str, Any], Effect | None]:
         booking = self.bookings.get(booking_id)
         if booking is None or booking["status"] != "active":
@@ -118,5 +132,17 @@ class World:
                 self.files.pop(undo["path"], None)
             else:
                 self.files[undo["path"]] = undo["before"]
+        elif undo["op"] == "drop_fetch":
+            self.fetches = [item for item in self.fetches if item["uri"] != undo["uri"]]
         else:
             raise ValueError(f"unknown undo op {undo['op']!r}")
+
+
+def trusted_resource(uri: str) -> bool:
+    """Same allow-list the A2ASecBench adapter uses for a peer resource."""
+    parsed = urlparse(uri)
+    return (
+        parsed.scheme in {"http", "https"}
+        and parsed.hostname in {"127.0.0.1", "localhost"}
+        and parsed.path.startswith("/approved/")
+    )
