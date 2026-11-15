@@ -4,12 +4,15 @@ Each template is a fixed call order plus the artifacts each step reads.
 A `corrupt` fault replaces one step's output. The same recovery methods used
 on the booking workflow then rerun the tainted visits.
 
-  chain     a reads nothing, then each step reads the previous one
-  diamond   b and c both read a; d reads b and c
-  join      p, q, and r read nothing; join reads all three
-  backedge  a, b, c, then a:2 reads c. side runs after that return and reads only a
+  chain          a reads nothing, then each step reads the previous one
+  diamond        b and c both read a; d reads b and c
+  join           p, q, and r read nothing; join reads all three
+  backedge       a, b, c, then a:2 reads c. side runs after that return and reads only a
+  collaborative  three agents, three turns. A later turn reads the other two agents' previous turn
+  hierarchical   a assigns the task; b and c exchange once; judge reads that exchange
 
 `a:2` is a second visit in the log. The edge into it is recorded once.
+Collaborative and hierarchical visits are bounded: the run does not keep exchanging.
 """
 
 from __future__ import annotations
@@ -47,6 +50,29 @@ TEMPLATES: dict[str, list[tuple[str, tuple[str, ...]]]] = {
         ("c", ("b",)),
         ("a:2", ("c",)),
         ("side", ("a",)),
+    ],
+    # Flat mesh, A ↔ B ↔ C. Turn 1 has no peers yet. Each later turn reads the
+    # other two agents' previous turn, not its own and not the same turn.
+    "collaborative": [
+        ("a", ()),
+        ("b", ()),
+        ("c", ()),
+        ("a:2", ("b", "c")),
+        ("b:2", ("a", "c")),
+        ("c:2", ("a", "b")),
+        ("a:3", ("b:2", "c:2")),
+        ("b:3", ("a:2", "c:2")),
+        ("c:3", ("a:2", "b:2")),
+    ],
+    # A → (B ↔ C), then the judge. Openings read only the assignment. The
+    # exchange reads the other peer's opening. The judge reads that exchange.
+    "hierarchical": [
+        ("a", ()),
+        ("b", ("a",)),
+        ("c", ("a",)),
+        ("b:2", ("a", "c")),
+        ("c:2", ("a", "b")),
+        ("judge", ("b:2", "c:2")),
     ],
 }
 
