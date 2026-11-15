@@ -36,6 +36,40 @@ CLAIM_SUPPORT = {
 }
 
 
+@dataclass(frozen=True)
+class WorkflowStage:
+    """One schedulable stage. A later visit is a new task id, so the graph stays a DAG."""
+
+    task_id: str
+    agent_id: str
+    depends_on: tuple[str, ...]
+    reads: tuple[str, ...]
+    writes: tuple[str, ...]
+
+
+def travel_stages() -> tuple[WorkflowStage, ...]:
+    """Research tasks share no edge. The planner waits for both of them.
+
+    Executor stages are added from the plan once it exists.
+    """
+    return (
+        WorkflowStage("research_flights", "researcher", (), ("task",), ("research_flights", "claim:flight_id")),
+        WorkflowStage("research_hotels", "researcher", (), ("task",), ("research_hotels", "claim:hotel_id", "claim:refundable")),
+        WorkflowStage(
+            "plan",
+            "planner",
+            ("research_flights", "research_hotels"),
+            ("task", "research_flights", "research_hotels", "claim:flight_id", "claim:hotel_id", "claim:refundable"),
+            ("plan",),
+        ),
+    )
+
+
+def executor_stage(index: int, action: str) -> WorkflowStage:
+    reads = ("plan", *CLAIM_SUPPORT.get(action, ()))
+    return WorkflowStage(f"exec:{index}", "executor", ("plan",), reads, (f"exec:{index}",))
+
+
 @dataclass
 class RunContext:
     task: dict[str, Any]
@@ -217,6 +251,9 @@ class TravelWorkflow:
             if ctx.injector is not None:
                 plan, fired = ctx.injector.on_plan(plan)
             art = ctx.prov.add_artifact("plan", plan, producer=step, **_fault_kwargs(ctx, fired))
+            # The claims already support this step. Link the step to the plan it
+            # produced so invalidation can cross claim → attempt → output.
+            ctx.prov.add_support(step, art)
             ok, feedback = self._check(ctx, "plan", findings, plan)
             ctx.prov.update(step, usage=ctx.llm.usage.since(before), verified=ok if ctx.verify else None)
             if ok:
@@ -291,7 +328,8 @@ class TravelWorkflow:
                 result = obs
                 break
             messages += _turn(out, obs)
-        ctx.prov.add_artifact(key, {"result": result}, producer=step)
+        result_id = ctx.prov.add_artifact(key, {"result": result}, producer=step)
+        ctx.prov.add_support(step, result_id)
         ctx.prov.update(step, usage=ctx.llm.usage.since(before), blocked_actions=blocked)
 
     # Tools.
