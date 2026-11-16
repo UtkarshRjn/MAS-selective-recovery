@@ -28,7 +28,22 @@ def verify_claim(evidence: Evidence, truth: dict[str, Any]) -> Verdict:
     if claim == "claim:restaurant_date":
         ok = isinstance(value, dict) and value.get("date") == truth["date"]
         return Verdict(ok, "" if ok else "wrong date", () if ok else (evidence.ref,), False)
+    if claim == "claim:refundable":
+        flag = value.get("refundable") if isinstance(value, dict) else value
+        ok = flag == truth.get("refundable")
+        return Verdict(ok, "" if ok else "refundable flag does not match the hotel", () if ok else (evidence.ref,), False)
     if claim == "claim:plan":
+        required = truth.get("plan_actions")
+        if required is not None:
+            steps = value.get("steps") if isinstance(value, dict) else None
+            got = [step.get("action") for step in (steps or []) if isinstance(step, dict)]
+            ok = got == list(required)
+            return Verdict(
+                ok,
+                "" if ok else "plan dropped a required step",
+                () if ok else (evidence.ref,),
+                not ok,
+            )
         text = "" if not isinstance(value, dict) else str(value.get("itinerary", ""))
         flight_ok = isinstance(value, dict) and value.get("flight_id") == truth["flight_id"]
         ok = flight_ok and truth["bad_date"] not in text
