@@ -278,15 +278,18 @@ def cmd_online_monitor(args: argparse.Namespace) -> None:
 
 def cmd_online_qwen(args: argparse.Namespace) -> None:
     from .llm import MockLLM, ServerLLM
-    from .qwen_runs import evaluate_qwen, format_qwen
+    from .qwen_runs import FAULTS, GRAPH_SLICE, evaluate_qwen, format_qwen
 
     seeds = tuple(int(part) for part in args.seeds.split(",") if part)
+    wanted = {part for part in args.shapes.split(",") if part}
+    shapes = tuple(pair for pair in GRAPH_SLICE if pair[0] in wanted)
+    faults = tuple(part for part in args.faults.split(",") if part in FAULTS)
     def make_llm(seed: int):
         if args.llm == "mock":
             return MockLLM()
         return ServerLLM(base_url=args.base_url, temperature=args.temperature, seed=seed)
 
-    rows = asyncio.run(evaluate_qwen(make_llm, seeds))
+    rows = asyncio.run(evaluate_qwen(make_llm, seeds, shapes, faults))
     print(format_qwen(rows))
     out = Path(args.out) / f"online-qwen-{args.llm}"
     out.mkdir(parents=True, exist_ok=True)
@@ -306,6 +309,7 @@ def cmd_online_qwen(args: argparse.Namespace) -> None:
                 "preserved": list(row.preserved),
                 "llm_calls": row.llm_calls,
                 "rejected": row.rejected,
+                "detail": row.detail,
                 "stale_accepted": 0,
             }) + "\n")
     print(f"done -> {path}")
@@ -350,6 +354,11 @@ def main() -> None:
 
     oq = sub.add_parser("online-qwen", help="checked repairs on the graph shapes and travel faults")
     oq.add_argument("--seeds", default="0,1,2")
+    oq.add_argument("--shapes", default="chain,diamond,join,backedge,collaborative,hierarchical")
+    oq.add_argument(
+        "--faults",
+        default="false_refundable,wrong_hotel_id,bad_argument,dropped_constraint",
+    )
     oq.set_defaults(fn=cmd_online_qwen)
 
     w = sub.add_parser("who-when", help="Who&When failure-attribution logs")

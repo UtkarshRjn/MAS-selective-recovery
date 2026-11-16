@@ -36,6 +36,7 @@ class FaultReport:
     unresolved: str | None
     transport: int
     rejected: int
+    proposals: dict[str, Any]
     evidence: tuple[dict[str, Any], ...]
 
 
@@ -150,21 +151,58 @@ def _book_args(snapshot: dict) -> dict[str, Any]:
     return {"flight_id": snapshot["claim:book_args"]["flight_id"]}
 
 
+_REPAIR_SYSTEM = (
+    'Reply with one JSON object {"value": <claim>} and no other text. '
+    "Match SHAPE_JSON. Fill value from the other JSON fields. Do not write a sentence."
+)
+
+
 def _propose(llm, fault: str, claim_id: str):
+    """Ask for the claim value. The shape example is a different id, so copying it fails the check."""
     if fault == "false_refundable":
-        body = f"KIND_JSON: {dumps('refundable')}\nCLAIM_JSON: {dumps(claim_id)}"
+        lines = [
+            f"KIND_JSON: {dumps('refundable')}",
+            f"CLAIM_JSON: {dumps(claim_id)}",
+            f"HOTEL_JSON: {dumps({'id': 'H1', 'refundable': False})}",
+            'SHAPE_JSON: {"value": {"refundable": true}}',
+            "Set value.refundable to the boolean in HOTEL_JSON.",
+        ]
     elif fault == "wrong_hotel_id":
         hotels = [{"id": "H1", "nightly_price": 180}, {"id": "H9", "nightly_price": 240}]
-        body = f"KIND_JSON: {dumps('hotel_id')}\nHOTELS_JSON: {dumps(hotels)}"
+        lines = [
+            f"KIND_JSON: {dumps('hotel_id')}",
+            f"HOTELS_JSON: {dumps(hotels)}",
+            'SHAPE_JSON: {"value": {"hotel_id": "H0"}}',
+            "Set value.hotel_id to the id of the cheapest hotel.",
+        ]
     elif fault == "bad_argument":
-        body = f"KIND_JSON: {dumps('book_args')}\nFLIGHT_JSON: {dumps('FL1')}"
+        lines = [
+            f"KIND_JSON: {dumps('book_args')}",
+            f"FLIGHT_JSON: {dumps('FL1')}",
+            'SHAPE_JSON: {"value": {"flight_id": "FL0"}}',
+            "Set value.flight_id to the string in FLIGHT_JSON.",
+        ]
     else:
-        body = f"KIND_JSON: {dumps('plan')}\nSTEPS_JSON: {dumps(list(FULL_STEPS))}"
+        lines = [
+            f"KIND_JSON: {dumps('plan')}",
+            f"STEPS_JSON: {dumps(list(FULL_STEPS))}",
+            'SHAPE_JSON: {"value": {"steps": [{"action": "book_flight"}]}}',
+            'Set value.steps to every name in STEPS_JSON, in order, each as {"action": <name>}.',
+        ]
     messages = [
-        {"role": "system", "content": 'Reply with one JSON object {"value": ...} holding the repaired claim.'},
-        {"role": "user", "content": body},
+        {"role": "system", "content": _REPAIR_SYSTEM},
+        {"role": "user", "content": "\n".join(lines)},
     ]
-    return llm.chat("corrector", messages)["value"]
+    return _as_claim(fault, llm.chat("corrector", messages)["value"])
+
+
+def _as_claim(fault: str, value):
+    """Keep a bare refundable boolean in the claim object the rest of the run reads."""
+    if fault != "false_refundable" or isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        return {"refundable": value.strip().lower() == "true"}
+    return {"refundable": bool(value)}
 
 
 def _ok(monitor: MonitorRuntime, fault: str) -> bool:
@@ -300,5 +338,6 @@ def _report(fault: str, policy: str, monitor: MonitorRuntime, clock: OverlapCloc
         unresolved=monitor.unresolved,
         transport=len(monitor.transport_calls),
         rejected=monitor.proposals_rejected,
+        proposals=dict(monitor.proposal_values),
         evidence=evidence,
     )

@@ -8,6 +8,7 @@ A rejected proposal is not booked. The numbers below are means over seeds.
 from __future__ import annotations
 
 import asyncio
+import json
 from collections import defaultdict
 from dataclasses import dataclass
 
@@ -38,12 +39,18 @@ class QwenRow:
     preserved: tuple[str, ...]
     llm_calls: int
     rejected: int
+    detail: str = ""
 
 
-async def evaluate_qwen(make_llm, seeds: tuple[int, ...] = (0, 1, 2)) -> list[QwenRow]:
+async def evaluate_qwen(
+    make_llm,
+    seeds: tuple[int, ...] = (0, 1, 2),
+    shapes: tuple[tuple[str, str], ...] = GRAPH_SLICE,
+    faults: tuple[str, ...] = FAULTS,
+) -> list[QwenRow]:
     rows: list[QwenRow] = []
     for seed in seeds:
-        for template, fault in GRAPH_SLICE:
+        for template, fault in shapes:
             for policy in GRAPH_POLICIES:
                 llm = make_llm(seed)
                 before = llm.usage.calls
@@ -51,16 +58,20 @@ async def evaluate_qwen(make_llm, seeds: tuple[int, ...] = (0, 1, 2)) -> list[Qw
                 rows.append(QwenRow(
                     seed, template, fault, policy, report.success, report.calls, report.repeated,
                     report.blocked, report.stale, report.preserved, llm.usage.calls - before, 0,
+                    " | ".join(report.mismatches),
                 ))
-        for fault in FAULTS:
+        for fault in faults:
             for policy in GRAPH_POLICIES:
                 llm = make_llm(seed)
                 before = llm.usage.calls
                 report = await run_fault_case(fault, policy, llm=llm)
+                proposal = ""
+                if report.rejected:
+                    proposal = json.dumps(report.proposals, default=str)
                 rows.append(QwenRow(
                     seed, "travel", fault, policy, report.success, report.calls, report.repeated,
                     report.blocked, report.stale, report.preserved, llm.usage.calls - before,
-                    report.rejected,
+                    report.rejected, proposal,
                 ))
     return rows
 

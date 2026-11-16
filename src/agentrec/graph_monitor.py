@@ -51,6 +51,7 @@ class GraphReport:
     rerun: tuple[str, ...]
     blocked: int = 0
     stale: int = 0
+    mismatches: tuple[str, ...] = ()
 
 
 def _produce(monitor: MonitorRuntime, snapshot: dict, attempt: AgentAttempt):
@@ -208,6 +209,18 @@ async def run_graph_case(
     return _report(template, fault, policy, monitor, clock, clean)
 
 
+def _mismatches(monitor: MonitorRuntime, clean: dict[str, str]) -> tuple[str, ...]:
+    found = []
+    for key, expected in clean.items():
+        versions = list(monitor.graph.versions(f"claim:{key}"))
+        if not versions:
+            continue
+        latest = max(versions, key=lambda item: item.version)
+        if latest.value != expected:
+            found.append(f"{key}={latest.value}")
+    return tuple(found)
+
+
 def _report(
     template: str,
     fault: str,
@@ -243,6 +256,7 @@ def _report(
         rerun=tuple(sorted(rerun)),
         blocked=monitor.verification_waits + monitor.dependency_waits + monitor.action_blocks,
         stale=monitor.stale_rejected,
+        mismatches=_mismatches(monitor, clean),
     )
 
 
