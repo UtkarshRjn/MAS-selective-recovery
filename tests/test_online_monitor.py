@@ -21,7 +21,7 @@ from agentrec.contract import (
 )
 from agentrec.faults import FAULTS_BY_NAME
 from agentrec.forward_recovery import decide_recovery, select_suspects
-from agentrec.llm import MockLLM
+from agentrec.llm import MockLLM, chat_async
 from agentrec.monitor_runtime import MonitorRuntime, Rejected
 from agentrec.online import attempt_rows, evidence_rows, initial_plan, run_case, run_comparison
 from agentrec.plan_manager import PlanError, apply_revision
@@ -34,7 +34,7 @@ from agentrec.protocol import (
 )
 from agentrec.provenance import Provenance
 from agentrec.runner import run_workflow
-from agentrec.scheduler import Scheduler
+from agentrec.scheduler import Holds, OverlapClock, Scheduler, run_mock
 from agentrec.tasks import make_task
 from agentrec.workflow import executor_stage, travel_stages
 
@@ -97,7 +97,7 @@ def test_travel_research_stages_have_no_edge_between_them():
     assert executor_stage(0, "book_flight").reads == ("plan", "claim:flight_id")
 
 
-def test_online_case_preserves_independent_work_and_rejects_the_late_plan():
+def test_online_case_preserves_independent_work_and_hard_cancels_the_old_plan():
     report = asyncio.run(run_case("online"))
     assert report.correct and report.overlapped
     assert attempt_rows(report, "research_flights")[0]["status"] == "completed"
@@ -106,7 +106,7 @@ def test_online_case_preserves_independent_work_and_rejects_the_late_plan():
     planners = [row for row in report.attempts if row["agent_id"] == "planner"]
     assert [row["task_id"] for row in planners] == ["planner", "planner:2"]
     assert planners[0]["status"] == "obsolete" and planners[1]["status"] == "completed"
-    assert report.stale_rejected >= 1
+    assert report.stale_rejected == 0
     plans = evidence_rows(report, "claim:plan")
     assert len(plans) == 1 and plans[0]["status"] == "verified"
     assert plans[0]["producer"].startswith("planner:2")
@@ -120,6 +120,103 @@ def test_online_case_preserves_independent_work_and_rejects_the_late_plan():
     assert report.required_goals == ("flight_booked", "trip_planned")
     assert attempt_rows(report, "research_restaurant")[0]["status"] == "obsolete"
     assert report.transport_calls == 1
+
+
+def test_hard_cancellation_reaches_an_active_async_model_call():
+    async def scenario() -> tuple[bool, str, int]:
+        node = TaskNode("slow", "slow", ("done",), (), ("claim:out",))
+        monitor = MonitorRuntime(Plan(1, (node,), (), ("done",)))
+        started = asyncio.Event()
+        cancelled = asyncio.Event()
+        never = asyncio.Event()
+
+        async def producer(_monitor, _snapshot, _attempt):
+            started.set()
+            try:
+                await never.wait()
+            except asyncio.CancelledError:
+                cancelled.set()
+                raise
+            return {"claim:out": "late"}
+
+        async def runner(runtime, attempt, task):
+            await run_mock(
+                runtime,
+                attempt,
+                task,
+                producers={"slow": producer},
+                actions={},
+                clock=OverlapClock(),
+                holds=Holds(set()),
+            )
+
+        scheduler = Scheduler(monitor, runner, concurrency=1)
+        await monitor.start()
+        schedule = asyncio.create_task(scheduler.run())
+        await asyncio.wait_for(started.wait(), 2)
+        async with monitor.lock:
+            attempt_id = monitor.latest_attempt["slow"]
+            monitor._signal_locked([attempt_id])
+            monitor.settled = True
+        await monitor._notify(["progress"])
+        await asyncio.wait_for(cancelled.wait(), 2)
+        await asyncio.wait_for(schedule, 2)
+        await monitor.stop()
+        status = monitor.graph.attempts[attempt_id].status.value
+        return cancelled.is_set(), status, len(monitor.graph.versions("claim:out"))
+
+    assert asyncio.run(scenario()) == (True, "cancelled", 0)
+
+
+def test_async_client_request_receives_task_cancellation():
+    async def scenario() -> bool:
+        started = asyncio.Event()
+        cancelled = asyncio.Event()
+
+        class Client:
+            def chat(self, _agent, _messages):
+                raise AssertionError("sync fallback must not run")
+
+            async def achat(self, _agent, _messages):
+                started.set()
+                try:
+                    await asyncio.Event().wait()
+                except asyncio.CancelledError:
+                    cancelled.set()
+                    raise
+
+        request = asyncio.create_task(chat_async(Client(), "graph", []))  # type: ignore[arg-type]
+        await asyncio.wait_for(started.wait(), 2)
+        request.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await request
+        return cancelled.is_set()
+
+    assert asyncio.run(scenario())
+
+
+def test_uncancellable_late_result_is_still_rejected():
+    async def scenario() -> tuple[dict, int]:
+        node = TaskNode("slow", "slow", ("done",), (), ("claim:out",))
+        monitor = MonitorRuntime(Plan(1, (node,), (), ("done",)))
+        await monitor.start()
+        attempt = await monitor.open_attempt(node)
+        async with monitor.lock:
+            monitor.graph.mark_obsolete(attempt.attempt_id)
+            monitor._cancel_event(attempt.attempt_id).set()
+        result = await monitor.submit(OutputProposed(
+            attempt.attempt_id,
+            "claim:out",
+            "late",
+            (),
+            attempt.plan_version,
+        ))
+        await monitor.stop()
+        return result, monitor.stale_rejected
+
+    result, rejected = asyncio.run(scenario())
+    assert result == {"accepted": False, "reason": "attempt_ineligible"}
+    assert rejected == 1
 
 
 def test_recovery_revision_follows_the_suspect_cone():
@@ -252,7 +349,7 @@ def test_baselines_repeat_more_and_block_more_than_the_online_monitor():
     reports = {item.policy: item for item in asyncio.run(run_comparison())}
     online, verify, restart, support = (reports[name] for name in ("online", "verify_before", "restart", "support"))
     assert all(item.correct for item in reports.values())
-    assert online.stale_rejected >= 1 and verify.stale_rejected == 0
+    assert online.stale_rejected == 0 and verify.stale_rejected == 0
     assert verify.verification_waits > online.verification_waits
     assert restart.repeated_work > online.repeated_work
     assert restart.model_calls > online.model_calls

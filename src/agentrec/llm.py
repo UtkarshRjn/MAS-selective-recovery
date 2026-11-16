@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import copy
 import re
@@ -37,6 +38,14 @@ class LLM(Protocol):
     usage: Usage
 
     def chat(self, agent: str, messages: Messages) -> dict[str, Any]: ...
+
+
+async def chat_async(llm: LLM, agent: str, messages: Messages) -> dict[str, Any]:
+    """Use a cancellable async request when the client provides one."""
+    async_chat = getattr(llm, "achat", None)
+    if callable(async_chat):
+        return await async_chat(agent, messages)
+    return await asyncio.to_thread(llm.chat, agent, messages)
 
 
 def parse_json_object(text: str) -> dict[str, Any]:
@@ -84,6 +93,7 @@ class ServerLLM:
         self.token_limit_field = token_limit_field
         headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
         self.client = httpx.Client(base_url=base_url, timeout=timeout_s, headers=headers)
+        self.async_client = httpx.AsyncClient(base_url=base_url, timeout=timeout_s, headers=headers)
         self.recorded_calls: list[dict[str, Any]] = []
         self.model = model
         self.temperature = temperature
@@ -94,7 +104,7 @@ class ServerLLM:
     def model_info(self) -> dict[str, Any]:
         return self.client.get("/models").json()
 
-    def complete(self, messages: Messages, *, json_mode: bool = False, max_tokens: int | None = None) -> str:
+    def _body(self, messages: Messages, *, json_mode: bool, max_tokens: int | None) -> dict[str, Any]:
         body: dict[str, Any] = {
             "messages": messages,
             self.token_limit_field: self.max_tokens if max_tokens is None else max_tokens,
@@ -107,16 +117,43 @@ class ServerLLM:
             body["response_format"] = {"type": "json_object"}
         if self.model:
             body["model"] = self.model
+        return body
+
+    def _consume(self, data: dict[str, Any], started: float) -> tuple[str, dict[str, float]]:
+        elapsed = time.perf_counter() - started
+        usage = data.get("usage", {})
+        prompt_tokens = usage.get("prompt_tokens", 0)
+        completion_tokens = usage.get("completion_tokens", 0)
+        self.usage.calls += 1
+        self.usage.prompt_tokens += prompt_tokens
+        self.usage.completion_tokens += completion_tokens
+        self.usage.latency_s += elapsed
+        return data["choices"][0]["message"]["content"], {
+            "calls": 1,
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "latency_s": round(elapsed, 4),
+        }
+
+    def complete(self, messages: Messages, *, json_mode: bool = False, max_tokens: int | None = None) -> str:
+        body = self._body(messages, json_mode=json_mode, max_tokens=max_tokens)
         t0 = time.perf_counter()
         resp = self.client.post("/chat/completions", json=body)
         resp.raise_for_status()
-        data = resp.json()
-        usage = data.get("usage", {})
-        self.usage.calls += 1
-        self.usage.prompt_tokens += usage.get("prompt_tokens", 0)
-        self.usage.completion_tokens += usage.get("completion_tokens", 0)
-        self.usage.latency_s += time.perf_counter() - t0
-        return data["choices"][0]["message"]["content"]
+        return self._consume(resp.json(), t0)[0]
+
+    async def acomplete(
+        self,
+        messages: Messages,
+        *,
+        json_mode: bool = False,
+        max_tokens: int | None = None,
+    ) -> str:
+        body = self._body(messages, json_mode=json_mode, max_tokens=max_tokens)
+        t0 = time.perf_counter()
+        resp = await self.async_client.post("/chat/completions", json=body)
+        resp.raise_for_status()
+        return self._consume(resp.json(), t0)[0]
 
     def chat(self, agent: str, messages: Messages) -> dict[str, Any]:
         before = self.usage.copy()
@@ -125,6 +162,22 @@ class ServerLLM:
         self.recorded_calls.append({"agent": agent, "messages": copy.deepcopy(messages),
                                     "raw_response": raw, "parsed_response": copy.deepcopy(result),
                                     "usage": self.usage.since(before)})
+        return result
+
+    async def achat(self, agent: str, messages: Messages) -> dict[str, Any]:
+        body = self._body(messages, json_mode=True, max_tokens=None)
+        t0 = time.perf_counter()
+        resp = await self.async_client.post("/chat/completions", json=body)
+        resp.raise_for_status()
+        raw, usage = self._consume(resp.json(), t0)
+        result = parse_json_object(raw)
+        self.recorded_calls.append({
+            "agent": agent,
+            "messages": copy.deepcopy(messages),
+            "raw_response": raw,
+            "parsed_response": copy.deepcopy(result),
+            "usage": usage,
+        })
         return result
 
 
@@ -197,6 +250,10 @@ class MockLLM:
         self.usage.prompt_tokens += sum(len(m["content"]) for m in messages) // 4
         self.usage.completion_tokens += len(json.dumps(out)) // 4
         return out
+
+    async def achat(self, agent: str, messages: Messages) -> dict[str, Any]:
+        await asyncio.sleep(0)
+        return self.chat(agent, messages)
 
     @staticmethod
     def _last_observation(messages: Messages) -> Any:

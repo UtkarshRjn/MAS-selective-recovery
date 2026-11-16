@@ -15,6 +15,7 @@ from dataclasses import dataclass
 
 from .contract import AgentAttempt, EvidenceStatus, Plan, TaskNode
 from .graphs import TEMPLATES, clean_values, step_value
+from .llm import chat_async
 from .monitor_runtime import MonitorRuntime
 from .scheduler import Holds, OverlapClock, Scheduler, run_mock
 
@@ -118,7 +119,7 @@ def _propose_graph(llm, template: str, claim_id: str, clean: dict[str, str]):
     return str(out.get("value", "")).strip().replace(", ", ",")
 
 
-def _produce_with_llm(llm, monitor: MonitorRuntime, snapshot: dict, attempt: AgentAttempt):
+async def _produce_with_llm(llm, monitor: MonitorRuntime, snapshot: dict, attempt: AgentAttempt):
     node = monitor.plan.node(attempt.task_id)
     if node is None:
         for plan in monitor.plans.values():
@@ -130,7 +131,7 @@ def _produce_with_llm(llm, monitor: MonitorRuntime, snapshot: dict, attempt: Age
     if monitor.faults_enabled and logical == monitor.graph_fault:
         return {node.writes[0]: "BAD"}
     inputs = [str(snapshot[claim_id]) for claim_id in node.reads]
-    out = llm.chat("graph", _repair_messages(logical, inputs))
+    out = await chat_async(llm, "graph", _repair_messages(logical, inputs))
     value = str(out.get("value", "")).strip().replace(", ", ",")
     return {node.writes[0]: value}
 
