@@ -126,6 +126,7 @@ class MonitorRuntime:
         self.queue: asyncio.Queue = asyncio.Queue()
         self.conditions: dict[str, asyncio.Condition] = {}
         self.cancel_events: dict[str, asyncio.Event] = {}
+        self.attempt_canceller: Callable[[str], None] | None = None
         self.resource_locks: dict[str, asyncio.Lock] = {}
         self.actions: dict[str, ProposedAction] = {}
         self.accounts: dict[str, AttemptAccount] = {}
@@ -756,7 +757,13 @@ class MonitorRuntime:
         for attempt_id in attempt_ids:
             if attempt_id in {self.verifier_id, self.recovery_id}:
                 continue
-            self._cancel_event(attempt_id).set()
+            self._cancel_attempt_locked(attempt_id)
+
+    def _cancel_attempt_locked(self, attempt_id: str) -> None:
+        """Signal cooperative cancellation and preempt the scheduler task."""
+        self._cancel_event(attempt_id).set()
+        if self.attempt_canceller is not None:
+            self.attempt_canceller(attempt_id)
 
     def _restart_locked(self) -> None:
         self.carried_forward = set()
@@ -767,10 +774,10 @@ class MonitorRuntime:
             if attempt.status == AttemptStatus.RUNNING:
                 attempt.status = AttemptStatus.CANCELLED
                 self.graph.obsolete_attempts.add(attempt.attempt_id)
-                self._cancel_event(attempt.attempt_id).set()
+                self._cancel_attempt_locked(attempt.attempt_id)
             elif attempt.status in {AttemptStatus.COMPLETED, AttemptStatus.INVALIDATED, AttemptStatus.PENDING}:
                 self.graph.mark_obsolete(attempt.attempt_id)
-                self._cancel_event(attempt.attempt_id).set()
+                self._cancel_attempt_locked(attempt.attempt_id)
         for evidence in list(self.graph.evidence.values()):
             if evidence.verification_status == EvidenceStatus.PROVISIONAL:
                 self.graph.set_status(evidence.ref, EvidenceStatus.INVALID)
@@ -869,7 +876,7 @@ class MonitorRuntime:
             )
             if drop:
                 self.graph.mark_obsolete(attempt.attempt_id)
-                self._cancel_event(attempt.attempt_id).set()
+                self._cancel_attempt_locked(attempt.attempt_id)
         self.graph.mark_plan(revised.version, revised.task_ids())
         self.graph.record("plan_revised", message.attempt_id, {
             "version": revised.version,

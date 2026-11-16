@@ -1,9 +1,9 @@
 """Run ready plan nodes together, up to a fixed concurrency limit.
 
 Each attempt receives a private copy of the evidence the monitor delivered.
-A model call that is already inside the runtime cannot be aborted; the attempt
-still submits that result, and the monitor drops it when the attempt is no
-longer eligible.
+Invalidation both sets the attempt's cooperative cancellation event and cancels
+its asyncio task. Async model clients receive that cancellation at their active
+request; late results remain subject to the monitor's eligibility check.
 """
 
 from __future__ import annotations
@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import copy
+import inspect
 from typing import Any, Awaitable, Callable
 
 from .contract import AgentAttempt, TaskNode
@@ -74,6 +75,13 @@ class Scheduler:
         self.launched: set[tuple[int, str]] = set()
         self.tasks: set[asyncio.Task] = set()
         self.inflight: dict[asyncio.Task, str] = {}
+        self.monitor.attempt_canceller = self.cancel_attempt
+
+    def cancel_attempt(self, attempt_id: str) -> None:
+        """Preempt the coroutine for one invalidated attempt."""
+        for task, running_attempt in tuple(self.inflight.items()):
+            if running_attempt == attempt_id and not task.done():
+                task.cancel()
 
     async def run(self) -> None:
         while True:
@@ -148,6 +156,11 @@ class Scheduler:
     async def _run(self, attempt: AgentAttempt, node: TaskNode) -> None:
         try:
             await self.runner(self.monitor, attempt, node)
+        except asyncio.CancelledError:
+            consumed = tuple(self.monitor.accounts[attempt.attempt_id].consumed)
+            self.monitor._spawn(
+                lambda: self.monitor.submit(CancellationAcknowledged(attempt.attempt_id, consumed))
+            )
         except Exception as exc:
             async with self.monitor.lock:
                 if self.monitor.unresolved is None:
@@ -184,9 +197,9 @@ async def run_mock(
             await holds.acquire(node.task_id, attempt.attempt_id)
         finally:
             clock.leave()
-        # The model call above may have finished after cancellation. Forward the
-        # result anyway; the monitor rejects it when the attempt is ineligible.
         produced = producers[node.agent_id](monitor, snapshot, attempt)
+        if inspect.isawaitable(produced):
+            produced = await produced
         for claim_id in node.writes:
             await monitor.submit(OutputProposed(
                 attempt_id=attempt.attempt_id,
