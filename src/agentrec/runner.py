@@ -330,6 +330,8 @@ def main() -> None:
     add_mechanism_cli(sub)
     from .codepilot.cli import add_cli as add_codepilot_cli
     add_codepilot_cli(sub)
+    from .workbench.cli import add_cli as add_workbench_cli
+    add_workbench_cli(sub)
 
     c = sub.add_parser("clean")
     c.add_argument("--tasks", type=int, default=10)
