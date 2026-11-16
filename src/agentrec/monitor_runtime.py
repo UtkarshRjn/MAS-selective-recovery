@@ -145,6 +145,7 @@ class MonitorRuntime:
         self.graph_fault = ""
         self.proposer = None
         self.proposals_rejected = 0
+        self.proposal_values: dict[str, Any] = {}
         self.verification_gate: asyncio.Event | None = asyncio.Event()
         self.verification_blocked = asyncio.Event()
         self.gate = BarrierGate()
@@ -699,6 +700,7 @@ class MonitorRuntime:
         if proposer is not None:
             for claim_id in view[0]:
                 proposals[claim_id] = await asyncio.to_thread(proposer, claim_id)
+        self.proposal_values = dict(proposals)
         decision = self._decision_locked(view, proposals)
         async with self.lock:
             if self.unresolved is not None:
