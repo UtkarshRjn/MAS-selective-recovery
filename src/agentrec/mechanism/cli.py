@@ -89,7 +89,7 @@ def add_cli(sub) -> None:
     msub = m.add_subparsers(dest="mechanism_cmd", required=True)
 
     run = msub.add_parser("run", help="run a frozen suite (resumes into the same directory)")
-    run.add_argument("--suite", choices=("mechanism", "extended", "ablation", "boundary"), default="mechanism")
+    run.add_argument("--suite", choices=("mechanism", "extended", "ablation", "boundary", "pararecover"), default="mechanism")
     run.add_argument("--seeds", type=int, default=10)
     run.add_argument("--template", choices=("dev", "test"), default="dev")
     run.add_argument("--verifier", choices=("source_check", "oracle"), default="source_check")

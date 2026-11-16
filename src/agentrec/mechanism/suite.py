@@ -73,7 +73,9 @@ def preset(name: str, *, seeds: int = 10, template: str = "dev", verifier: str =
         return SuiteConfig(
             name, tuple(cases.BOUNDARY_FAMILIES), (*core, *BOUNDARY_ABLATIONS), seed_range, template, "all", verifier,
         )
-    raise KeyError(f"unknown suite {name}; known: mechanism, extended, ablation, boundary")
+    if name == "pararecover":
+        return SuiteConfig(name, tuple(cases.PARARECOVER_FAMILIES), core, seed_range, template, "all", verifier)
+    raise KeyError(f"unknown suite {name}; known: mechanism, extended, ablation, boundary, pararecover")
 
 
 def _git(*args: str) -> str:

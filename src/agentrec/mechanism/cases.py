@@ -1108,7 +1108,22 @@ MECHANISM_FAMILIES: dict[str, Callable[[str], CaseSpec]] = {
 BOUNDARY_FAMILIES: dict[str, Callable[[str], CaseSpec]] = {
     "G": case_g, "H": case_h, "lost_ack": case_lost_ack, "revocation": case_revocation, "contention": case_contention,
 }
-ALL_FAMILIES = {**MECHANISM_FAMILIES, **BOUNDARY_FAMILIES}
+
+
+def _pararecover(family: str) -> Callable[[str], CaseSpec]:
+    def build_motif(template: str) -> CaseSpec:
+        from ..pararecover.cases import build as build_pararecover
+
+        return build_pararecover(family, template)
+
+    return build_motif
+
+
+PARARECOVER_FAMILIES: dict[str, Callable[[str], CaseSpec]] = {
+    f"PR_{relation}_{index}": _pararecover(f"PR_{relation}_{index}")
+    for relation in ("nested", "overlap", "disjoint") for index in (1, 2)
+}
+ALL_FAMILIES = {**MECHANISM_FAMILIES, **BOUNDARY_FAMILIES, **PARARECOVER_FAMILIES}
 TEMPLATES = ("dev", "test")
 
 
@@ -1125,6 +1140,7 @@ def core_schedules(case: CaseSpec) -> tuple[Schedule, ...]:
 
 
 __all__ = [
-    "ALL_FAMILIES", "BOUNDARY_FAMILIES", "MECHANISM_FAMILIES", "TEMPLATES", "build", "core_schedules",
+    "ALL_FAMILIES", "BOUNDARY_FAMILIES", "MECHANISM_FAMILIES", "PARARECOVER_FAMILIES", "TEMPLATES", "build",
+    "core_schedules",
     "EvidenceStatus",
 ]
