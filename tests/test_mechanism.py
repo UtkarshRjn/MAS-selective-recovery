@@ -203,3 +203,24 @@ def test_presets_match_the_plan() -> None:
     assert len(mechanism.families) == 6 and case_count == 24
     assert case_count * len(mechanism.seeds) * len(mechanism.policies) == 1680
     assert set(preset("boundary").families) == set(cases.BOUNDARY_FAMILIES)
+
+
+
+@pytest.mark.parametrize("policy", ["restart", "suffix", "online"])
+def test_activation_trigger_sees_every_kind_of_repair_activation(policy: str) -> None:
+    row = cell("PR_disjoint_2", "during_activation", policy, horizon=400, correction_budget=3)
+    assert row["outcome"] == "safe_completion" and not row["stalled"]
+    assert all(not item["fallback"] for item in row["realized_ordering"].values())
+
+
+def test_a_pending_scheduled_release_is_not_a_stall() -> None:
+    from agentrec.mechanism.spec import Trigger
+
+    case = cases.build("PR_disjoint_2", "dev")
+    base = case.schedule("simultaneous")
+    slow = type(base)(base.name, base.faults, {
+        **base.triggers, "first": Trigger("after_event", delay=0.0, event="never_happens", claim="x", max_wait=45.0),
+    })
+    row = run_cell(case, slow, 0, policies.get("online"), horizon=400, correction_budget=3).row
+    assert not row["stalled"] and row["outcome"] == "safe_completion"
+    assert row["realized_ordering"]["first"]["fallback"]
