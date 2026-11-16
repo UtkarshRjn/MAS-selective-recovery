@@ -19,6 +19,8 @@ class Verdict:
     suspect_claims: tuple[EvidenceRef, ...]
     ambiguous: bool
     approved_arguments: dict[str, Any] | None = None
+    pending: bool = False
+    wait_for: tuple[str, ...] = ()
 
 
 def verify_claim(evidence: Evidence, truth: dict[str, Any]) -> Verdict:

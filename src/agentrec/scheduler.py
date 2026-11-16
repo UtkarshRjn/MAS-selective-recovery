@@ -15,6 +15,7 @@ import inspect
 from typing import Any, Awaitable, Callable
 
 from .contract import AgentAttempt, TaskNode
+from .forward_recovery import superstep_levels
 from .monitor_runtime import CancelledAttempt, MonitorRuntime, Rejected
 from .protocol import ActionProposed, AttemptCompleted, CancellationAcknowledged, OutputProposed
 
@@ -92,10 +93,13 @@ class Scheduler:
             async with self.monitor.lock:
                 quiet = self.monitor.settled and not self.tasks
             if quiet:
+                self.monitor.quiescent.set()
                 return
             if not self.tasks:
+                self.monitor.quiescent.set()
                 await self.monitor.progress_event.wait()
                 continue
+            self.monitor.quiescent.clear()
             waiter = asyncio.create_task(self.monitor.progress_event.wait())
             done, _pending = await asyncio.wait(self.tasks | {waiter}, return_when=asyncio.FIRST_COMPLETED)
             if waiter not in done:
@@ -109,7 +113,10 @@ class Scheduler:
             version = self.monitor.plan.version
             available = self.concurrency - self._uncancelled_locked()
             opened: list[tuple[AgentAttempt, TaskNode]] = []
+            blocked_levels = self._barrier_locked()
             for node in self.monitor.plan.task_nodes:
+                if node.task_id in blocked_levels:
+                    continue
                 key = (version, node.task_id)
                 if key in self.launched:
                     continue
@@ -131,11 +138,30 @@ class Scheduler:
             self.inflight[task] = attempt.attempt_id
 
     def _uncancelled_locked(self) -> int:
+        """Busy slots. Without cancellation an invalidated attempt keeps running and keeps its slot."""
+        stopped = self.monitor.is_cancelled if self.monitor.config.cancellation else self.monitor.cancel_requested
         count = 0
         for task, attempt_id in self.inflight.items():
-            if not task.done() and not self.monitor.is_cancelled(attempt_id):
+            if not task.done() and not stopped(attempt_id):
                 count += 1
         return count
+
+    def _barrier_locked(self) -> set[str]:
+        """Tasks held by a superstep barrier: a level starts only after every earlier level verified."""
+        if self.monitor.config.barrier != "superstep":
+            return set()
+        plan = self.monitor.plan
+        by_level: dict[int, list[str]] = {}
+        for task_id, level in superstep_levels(plan.task_nodes, plan.dependency_edges).items():
+            by_level.setdefault(level, []).append(task_id)
+        held: set[str] = set()
+        closed = False
+        for level in sorted(by_level):
+            if closed:
+                held.update(by_level[level])
+            elif not all(self.monitor.task_output_verified(task_id) for task_id in by_level[level]):
+                closed = True
+        return held
 
     def _live_attempt_locked(self, task_id: str) -> bool:
         for attempt in self.monitor.graph.attempts.values():

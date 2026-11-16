@@ -1,18 +1,32 @@
 from __future__ import annotations
 
+import asyncio
+import time
 from collections import defaultdict, deque
 from dataclasses import asdict, dataclass, field
-from typing import Any, Iterable
+from typing import Any, Callable, Iterable
 
 from .contract import (
+    DEAD_STATUSES,
     AgentAttempt,
+    ArtifactRef,
     AttemptStatus,
     Evidence,
     EvidenceRef,
     EvidenceStatus,
     MonitorEvent,
+    revoke_evidence,
     transition_evidence,
 )
+
+
+def loop_clock() -> tuple[float, float]:
+    """Event-loop time (virtual under a virtual clock) and wall-clock time."""
+    try:
+        loop_time = asyncio.get_running_loop().time()
+    except RuntimeError:
+        loop_time = 0.0
+    return loop_time, time.perf_counter()
 
 
 @dataclass
@@ -187,6 +201,9 @@ class ExecutionGraph:
         self.plan_tasks: dict[int, set[str]] = {}
         self.obsolete_attempts: set[str] = set()
         self.events: list[MonitorEvent] = []
+        self.applicability_edges: list[tuple[EvidenceRef, ArtifactRef]] = []
+        self.clock: Callable[[], tuple[float, float]] = loop_clock
+        self.origin: tuple[float, float] | None = None
         self._event_seq = 0
 
     def add_attempt(self, attempt: AgentAttempt) -> None:
@@ -204,15 +221,22 @@ class ExecutionGraph:
             raise ValueError(f"evidence {evidence.claim_id}@{evidence.version} already exists")
         self.evidence[key] = evidence
         self.produced_by[evidence.producer_attempt].append(evidence.ref)
+        for target in evidence.applies_to:
+            self.applicability_edges.append((evidence.ref, target))
         self._append("evidence_added", evidence.producer_attempt, {
             "claim_id": evidence.claim_id,
             "version": evidence.version,
             "status": evidence.verification_status.value,
+            "digest": evidence.digest,
+            "applies_to": [[item.kind, item.digest] for item in evidence.applies_to],
         })
 
     def register_consumption(self, attempt_id: str, ref: EvidenceRef) -> None:
         """Record a consumer before the evidence value is delivered."""
+        first = not self.consumers.get((ref.claim_id, ref.version))
         self.consumers[(ref.claim_id, ref.version)].add(attempt_id)
+        if first:
+            self._append("first_consumption", attempt_id, {"claim_id": ref.claim_id, "version": ref.version})
         attempt = self.attempts[attempt_id]
         if ref not in attempt.consumed_evidence_versions:
             attempt.consumed_evidence_versions = (*attempt.consumed_evidence_versions, ref)
@@ -236,14 +260,20 @@ class ExecutionGraph:
             return current
         updated = transition_evidence(current, status)
         self.evidence[(ref.claim_id, ref.version)] = updated
+        self._append("status_changed", current.producer_attempt, {
+            "claim_id": ref.claim_id,
+            "version": ref.version,
+            "status": status.value,
+        })
         return updated
 
-    def invalidate(self, roots: Iterable[EvidenceRef]) -> Invalidation:
+    def invalidate(self, roots: Iterable[EvidenceRef], *, revoke: bool = False) -> Invalidation:
         """Invalidate provisional roots and the attempts and outputs that consumed them.
 
-        Verified evidence is left in place and does not spread. The producer of
-        an invalidated claim is closed so it cannot add further outputs, but its
-        other claims are not invalidated with it.
+        Verified evidence is left in place and does not spread, unless `revoke`
+        is set by the revocable trust model; then verified evidence in the cone
+        is revoked too. The producer of an invalidated claim is closed so it
+        cannot add further outputs, but its other claims are not invalidated.
         """
         invalid_evidence: list[EvidenceRef] = []
         invalid_attempts: list[str] = []
@@ -256,11 +286,15 @@ class ExecutionGraph:
             if key in seen_evidence:
                 continue
             current = self.get(ref)
-            if current is None or current.verification_status == EvidenceStatus.VERIFIED:
+            if current is None:
+                continue
+            if current.verification_status == EvidenceStatus.VERIFIED and not revoke:
                 continue
             seen_evidence.add(key)
             if current.verification_status == EvidenceStatus.PROVISIONAL:
                 self.evidence[key] = transition_evidence(current, EvidenceStatus.INVALID)
+            elif current.verification_status == EvidenceStatus.VERIFIED:
+                self.evidence[key] = revoke_evidence(current)
             invalid_evidence.append(ref)
             producer = current.producer_attempt
             if producer not in seen_attempts and producer in self.attempts:
@@ -278,8 +312,36 @@ class ExecutionGraph:
         self._append("invalidated", "monitor:recovery", {
             "evidence": [[ref.claim_id, ref.version] for ref in invalid_evidence],
             "attempts": list(invalid_attempts),
+            "revoked": revoke,
         })
         return Invalidation(tuple(invalid_evidence), tuple(invalid_attempts))
+
+    def mark_dead(self, ref: EvidenceRef) -> Evidence | None:
+        """Mark one version failed without spreading. Used when invalidation is switched off."""
+        current = self.get(ref)
+        if current is None or current.verification_status in DEAD_STATUSES:
+            return current
+        if current.verification_status == EvidenceStatus.VERIFIED:
+            return current
+        updated = transition_evidence(current, EvidenceStatus.INVALID)
+        self.evidence[(ref.claim_id, ref.version)] = updated
+        self._append("root_failed", "monitor:recovery", {"claim_id": ref.claim_id, "version": ref.version})
+        return updated
+
+    def support_closure(self, refs: Iterable[EvidenceRef]) -> set[tuple[str, int]]:
+        """Every version that transitively supports `refs`, including the refs."""
+        seen: set[tuple[str, int]] = set()
+        queue = deque(refs)
+        while queue:
+            ref = queue.popleft()
+            key = (ref.claim_id, ref.version)
+            if key in seen:
+                continue
+            seen.add(key)
+            evidence = self.get(ref)
+            if evidence is not None:
+                queue.extend(evidence.supporting_evidence)
+        return seen
 
     def _close_attempt(self, attempt_id: str) -> None:
         attempt = self.attempts.get(attempt_id)
@@ -308,12 +370,20 @@ class ExecutionGraph:
 
     def _append(self, event_type: str, attempt_id: str, payload: dict[str, Any]) -> None:
         self._event_seq += 1
+        loop_time, wall = self.clock()
+        if self.origin is None:
+            self.origin = (loop_time, wall)
         self.events.append(MonitorEvent(
             event_id=f"event:{self._event_seq}",
             originating_attempt=attempt_id or "monitor:recovery",
             event_type=event_type,
             payload=payload,
+            t=round(loop_time - self.origin[0], 6),
+            wall=round(wall - self.origin[1], 6),
         ))
+
+    def events_of(self, event_type: str) -> list[MonitorEvent]:
+        return [event for event in self.events if event.event_type == event_type]
 
 
 # Measure provenance writes only; excludes graph traversal, serialization and audit.

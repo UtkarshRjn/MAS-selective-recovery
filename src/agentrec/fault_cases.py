@@ -264,6 +264,7 @@ async def run_fault_case(
         required_action={"flight_id": "FL1"},
     )
     monitor.graph_fault = fault
+    monitor.legacy_fault_switch = True
     monitor.defer_input_verification = True
     if llm is not None:
         monitor.proposer = lambda claim_id, llm=llm, fault=fault: _propose(llm, fault, claim_id)

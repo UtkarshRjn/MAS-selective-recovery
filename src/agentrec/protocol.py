@@ -8,10 +8,10 @@ the monitor has carried forward stays eligible.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
-from .contract import EvidenceRef, TaskNode, canonical
+from .contract import ArtifactRef, EvidenceRef, TaskNode, canonical
 
 
 class ProtocolError(ValueError):
@@ -71,6 +71,7 @@ class OutputProposed:
     value: Any
     evidence_versions: tuple[EvidenceRef, ...]
     plan_version: int
+    applies_to: tuple[ArtifactRef, ...] = ()
 
     def __post_init__(self) -> None:
         _attempt(self.attempt_id)
@@ -79,6 +80,9 @@ class OutputProposed:
         if self.plan_version < 1:
             raise ProtocolError("plan_version is required")
         object.__setattr__(self, "evidence_versions", _refs(self.evidence_versions))
+        if any(not isinstance(item, ArtifactRef) for item in self.applies_to):
+            raise ProtocolError("applicability must name ArtifactRef identities")
+        object.__setattr__(self, "applies_to", tuple(self.applies_to))
 
 
 @dataclass(frozen=True)
@@ -90,6 +94,7 @@ class ActionProposed:
     evidence_versions: tuple[EvidenceRef, ...]
     task_id: str
     plan_version: int
+    preconditions: dict[str, int] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         _attempt(self.attempt_id)
@@ -101,6 +106,8 @@ class ActionProposed:
         if self.plan_version < 1:
             raise ProtocolError("plan_version is required")
         object.__setattr__(self, "evidence_versions", _refs(self.evidence_versions))
+        if not isinstance(self.preconditions, dict):
+            raise ProtocolError("preconditions map a resource to its expected version")
 
 
 @dataclass(frozen=True)
