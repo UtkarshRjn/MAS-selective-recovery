@@ -143,6 +143,8 @@ class MonitorRuntime:
         self.fault_name = "restaurant_date"
         self.defer_input_verification = False
         self.graph_fault = ""
+        self.proposer = None
+        self.proposals_rejected = 0
         self.verification_gate: asyncio.Event | None = asyncio.Event()
         self.verification_blocked = asyncio.Event()
         self.gate = BarrierGate()
@@ -627,32 +629,85 @@ class MonitorRuntime:
             affected = self.graph.invalidate(roots)
             self._signal_locked(affected.attempts)
             self.faults_enabled = False
-            decision = decide_recovery(
-                policy=self.policy,
-                budget_remaining=self.correction_budget - self.corrections_used,
-                roots=tuple(roots),
-                corrections=self.corrections,
-                base_version=self.plan.version,
-                goals=self.plan.required_goals,
-                tasks=self.plan.task_nodes,
-                edges=self.plan.dependency_edges,
-                evidence_versions=(),
+            claim_ids: list[str] = []
+            for ref in roots:
+                if ref.claim_id not in claim_ids:
+                    claim_ids.append(ref.claim_id)
+            view = (
+                tuple(claim_ids),
+                self.correction_budget - self.corrections_used,
+                self.plan.version,
+                self.plan.required_goals,
+                self.plan.task_nodes,
+                self.plan.dependency_edges,
+                tuple(roots),
             )
             notifies = [f"evidence:{ref.claim_id}" for ref in affected.evidence]
             notifies.extend(f"action:{action_id}" for action_id in self.actions)
             notifies.append("progress")
-            if decision.unresolved:
-                self.unresolved = "correction budget exhausted"
-                self.settled = True
-                self.recovery_applied = True
-                return _Handled({"applied": True, "unresolved": True}, notifies)
-            if decision.restart:
-                self._restart_locked()
+            if self.proposer is not None and self.policy == "online":
+                return _Handled(
+                    {"applied": True, "ok": False},
+                    notifies,
+                    lambda: self._propose_and_recover(view, notifies),
+                )
+            decision = self._decision_locked(view, self.corrections)
+            return self._finish_recovery_locked(decision, notifies)
+
+    def _decision_locked(self, view: tuple, corrections: dict[str, Any]) -> RecoveryDecision:
+        claim_ids, budget, version, goals, tasks, edges, roots = view
+        return decide_recovery(
+            policy=self.policy,
+            budget_remaining=budget,
+            roots=roots,
+            corrections=corrections,
+            base_version=version,
+            goals=goals,
+            tasks=tasks,
+            edges=edges,
+            evidence_versions=(),
+            truth=self.truth,
+        )
+
+    def _finish_recovery_locked(self, decision: RecoveryDecision, notifies: list[str]) -> _Handled:
+        if decision.rejected:
+            self.proposals_rejected += 1
+            self.graph.record("correction_rejected", self.recovery_id, {
+                "accepted": [claim_id for claim_id, _value in decision.publish],
+            })
+        if decision.unresolved:
+            if decision.rejected:
                 self.corrections_used += 1
-                self.recovery_applied = True
-                return _Handled({"applied": True, "restart": True}, notifies)
+                self.unresolved = "correction rejected"
+            else:
+                self.unresolved = "correction budget exhausted"
+            self.settled = True
+            self.recovery_applied = True
+            return _Handled({"applied": True, "unresolved": True}, notifies)
+        if decision.restart:
+            self._restart_locked()
             self.corrections_used += 1
-            return _Handled({"applied": True, "ok": False}, notifies, lambda: self._recover(decision))
+            self.recovery_applied = True
+            return _Handled({"applied": True, "restart": True}, notifies)
+        self.corrections_used += 1
+        return _Handled({"applied": True, "ok": False}, notifies, lambda: self._recover(decision))
+
+    async def _propose_and_recover(self, view: tuple, notifies: list[str]) -> None:
+        """Ask the repair model outside the lock, then accept or reject its value."""
+        proposer = self.proposer
+        proposals = dict(self.corrections)
+        if proposer is not None:
+            for claim_id in view[0]:
+                proposals[claim_id] = await asyncio.to_thread(proposer, claim_id)
+        decision = self._decision_locked(view, proposals)
+        async with self.lock:
+            if self.unresolved is not None:
+                return
+            handled = self._finish_recovery_locked(decision, notifies)
+        if handled.followup is not None:
+            await handled.followup()
+        else:
+            await self._notify(handled.notifies)
 
     def _suspects_locked(self, message: VerificationCompleted) -> tuple[EvidenceRef, ...]:
         attempt = self.graph.attempts[message.target_attempt]
