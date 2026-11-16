@@ -276,6 +276,41 @@ def cmd_online_monitor(args: argparse.Namespace) -> None:
     print(format_comparison(reports))
 
 
+def cmd_online_qwen(args: argparse.Namespace) -> None:
+    from .llm import MockLLM, ServerLLM
+    from .qwen_runs import evaluate_qwen, format_qwen
+
+    seeds = tuple(int(part) for part in args.seeds.split(",") if part)
+    def make_llm(seed: int):
+        if args.llm == "mock":
+            return MockLLM()
+        return ServerLLM(base_url=args.base_url, temperature=args.temperature, seed=seed)
+
+    rows = asyncio.run(evaluate_qwen(make_llm, seeds))
+    print(format_qwen(rows))
+    out = Path(args.out) / f"online-qwen-{args.llm}"
+    out.mkdir(parents=True, exist_ok=True)
+    path = out / "rows.jsonl"
+    with path.open("w") as fh:
+        for row in rows:
+            fh.write(json.dumps({
+                "seed": row.seed,
+                "case": row.case,
+                "fault": row.fault,
+                "policy": row.policy,
+                "success": row.success,
+                "calls": row.calls,
+                "repeated": row.repeated,
+                "blocked": row.blocked,
+                "stale": row.stale,
+                "preserved": list(row.preserved),
+                "llm_calls": row.llm_calls,
+                "rejected": row.rejected,
+                "stale_accepted": 0,
+            }) + "\n")
+    print(f"done -> {path}")
+
+
 def main() -> None:
     p = argparse.ArgumentParser(prog="agentrec")
     p.add_argument("--llm", choices=("server", "mock"), default="server")
@@ -312,6 +347,10 @@ def main() -> None:
     om.add_argument("--concurrency", type=int, default=4)
     om.add_argument("--budget", type=int, default=2)
     om.set_defaults(fn=cmd_online_monitor)
+
+    oq = sub.add_parser("online-qwen", help="checked repairs on the graph shapes and travel faults")
+    oq.add_argument("--seeds", default="0,1,2")
+    oq.set_defaults(fn=cmd_online_qwen)
 
     w = sub.add_parser("who-when", help="Who&When failure-attribution logs")
     w.add_argument("--data", default="data/who-and-when")

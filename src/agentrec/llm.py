@@ -159,6 +159,24 @@ class MockLLM:
             return {"value": key}
         return {"value": f"{key}({','.join(inputs)})"}
 
+    @staticmethod
+    def _corrector(messages: Messages) -> dict[str, Any]:
+        user = messages[1]["content"]
+        kind = read_field(user, "KIND_JSON")
+        if kind == "graph":
+            return MockLLM._graph(messages)
+        if kind == "refundable":
+            return {"value": {"refundable": False}}
+        if kind == "hotel_id":
+            hotels = read_field(user, "HOTELS_JSON") or []
+            chosen = min(hotels, key=lambda item: item["nightly_price"])
+            return {"value": {"hotel_id": chosen["id"]}}
+        if kind == "book_args":
+            return {"value": {"flight_id": read_field(user, "FLIGHT_JSON")}}
+        if kind == "plan":
+            return {"value": {"steps": [{"action": name} for name in read_field(user, "STEPS_JSON")]}}
+        return {"value": read_field(user, "VALUE_JSON")}
+
 
     def complete(self, messages: Messages, *, json_mode: bool = False, max_tokens: int | None = None) -> str:
         """Plumbing-only text completion. Not a failure-attribution baseline."""

@@ -49,6 +49,8 @@ class GraphReport:
     repeated: int
     preserved: tuple[str, ...]
     rerun: tuple[str, ...]
+    blocked: int = 0
+    stale: int = 0
 
 
 def _produce(monitor: MonitorRuntime, snapshot: dict, attempt: AgentAttempt):
@@ -89,7 +91,58 @@ def _done(monitor: MonitorRuntime, clean: dict[str, str]) -> bool:
     return True
 
 
-async def run_graph_case(template: str, fault: str, policy: str = "online") -> GraphReport:
+def _repair_messages(key: str, inputs: list[str]) -> list[dict[str, str]]:
+    from .agents import dumps
+
+    return [
+        {
+            "role": "system",
+            "content": (
+                'Reply with one JSON object {"value": "..."}. '
+                "If INPUTS_JSON is empty, value is the KEY_JSON string. "
+                "Otherwise value is the key, then '(', then the inputs joined by commas, then ')'."
+            ),
+        },
+        {
+            "role": "user",
+            "content": f"KIND_JSON: {dumps('graph')}\nKEY_JSON: {dumps(key)}\nINPUTS_JSON: {dumps(inputs)}",
+        },
+    ]
+
+
+def _propose_graph(llm, template: str, claim_id: str, clean: dict[str, str]):
+    key = claim_id.removeprefix("claim:")
+    reads = dict(TEMPLATES[template])[key]
+    out = llm.chat("corrector", _repair_messages(key, [clean[src] for src in reads]))
+    return str(out.get("value", "")).strip().replace(", ", ",")
+
+
+def _produce_with_llm(llm, monitor: MonitorRuntime, snapshot: dict, attempt: AgentAttempt):
+    node = monitor.plan.node(attempt.task_id)
+    if node is None:
+        for plan in monitor.plans.values():
+            node = plan.node(attempt.task_id)
+            if node is not None:
+                break
+    assert node is not None
+    logical = attempt.agent_id
+    if monitor.faults_enabled and logical == monitor.graph_fault:
+        return {node.writes[0]: "BAD"}
+    inputs = [str(snapshot[claim_id]) for claim_id in node.reads]
+    out = llm.chat("graph", _repair_messages(logical, inputs))
+    value = str(out.get("value", "")).strip().replace(", ", ",")
+    return {node.writes[0]: value}
+
+
+async def run_graph_case(
+    template: str,
+    fault: str,
+    policy: str = "online",
+    *,
+    llm=None,
+    corrections: dict | None = None,
+    correction_budget: int = 2,
+) -> GraphReport:
     if policy not in GRAPH_POLICIES:
         raise ValueError(f"unknown policy {policy}")
     if template not in TEMPLATES:
@@ -99,18 +152,26 @@ async def run_graph_case(template: str, fault: str, policy: str = "online") -> G
         raise KeyError(fault)
     plan = graph_plan(template)
     truth = {f"claim:{key}": value for key, value in clean.items()}
+    supplied = {f"claim:{fault}": clean[fault]} if llm is None and corrections is None else (corrections or {})
     monitor = MonitorRuntime(
         plan,
         worker_count=2,
         policy=policy,
-        correction_budget=2,
+        correction_budget=correction_budget,
         truth=truth,
-        corrections={f"claim:{fault}": clean[fault]},
+        corrections=supplied,
         allow_provisional=True,
     )
     monitor.graph_fault = fault
     monitor.defer_input_verification = True
-    producers = {node.agent_id: _produce for node in plan.task_nodes}
+    if llm is not None:
+        monitor.proposer = lambda claim_id, llm=llm, template=template, clean=clean: _propose_graph(
+            llm, template, claim_id, clean
+        )
+    producers = {
+        node.agent_id: (_produce if llm is None else (lambda m, s, a, llm=llm: _produce_with_llm(llm, m, s, a)))
+        for node in plan.task_nodes
+    }
     clock = OverlapClock()
     holds = Holds(set())
 
@@ -128,18 +189,21 @@ async def run_graph_case(template: str, fault: str, policy: str = "online") -> G
     scheduler = Scheduler(monitor, runner, concurrency=max(4, len(plan.task_nodes)))
     await monitor.start()
     schedule = asyncio.create_task(scheduler.run())
+    # A model call is silent on the progress condition, so the wait has to
+    # outlast one completion. The mock path stays on the short bound.
+    limit = 180 if llm is not None else 5
     try:
-        await monitor.wait_until(lambda item: _done(item, clean), timeout=5)
+        await monitor.wait_until(lambda item: _done(item, clean), timeout=limit)
         async with monitor.lock:
             monitor.settled = True
         await monitor._notify(["progress"])
-        await asyncio.wait_for(schedule, 5)
+        await asyncio.wait_for(schedule, limit)
     finally:
         if not schedule.done():
             async with monitor.lock:
                 monitor.settled = True
             await monitor._notify(["progress"])
-            await asyncio.wait_for(schedule, 5)
+            await asyncio.wait_for(schedule, limit)
         await monitor.stop()
     return _report(template, fault, policy, monitor, clock, clean)
 
@@ -177,6 +241,8 @@ def _report(
         repeated=repeated,
         preserved=tuple(sorted(preserved)),
         rerun=tuple(sorted(rerun)),
+        blocked=monitor.verification_waits + monitor.dependency_waits + monitor.action_blocks,
+        stale=monitor.stale_rejected,
     )
 
 
