@@ -1,0 +1,782 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Parallel Monitor graph explainer</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f7f8fb;
+      --surface: #ffffff;
+      --surface-2: #f0f3f8;
+      --text: #182033;
+      --muted: #5d687c;
+      --border: #cbd3e0;
+      --blue: #2563eb;
+      --blue-soft: #e9f0ff;
+      --purple: #7047b8;
+      --purple-soft: #f0ebfb;
+      --green: #14804a;
+      --green-soft: #e7f6ee;
+      --red: #c43d37;
+      --red-soft: #fdecea;
+      --amber: #986000;
+      --amber-soft: #fff3d7;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--text);
+      background: var(--bg);
+      font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    button, select { font: inherit; }
+    .app { width: min(1180px, calc(100% - 32px)); margin: 26px auto 48px; }
+    h1, h2, p { margin: 0; }
+    h1 { font-size: clamp(25px, 3vw, 38px); line-height: 1.1; font-weight: 680; }
+    h2 { font-size: 18px; font-weight: 660; }
+    .subtitle { margin-top: 7px; color: var(--muted); font-size: 16px; }
+    .top {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 24px;
+      margin-bottom: 18px;
+    }
+    .controls { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+    button, select {
+      min-height: 40px;
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      background: var(--surface);
+      color: var(--text);
+      padding: 8px 13px;
+    }
+    button { cursor: pointer; }
+    button.primary { background: var(--blue); border-color: var(--blue); color: white; }
+    button:disabled { opacity: .45; cursor: default; }
+    button:focus-visible, select:focus-visible { outline: 3px solid color-mix(in srgb, var(--blue) 35%, transparent); outline-offset: 2px; }
+    .progress { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; margin-bottom: 18px; }
+    .progress span { height: 5px; border-radius: 99px; background: var(--border); }
+    .progress span.done { background: var(--blue); }
+    .progress span.current { background: var(--purple); }
+    .panel {
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      background: var(--surface);
+      padding: 18px;
+    }
+    .panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      margin-bottom: 16px;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      padding: 3px 10px;
+      border-radius: 999px;
+      background: var(--surface-2);
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+    .badge.locked { background: var(--blue-soft); color: var(--blue); }
+    .badge.free { background: var(--green-soft); color: var(--green); }
+    .agent-field {
+      position: relative;
+      min-height: 480px;
+      border-radius: 14px;
+      background: var(--surface-2);
+      overflow: hidden;
+    }
+    .runtime-graph {
+      position: absolute;
+      inset: 6px 0 auto;
+      z-index: 2;
+      width: 100%;
+      height: 215px;
+    }
+    .runtime-graph .node.running rect {
+      stroke-dasharray: 8 5;
+      animation: node-running 700ms linear infinite;
+    }
+    .gate-zone {
+      position: absolute;
+      z-index: 4;
+      top: 220px;
+      left: 50%;
+      width: min(620px, calc(100% - 32px));
+      transform: translateX(-50%);
+      display: grid;
+      grid-template-columns: minmax(130px, 1fr) 150px minmax(150px, 1fr);
+      align-items: center;
+      gap: 14px;
+    }
+    .worker-waiting, .gate-owner {
+      min-height: 46px;
+      display: grid;
+      place-items: center;
+      border-radius: 10px;
+      color: var(--muted);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      text-align: center;
+      font-size: 13px;
+      transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease;
+    }
+    .worker-waiting.active {
+      color: var(--amber);
+      background: var(--amber-soft);
+      border-color: var(--amber);
+    }
+    .gate-owner.active {
+      color: var(--blue);
+      background: var(--blue-soft);
+      border-color: var(--blue);
+    }
+    .gate {
+      display: grid;
+      gap: 5px;
+      justify-items: center;
+    }
+    .gate-label { color: var(--muted); font-size: 12px; }
+    .gate-frame {
+      position: relative;
+      width: 108px;
+      height: 52px;
+      border: 3px solid var(--green);
+      border-radius: 9px;
+      background: var(--green-soft);
+      overflow: hidden;
+      transition: border-color 180ms ease, background-color 180ms ease;
+    }
+    .gate-door {
+      position: absolute;
+      top: 4px;
+      bottom: 4px;
+      width: 43px;
+      border-radius: 5px;
+      background: var(--green);
+      transition: transform 300ms ease, background-color 180ms ease;
+    }
+    .gate-door.left { left: 5px; transform: translateX(-34px); }
+    .gate-door.right { right: 5px; transform: translateX(34px); }
+    .gate.closed .gate-frame { border-color: var(--blue); background: var(--blue-soft); }
+    .gate.closed .gate-door { background: var(--blue); transform: translateX(0); }
+    .gate-line {
+      position: absolute;
+      z-index: 2;
+      top: 294px;
+      left: 50%;
+      width: 2px;
+      height: 30px;
+      transform: translateX(-50%);
+      background: var(--border);
+    }
+    .gate-effect {
+      position: absolute;
+      z-index: 4;
+      left: 50%;
+      bottom: 17px;
+      width: min(580px, calc(100% - 52px));
+      transform: translateX(-50%);
+      display: flex;
+      justify-content: center;
+      gap: 18px;
+      color: var(--muted);
+      font-size: 12px;
+      text-align: center;
+    }
+    .gate-effect .stopped { color: var(--amber); }
+    .gate-effect .continues { color: var(--green); }
+    .agents {
+      position: relative;
+      z-index: 2;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 18px;
+      padding: 28px 28px 0;
+    }
+    .agent {
+      min-height: 112px;
+      border: 1px solid var(--border);
+      border-radius: 13px;
+      background: var(--surface);
+      padding: 14px;
+      text-align: center;
+      transition: transform 240ms ease, background-color 180ms ease, border-color 180ms ease;
+    }
+    .agent .name { font-weight: 650; margin-bottom: 7px; }
+    .agent .attempt { color: var(--muted); font-size: 13px; }
+    .agent .state { margin-top: 8px; font-size: 13px; color: var(--muted); }
+    .agent.running { transform: translateY(8px); background: var(--purple-soft); border-color: var(--purple); }
+    .agent.running .state { color: var(--purple); }
+    .agent.kept, .agent.complete { background: var(--green-soft); border-color: var(--green); }
+    .agent.kept .state, .agent.complete .state { color: var(--green); }
+    .agent.cancelled { background: var(--red-soft); border-color: var(--red); }
+    .agent.cancelled .state { color: var(--red); }
+    .agent.rerun { background: var(--amber-soft); border-color: var(--amber); transform: translateY(8px); }
+    .agent.rerun .state { color: var(--amber); }
+    .agent.queued { background: var(--amber-soft); border-color: var(--amber); }
+    .agent.queued .state { color: var(--amber); }
+    .links {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+    .links path { fill: none; stroke: var(--border); stroke-width: 2; vector-effect: non-scaling-stroke; }
+    .links path.active { stroke: var(--purple); stroke-dasharray: 8 7; animation: flow 900ms linear infinite; }
+    .links path.locked { stroke: var(--blue); stroke-dasharray: none; }
+    .monitor-node {
+      position: absolute;
+      z-index: 3;
+      left: 50%;
+      bottom: 68px;
+      width: min(500px, calc(100% - 40px));
+      min-height: 122px;
+      transform: translateX(-50%);
+      border: 2px solid var(--border);
+      border-radius: 15px;
+      background: var(--surface);
+      padding: 16px 18px;
+      text-align: center;
+      transition: background-color 180ms ease, border-color 180ms ease;
+    }
+    .monitor-node.locked { background: var(--blue-soft); border-color: var(--blue); }
+    .monitor-title { font-weight: 680; font-size: 17px; }
+    .monitor-action { margin-top: 7px; color: var(--muted); }
+    .event-queue {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 10px;
+    }
+    .event {
+      padding: 3px 7px;
+      border-radius: 6px;
+      background: var(--surface-2);
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .event.current { background: var(--blue); color: white; }
+    .explanation {
+      margin-top: 14px;
+      min-height: 75px;
+      border-left: 4px solid var(--blue);
+      padding: 13px 16px;
+      background: var(--surface);
+      border-radius: 0 11px 11px 0;
+    }
+    .step-title { color: var(--blue); font-weight: 650; margin-bottom: 4px; }
+    .topology { margin-top: 20px; }
+    .topology-controls { display: flex; align-items: center; gap: 10px; }
+    .topology-controls label { color: var(--muted); }
+    .graph-wrap {
+      min-height: 420px;
+      display: grid;
+      place-items: center;
+      border-radius: 14px;
+      background: var(--surface-2);
+      overflow: hidden;
+    }
+    #graph { width: 100%; height: auto; max-height: 420px; }
+    .edge { fill: none; stroke: var(--muted); stroke-width: 2; vector-effect: non-scaling-stroke; }
+    .node rect { fill: var(--surface); stroke: var(--text); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+    .node text { fill: var(--text); font-size: 15px; font-weight: 620; text-anchor: middle; dominant-baseline: middle; }
+    .node.fault rect { fill: var(--red-soft); stroke: var(--red); }
+    .node.fault text { fill: var(--red); }
+    .node.affected rect { fill: var(--amber-soft); stroke: var(--amber); }
+    .node.affected text { fill: var(--amber); }
+    .node.independent rect { fill: var(--green-soft); stroke: var(--green); }
+    .node.independent text { fill: var(--green); }
+    .node.running rect { fill: var(--purple-soft); stroke: var(--purple); }
+    .node.running text { fill: var(--purple); }
+    .node.recovered rect { fill: var(--green-soft); stroke: var(--green); }
+    .node.recovered text { fill: var(--green); }
+    .legend { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 12px; color: var(--muted); font-size: 13px; }
+    .legend span { display: inline-flex; align-items: center; gap: 6px; }
+    .swatch { width: 12px; height: 12px; border-radius: 3px; border: 1px solid var(--border); }
+    .swatch.fault { background: var(--red-soft); border-color: var(--red); }
+    .swatch.affected { background: var(--amber-soft); border-color: var(--amber); }
+    .swatch.independent { background: var(--green-soft); border-color: var(--green); }
+    .topology-note { margin-top: 11px; color: var(--muted); }
+    @keyframes flow { to { stroke-dashoffset: -30; } }
+    @keyframes node-running { to { stroke-dashoffset: -26; } }
+    @media (prefers-reduced-motion: reduce) {
+      .links path.active { animation: none; }
+      .agent { transition: none; }
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #11151d;
+        --surface: #181e29;
+        --surface-2: #222a37;
+        --text: #edf1f7;
+        --muted: #aab4c5;
+        --border: #3a4556;
+        --blue-soft: #172a53;
+        --purple-soft: #30254a;
+        --green-soft: #173a2a;
+        --red-soft: #482321;
+        --amber-soft: #493613;
+      }
+    }
+    @media (max-width: 780px) {
+      .top { align-items: flex-start; flex-direction: column; }
+      .controls { justify-content: flex-start; }
+      .agents { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 18px; gap: 10px; }
+      .agent-field { min-height: 530px; }
+      .monitor-node { bottom: 20px; }
+      .links { display: none; }
+      .panel-head { align-items: flex-start; flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header class="top">
+      <div>
+        <h1>Parallel Monitor architecture</h1>
+        <p class="subtitle">Agents are separate concurrent workers; one Monitor serializes only shared-state updates.</p>
+      </div>
+      <div class="controls" aria-label="Step controls">
+        <button id="previous" type="button">Previous</button>
+        <button id="play" type="button" class="primary">Play</button>
+        <button id="next" type="button">Next</button>
+        <button id="reset" type="button">Reset</button>
+      </div>
+    </header>
+
+    <div id="progress" class="progress" aria-label="Eight-step progress"></div>
+
+    <section class="panel" aria-label="Parallel runtime">
+      <div class="panel-head">
+        <h2>Concurrent runtime</h2>
+        <div class="topology-controls">
+          <label for="topologySelect">Topology</label>
+          <select id="topologySelect">
+            <option value="chain">Chain</option>
+            <option value="diamond" selected>Diamond</option>
+            <option value="join">Join</option>
+            <option value="backedge">Back-edge</option>
+            <option value="collaborative">Collaborative</option>
+            <option value="hierarchical">Hierarchical</option>
+          </select>
+        </div>
+      </div>
+      <div class="agent-field">
+        <svg id="runtimeGraph" class="runtime-graph" viewBox="0 0 920 220" role="img" aria-label="Selected topology executing above the Monitor"></svg>
+
+        <div class="gate-zone" aria-label="Shared-state access gate">
+          <div id="waitingWorkers" class="worker-waiting">Monitor workers ready</div>
+          <div id="mutexGate" class="gate">
+            <span id="gateLabel" class="gate-label">Shared-state gate open</span>
+            <div class="gate-frame" aria-hidden="true">
+              <i class="gate-door left"></i>
+              <i class="gate-door right"></i>
+            </div>
+          </div>
+          <div id="gateOwner" class="gate-owner">No worker inside</div>
+        </div>
+        <div class="gate-line" aria-hidden="true"></div>
+
+        <div id="monitorNode" class="monitor-node">
+          <div class="monitor-title">Monitor shared state</div>
+          <div id="monitorAction" class="monitor-action">Waiting for agent events</div>
+          <div id="eventQueue" class="event-queue"><span class="event">queue empty</span></div>
+        </div>
+        <div class="gate-effect">
+          <span id="stoppedEffect" class="stopped">No Monitor worker waiting</span>
+          <span class="continues">Agent and model work continues</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="explanation" aria-live="polite">
+      <div id="stepTitle" class="step-title"></div>
+      <p id="stepText"></p>
+    </section>
+
+    <section class="panel topology" aria-label="Recovery graph topologies">
+      <div class="panel-head">
+        <div>
+          <h2>Dependency topologies tested</h2>
+          <p class="topology-note">This graph follows the same eight Monitor steps shown above.</p>
+        </div>
+        <span id="topologyPhase" class="badge">Ready</span>
+      </div>
+      <div class="graph-wrap">
+        <svg id="graph" viewBox="0 0 920 390" role="img" aria-label="Selected dependency topology"></svg>
+      </div>
+      <div class="legend" aria-label="Topology legend">
+        <span><i class="swatch fault"></i>Fault</span>
+        <span><i class="swatch affected"></i>Affected or rerun</span>
+        <span><i class="swatch independent"></i>Carried forward or recovered</span>
+      </div>
+      <p id="topologyResult" class="topology-note"></p>
+    </section>
+  </main>
+
+  <script>
+    const steps = [
+      {
+        title: "Step 1 of 8 — Ready",
+        text: "Four independent workers are ready. The Monitor owns the live evidence graph, attempts, active plan, and action state.",
+        lock: false, action: "Waiting for agent events", queue: [],
+        agents: { restaurant: "idle", flight: "idle", planner: "idle", notes: "idle" }
+      },
+      {
+        title: "Step 2 of 8 — Parallel model work",
+        text: "All four agents execute concurrently with isolated snapshots. No agent holds the Monitor mutex while calling a model.",
+        lock: false, action: "Agents compute outside the mutex", queue: [],
+        agents: { restaurant: "running", flight: "running", planner: "running", notes: "running" }
+      },
+      {
+        title: "Step 3 of 8 — Atomic registration",
+        text: "Outputs enter one queue. The Monitor briefly locks, rechecks eligibility, creates evidence versions, and registers dependencies before delivering evidence.",
+        lock: true, action: "Registering evidence and consumers", queue: ["restaurant output", "flight output", "notes output"],
+        agents: { restaurant: "complete", flight: "complete", planner: "running", notes: "complete" }
+      },
+      {
+        title: "Step 4 of 8 — Verification",
+        text: "The Monitor copies evidence and releases the mutex. Verification runs outside the critical section while independent agents continue.",
+        lock: false, action: "Verifying copied restaurant date", queue: ["verification pending"],
+        agents: { restaurant: "complete", flight: "complete", planner: "running", notes: "complete" }
+      },
+      {
+        title: "Step 5 of 8 — Selective invalidation",
+        text: "The date fails. Under the mutex, the Monitor invalidates its actual consumer cone and cancels Restaurant v1 and Planner v1. Flight and unrelated Notes remain valid.",
+        lock: true, action: "Invalidating actual consumers", queue: ["failed verdict"],
+        agents: { restaurant: "cancelled", flight: "kept", planner: "cancelled", notes: "kept" }
+      },
+      {
+        title: "Step 6 of 8 — Repair proposal",
+        text: "Qwen proposes a repair and the verifier checks it outside the mutex. A rejected repair is never published; this accepted value becomes the candidate date v2.",
+        lock: false, action: "Checking Qwen repair outside the mutex", queue: ["candidate date v2"],
+        agents: { restaurant: "cancelled", flight: "kept", planner: "cancelled", notes: "kept" }
+      },
+      {
+        title: "Step 7 of 8 — Atomic plan revision",
+        text: "The Monitor reacquires the mutex, rechecks current state, publishes the accepted evidence version, and atomically activates the revised plan. Planner v2 is queued as a new attempt.",
+        lock: true, action: "Publishing correction and switching active plan", queue: ["accepted date v2", "plan revision"],
+        agents: { restaurant: "cancelled", flight: "kept", planner: "queued", notes: "kept" }
+      },
+      {
+        title: "Step 8 of 8 — Action gate",
+        text: "The Monitor locks to recheck verified evidence, exact arguments, active-plan membership, and attempt eligibility. It marks dispatch, releases the mutex, then performs the network call under a per-resource lock.",
+        lock: true, action: "Authorizing exact external action", queue: ["action proposed"],
+        agents: { restaurant: "cancelled", flight: "kept", planner: "complete", notes: "kept" }
+      }
+    ];
+
+    const stateText = {
+      idle: ["ready", "attempt v1"],
+      running: ["model running", "attempt v1"],
+      complete: ["completed", "attempt v1"],
+      kept: ["carried forward", "attempt v1"],
+      cancelled: ["cancelled / obsolete", "attempt v1"],
+      rerun: ["new attempt running", "attempt v2"],
+      queued: ["new attempt queued", "attempt v2"]
+    };
+
+    const topologies = {
+      chain: {
+        fault: "b",
+        result: "A chain has no independent branch after b; recovery follows b → c → d.",
+        nodes: { a:[90,195], b:[330,195], c:[570,195], d:[810,195] },
+        edges: [["a","b"],["b","c"],["c","d"]]
+      },
+      diamond: {
+        fault: "b",
+        result: "Fault b affects d. Branch c never consumed b, so the Monitor preserves it.",
+        nodes: { a:[100,195], b:[390,105], c:[390,285], d:[720,195] },
+        edges: [["a","b"],["a","c"],["b","d"],["c","d"]]
+      },
+      join: {
+        fault: "p",
+        result: "Fault p affects join. Independent roots q and r remain completed.",
+        nodes: { p:[150,75], q:[150,195], r:[150,315], join:[650,195] },
+        edges: [["p","join"],["q","join"],["r","join"]]
+      },
+      backedge: {
+        fault: "b",
+        result: "Fault b affects c and the later a:2 visit. Side reads only the original a and is preserved.",
+        nodes: { a:[90,195], b:[285,195], c:[480,195], "a:2":[710,105], side:[710,285] },
+        edges: [["a","b"],["b","c"],["c","a:2"],["a","side"]]
+      },
+      collaborative: {
+        fault: "a",
+        result: "Later turns that consumed a enter the cone; turns supported only by other valid peers can be preserved.",
+        nodes: {
+          a:[100,70], b:[100,195], c:[100,320],
+          "a:2":[450,70], "b:2":[450,195], "c:2":[450,320],
+          "a:3":[800,70], "b:3":[800,195], "c:3":[800,320]
+        },
+        edges: [
+          ["b","a:2"],["c","a:2"],["a","b:2"],["c","b:2"],["a","c:2"],["b","c:2"],
+          ["b:2","a:3"],["c:2","a:3"],["a:2","b:3"],["c:2","b:3"],["a:2","c:3"],["b:2","c:3"]
+        ]
+      },
+      hierarchical: {
+        fault: "b",
+        result: "Fault b affects c:2 and the judge through that exchange. The valid c opening is preserved.",
+        nodes: { a:[90,195], b:[320,95], c:[320,295], "b:2":[570,95], "c:2":[570,295], judge:[830,195] },
+        edges: [["a","b"],["a","c"],["a","b:2"],["c","b:2"],["a","c:2"],["b","c:2"],["b:2","judge"],["c:2","judge"]]
+      }
+    };
+
+    let stepIndex = 0;
+    let timer = null;
+    const $ = value => document.querySelector(value);
+
+    function renderStep() {
+      const step = steps[stepIndex];
+      $("#stepTitle").textContent = step.title;
+      $("#stepText").textContent = step.text;
+      $("#monitorNode").classList.toggle("locked", step.lock);
+      $("#mutexGate").classList.toggle("closed", step.lock);
+      $("#gateLabel").textContent = step.lock ? "Gate closed to other workers" : "Shared-state gate open";
+      $("#waitingWorkers").textContent = step.lock ? "Worker W2 waits here" : "Workers W1 and W2 ready";
+      $("#waitingWorkers").classList.toggle("active", step.lock);
+      $("#gateOwner").textContent = step.lock ? "Worker W1 updates state" : "No worker inside";
+      $("#gateOwner").classList.toggle("active", step.lock);
+      $("#stoppedEffect").textContent = step.lock
+        ? "Stopped: other Monitor workers"
+        : "No Monitor worker waiting";
+      $("#monitorAction").textContent = step.action;
+
+      const queue = $("#eventQueue");
+      queue.replaceChildren();
+      (step.queue.length ? step.queue : ["queue empty"]).forEach((label, i) => {
+        const item = document.createElement("span");
+        item.className = "event" + (i === 0 && step.queue.length ? " current" : "");
+        item.textContent = label;
+        queue.appendChild(item);
+      });
+
+      $("#progress").replaceChildren(...steps.map((_, i) => {
+        const dot = document.createElement("span");
+        dot.className = i < stepIndex ? "done" : i === stepIndex ? "current" : "";
+        return dot;
+      }));
+      $("#previous").disabled = stepIndex === 0;
+      $("#next").disabled = stepIndex === steps.length - 1;
+      $("#play").textContent = timer ? "Pause" : "Play";
+      renderTopology();
+    }
+
+    function stop() {
+      if (timer) clearInterval(timer);
+      timer = null;
+    }
+
+    function togglePlay() {
+      if (timer) {
+        stop();
+        renderStep();
+        return;
+      }
+      if (stepIndex === steps.length - 1) stepIndex = 0;
+      timer = setInterval(() => {
+        if (stepIndex === steps.length - 1) stop();
+        else stepIndex += 1;
+        renderStep();
+      }, 2300);
+      renderStep();
+    }
+
+    const svgNS = "http://www.w3.org/2000/svg";
+    function svgElement(name, attributes = {}) {
+      const element = document.createElementNS(svgNS, name);
+      Object.entries(attributes).forEach(([key, value]) => element.setAttribute(key, value));
+      return element;
+    }
+
+    function affectedNodes(topology) {
+      const affected = new Set([topology.fault]);
+      let changed = true;
+      while (changed) {
+        changed = false;
+        topology.edges.forEach(([source, target]) => {
+          if (affected.has(source) && !affected.has(target)) {
+            affected.add(target);
+            changed = true;
+          }
+        });
+      }
+      return affected;
+    }
+
+    function recoverySets(topology) {
+      const names = Object.keys(topology.nodes);
+      const cone = affectedNodes(topology);
+      const preserved = new Set(names.filter(name => !cone.has(name)));
+      const sinks = new Set(names.filter(name => !topology.edges.some(([source]) => source === name)));
+      const relaunch = new Set();
+      while (true) {
+        const readers = new Set([...preserved, ...relaunch]);
+        let chosen = null;
+        for (const name of names) {
+          if (!cone.has(name) || relaunch.has(name)) continue;
+          const missingGoal = sinks.has(name) && !readers.has(name);
+          const needed = name !== topology.fault
+            && !readers.has(name)
+            && topology.edges.some(([source, target]) => source === name && readers.has(target));
+          if (missingGoal || needed) {
+            chosen = name;
+            break;
+          }
+        }
+        if (chosen === null) break;
+        relaunch.add(chosen);
+      }
+      return { cone, preserved, relaunch };
+    }
+
+    function topologyNodeStatus(name, topology, cone, relaunch, roots, nextFrontier) {
+      if (stepIndex === 1 && roots.has(name)) return "running";
+      if (stepIndex === 2) {
+        if (roots.has(name)) return "independent";
+        if (nextFrontier.has(name)) return "running";
+      }
+      if (stepIndex === 3 || stepIndex === 4) {
+        if (name === topology.fault) return "fault";
+        if (cone.has(name)) return "affected";
+        return "independent";
+      }
+      if (stepIndex === 5) {
+        if (name === topology.fault) return "independent";
+        if (cone.has(name)) return "affected";
+        return "independent";
+      }
+      if (stepIndex === 6) return relaunch.has(name) ? "affected" : "independent";
+      if (stepIndex === 7) return "recovered";
+      return "";
+    }
+
+    function drawGraph(target, topology, statusOf, runtime = false) {
+      target.replaceChildren();
+      const markerId = runtime ? "runtimeArrow" : "arrow";
+      const defs = svgElement("defs");
+      const marker = svgElement("marker", {
+        id: markerId, viewBox: "0 0 10 10", refX: "9", refY: "5",
+        markerWidth: "6", markerHeight: "6", orient: "auto-start-reverse"
+      });
+      marker.appendChild(svgElement("path", { d: "M 0 0 L 10 5 L 0 10 z", fill: "var(--muted)" }));
+      defs.appendChild(marker);
+      target.appendChild(defs);
+
+      const point = ([x, y]) => runtime ? [x, 26 + (y - 70) * 0.58] : [x, y];
+      const halfWidth = runtime ? 35 : 47;
+      const halfHeight = runtime ? 20 : 28;
+      topology.edges.forEach(([source, destination]) => {
+        const [sx, sy] = point(topology.nodes[source]);
+        const [tx, ty] = point(topology.nodes[destination]);
+        const dx = tx - sx;
+        const startX = sx + Math.sign(dx || 1) * halfWidth;
+        const endX = tx - Math.sign(dx || 1) * halfWidth;
+        target.appendChild(svgElement("path", {
+          class: "edge",
+          d: `M ${startX} ${sy} C ${(startX+endX)/2} ${sy}, ${(startX+endX)/2} ${ty}, ${endX} ${ty}`,
+          "marker-end": `url(#${markerId})`
+        }));
+      });
+
+      Object.entries(topology.nodes).forEach(([name, rawPoint]) => {
+        const [x, y] = point(rawPoint);
+        const group = svgElement("g", { class: `node ${statusOf(name)}` });
+        group.appendChild(svgElement("rect", {
+          x: x-halfWidth, y: y-halfHeight,
+          width: halfWidth*2, height: halfHeight*2,
+          rx: runtime ? 8 : 11
+        }));
+        const label = svgElement("text", { x, y });
+        label.textContent = name;
+        group.appendChild(label);
+        target.appendChild(group);
+      });
+    }
+
+    function renderTopology() {
+      const key = $("#topologySelect").value;
+      const topology = topologies[key];
+      const svg = $("#graph");
+      const { cone, preserved, relaunch } = recoverySets(topology);
+      const names = Object.keys(topology.nodes);
+      const roots = new Set(names.filter(name => !topology.edges.some(([, target]) => target === name)));
+      const nextFrontier = new Set(
+        topology.edges.filter(([source]) => roots.has(source)).map(([, target]) => target)
+      );
+      const statusOf = name => topologyNodeStatus(name, topology, cone, relaunch, roots, nextFrontier);
+      drawGraph(svg, topology, statusOf);
+      drawGraph($("#runtimeGraph"), topology, statusOf, true);
+
+      svg.setAttribute("aria-label", `${key} topology with fault at ${topology.fault}`);
+      $("#runtimeGraph").setAttribute("aria-label", `${key} topology executing above the Monitor`);
+      const rootList = [...roots].join(", ");
+      const coneList = [...cone].join(", ");
+      const preservedList = [...preserved].join(", ") || "none";
+      const rerunList = [...relaunch].join(", ") || "none";
+      const phase = [
+        ["Ready", `The Monitor loads the ${key} DAG. Ready roots: ${rootList}.`],
+        ["Schedule", `The scheduler starts ready roots in parallel: ${rootList}. Later nodes wait only for their declared predecessors.`],
+        ["Register", "Under the mutex, each delivered version and consumer edge is registered before the next frontier can use it."],
+        ["Verify", `Verification finds the fault at ${topology.fault}. Its runtime-dependent cone is ${coneList}.`],
+        ["Invalidate", `Under the mutex, the Monitor invalidates ${coneList}; it carries forward ${preservedList}.`],
+        ["Repair", `Outside the mutex, Qwen proposes a replacement for ${topology.fault}; the verifier accepts it before publication.`],
+        ["Revise", `Under the mutex, the repair replaces ${topology.fault}. New attempts are created only for ${rerunList}.`],
+        ["Recovered", `All required ${key} outputs are verified. Carried work was never rerun.`]
+      ][stepIndex];
+      const queueLabels = [
+        [],
+        [],
+        [...roots].map(name => `${name} output`),
+        [`verify ${topology.fault}`],
+        [`failed ${topology.fault}`],
+        [`candidate ${topology.fault} v2`],
+        [`accepted ${topology.fault} v2`, "plan revision"],
+        ["completion check"]
+      ][stepIndex];
+      const monitorActions = [
+        `Waiting for ready roots: ${rootList}`,
+        `Scheduling ready roots: ${rootList}`,
+        "Registering evidence versions and consumers",
+        `Verifying ${topology.fault} outside the mutex`,
+        `Invalidating cone: ${coneList}`,
+        `Checking repair for ${topology.fault} outside the mutex`,
+        `Activating plan; new attempts: ${rerunList}`,
+        "Checking required outputs and action gate"
+      ];
+      $("#monitorAction").textContent = monitorActions[stepIndex];
+      const queue = $("#eventQueue");
+      queue.replaceChildren();
+      (queueLabels.length ? queueLabels : ["queue empty"]).forEach((label, index) => {
+        const item = document.createElement("span");
+        item.className = "event" + (index === 0 && queueLabels.length ? " current" : "");
+        item.textContent = label;
+        queue.appendChild(item);
+      });
+      $("#stepText").textContent = phase[1];
+      $("#topologyPhase").textContent = phase[0];
+      $("#topologyPhase").className = "badge " + (steps[stepIndex].lock ? "locked" : "free");
+      $("#topologyResult").textContent = phase[1] + " " + topology.result;
+    }
+
+    $("#previous").addEventListener("click", () => { stop(); stepIndex = Math.max(0, stepIndex-1); renderStep(); });
+    $("#next").addEventListener("click", () => { stop(); stepIndex = Math.min(steps.length-1, stepIndex+1); renderStep(); });
+    $("#reset").addEventListener("click", () => { stop(); stepIndex = 0; renderStep(); });
+    $("#play").addEventListener("click", togglePlay);
+    $("#topologySelect").addEventListener("change", renderTopology);
+    renderStep();
+  </script>
+</body>
+</html>
