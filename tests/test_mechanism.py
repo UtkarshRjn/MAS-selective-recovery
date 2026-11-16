@@ -1,0 +1,205 @@
+"""Mechanism, boundary, statistics, and suite-runner tests."""
+
+from __future__ import annotations
+
+import json
+
+import pytest
+
+from agentrec import policies
+from agentrec.mechanism import cases
+from agentrec.mechanism.harness import run_cell
+from agentrec.mechanism.stats import (
+    cluster_bootstrap,
+    common_clean_population,
+    compare,
+    crsr_safe,
+    mcnemar_exact,
+    quantile,
+    summarize,
+)
+from agentrec.mechanism.suite import SuiteConfig, load_rows, manifest, preset, run_suite
+
+VOLATILE = {"wall_s", "lock", "idle_spins"}
+
+
+def cell(family: str, schedule: str, policy: str, seed: int = 0, **kwargs) -> dict:
+    case = cases.build(family, kwargs.pop("template", "dev"))
+    chosen = next(item for item in case.schedules if item.name == schedule)
+    return run_cell(case, chosen, seed, policies.get(policy), **kwargs).row
+
+
+@pytest.mark.parametrize("family", sorted(cases.ALL_FAMILIES))
+@pytest.mark.parametrize("template", cases.TEMPLATES)
+def test_every_family_completes_cleanly_under_core_policies(family: str, template: str) -> None:
+    case = cases.build(family, template)
+    if not case.has_clean_condition:
+        pytest.skip("the hazard is the schedule itself")
+    for config in policies.CORE:
+        row = run_cell(case, case.schedules[0], 0, config, clean=True).row
+        assert row["outcome"] == "safe_completion", (family, template, config.name, row.get("error"))
+
+
+@pytest.mark.parametrize("family", sorted(cases.MECHANISM_FAMILIES))
+def test_core_policies_recover_safely_in_mechanism_families(family: str) -> None:
+    case = cases.build(family, "dev")
+    for schedule in cases.core_schedules(case):
+        for name in ("restart", "suffix", "claim_rerun", "online", "verify_before"):
+            row = run_cell(case, schedule, 1, policies.get(name)).row
+            assert row["outcome"] == "safe_completion", (family, schedule.name, name, row["outcome"])
+            assert row["forbidden_effects"] == 0 and row["duplicate_effects"] == 0
+
+
+def test_runs_are_deterministic() -> None:
+    first = cell("E", "overlap", "online", seed=3)
+    second = cell("E", "overlap", "online", seed=3)
+    assert {k: v for k, v in first.items() if k not in VOLATILE} == {
+        k: v for k, v in second.items() if k not in VOLATILE
+    }
+
+
+def test_detection_delay_is_matched_across_policies() -> None:
+    held = {name: cell("A", "inflight", name)["realized_ordering"]["date"]["released_at"] for name in
+            ("suffix", "online", "verify_before", "advisory")}
+    assert len(set(held.values())) == 1
+
+
+def test_online_preserves_independent_work_that_restart_repeats() -> None:
+    online = cell("A", "immediate", "online")
+    restart = cell("A", "immediate", "restart")
+    assert online["independent_preserved"] == online["independent_tasks"] > 0
+    assert restart["independent_preserved"] == 0
+    assert online["tokens"] < restart["tokens"]
+
+
+def test_persistent_fault_needs_a_checked_correction() -> None:
+    assert cell("A", "persistent", "online")["outcome"] == "safe_completion"
+    assert cell("A", "persistent", "no_correction_model")["outcome"] == "safe_but_incomplete"
+
+
+def test_applicability_and_versioned_handoff_prevent_a_forbidden_merge() -> None:
+    assert cell("B", "p1_early", "online")["forbidden_effects"] == 0
+    assert cell("B", "p1_early", "no_applicability")["forbidden_effects"] > 0
+    assert cell("B", "p1_early", "unversioned_handoff")["forbidden_effects"] > 0
+
+
+def test_invalidation_by_gate_ablation() -> None:
+    assert cell("C", "pre_commit", "online")["outcome"] == "safe_completion"
+    assert cell("C", "pre_commit", "inv_on_gate_off")["safe"] is False
+    assert cell("C", "pre_commit", "inv_off_gate_on")["outcome"] == "safe_but_incomplete"
+    assert cell("C", "pre_commit", "inv_off_gate_off")["safe"] is False
+
+
+def test_posthoc_repair_dispatches_before_the_verdict() -> None:
+    row = cell("C", "late", "posthoc_repair")
+    assert row["safe"] is False and row["dispatched_on_dead_support"] + row["forbidden_effects"] > 0
+
+
+def test_uncancellable_transport_is_billed_after_cancel_but_fenced() -> None:
+    row = cell("F", "uncancellable", "online")
+    assert row["outcome"] == "safe_completion"
+    assert row["unobservable_cancels"] >= 1 and row["stale_outputs_accepted"] == 0
+    assert cell("F", "uncancellable", "cancel_only")["outcome"] != "safe_completion"
+
+
+def test_trust_models_on_a_global_invariant() -> None:
+    assert cell("G", "local_commit_ambiguous", "online")["outcome"] == "safe_but_incomplete"
+    for schedule in ("global_settle_ambiguous", "revocable_attributed", "global_settle_attributed"):
+        assert cell("G", schedule, "online")["outcome"] == "safe_completion", schedule
+
+
+def test_conditional_writes_are_needed_against_concurrent_writers() -> None:
+    for schedule in ("two_sellers", "address_change_before_check"):
+        assert cell("H", schedule, "online")["safe"] is False, schedule
+        assert cell("H", schedule, "online_cas")["safe"] is True, schedule
+
+
+def test_lost_acknowledgments_need_reconciliation() -> None:
+    online = cell("lost_ack", "ack_lost_once", "online")
+    assert online["outcome"] == "safe_completion" and online["duplicate_effects"] == 0
+    assert cell("lost_ack", "ack_lost_once", "naive_retry")["duplicate_effects"] > 0
+    unreconciled = cell("lost_ack", "ack_lost_always", "no_reconcile")
+    assert unreconciled["uncertain_effects"] > 0 and unreconciled["outcome"] != "safe_completion"
+
+
+def test_revocation_of_verified_source_evidence() -> None:
+    assert cell("revocation", "commit_change_early", "online")["safe"] is False
+    assert cell("revocation", "revocable_change_early", "online")["outcome"] == "safe_completion"
+
+
+def test_contention_with_frequent_faults_completes() -> None:
+    row = cell("contention", "frequent_slow_check", "online")
+    assert row["outcome"] == "safe_completion" and row["faults_fired"]
+
+
+def test_oracle_verifier_mode_is_labeled() -> None:
+    row = cell("A", "immediate", "online", verifier="oracle")
+    assert row["verifier"] == "oracle" and row["outcome"] == "safe_completion"
+
+
+def test_quantile_and_mcnemar() -> None:
+    assert quantile([1, 2, 3, 4], 0.5) == 2.5
+    assert quantile([], 0.5) is None
+    pairs = [("c", 1.0, 0.0)] * 10 + [("c", 0.0, 1.0)] * 2 + [("c", 1.0, 1.0)] * 5
+    result = mcnemar_exact(pairs)
+    assert (result["a_only"], result["b_only"]) == (10, 2)
+    assert result["p"] == pytest.approx(0.03857, abs=1e-4)
+    assert mcnemar_exact([("c", 1.0, 1.0)])["p"] == 1.0
+
+
+def test_cluster_bootstrap_resamples_whole_clusters() -> None:
+    pairs = [("x", 1.0, 0.0)] * 4 + [("y", 0.0, 0.0)] * 4
+    result = cluster_bootstrap(pairs, iterations=500, seed=1)
+    assert result["diff"] == pytest.approx(0.5)
+    assert result["clusters"] == 2
+    assert 0.0 <= result["low"] <= result["diff"] <= result["high"] <= 1.0
+    assert cluster_bootstrap(pairs, iterations=500, seed=1) == result
+
+
+def _row(policy: str, seed: int, outcome: str, condition: str = "fault", family: str = "A") -> dict:
+    return {
+        "family": family, "template": "dev", "cluster": f"{family}:dev", "schedule": "s", "seed": seed,
+        "policy": policy, "condition": condition, "outcome": outcome, "safe": outcome != "correct_but_unsafe",
+        "makespan": 10.0 + seed, "tokens": 100, "obligations": [{"opened": 1.0, "discharged": 3.0}],
+    }
+
+
+def test_crsr_safe_uses_the_common_clean_population() -> None:
+    rows = [
+        _row("a", 0, "safe_completion", "clean"), _row("b", 0, "safe_completion", "clean"),
+        _row("a", 1, "safe_completion", "clean"), _row("b", 1, "timeout", "clean"),
+        _row("a", 0, "safe_completion"), _row("b", 0, "safe_but_incomplete"),
+        _row("a", 1, "safe_completion"), _row("b", 1, "safe_completion"),
+    ]
+    assert common_clean_population(rows) == {("A", "dev", 0)}
+    result = crsr_safe(rows, ["a", "b"])
+    assert result["a"] == {"n": 1, "crsr_safe": 1.0}
+    assert result["b"] == {"n": 1, "crsr_safe": 0.0}
+    summary = summarize(rows)
+    assert summary["a"]["n"] == 2 and summary["a"]["restore_p50"] == 2.0
+    comparison = compare(rows, "a", "b", iterations=200)
+    assert comparison["safe_completion"]["mcnemar"]["a_only"] == 1
+
+
+def test_suite_runner_freezes_its_manifest_and_resumes(tmp_path) -> None:
+    config = SuiteConfig("tiny", ("A",), ("online", "suffix"), (0,), schedules="core")
+    out = tmp_path / "tiny"
+    first = run_suite(config, out, progress=False)
+    assert first["ran"] == 4 * 2 + 2 and first["infrastructure_errors"] == 0
+    rows = load_rows(out)
+    assert {row["condition"] for row in rows} == {"fault", "clean"}
+    saved = json.loads((out / "manifest.json").read_text())
+    assert saved["config_sha256"] == manifest(config)["config_sha256"]
+    assert saved["frozen"]["policies"]["online"]["invalidation"] is True
+    assert run_suite(config, out, progress=False)["skipped"] == first["ran"]
+    changed = SuiteConfig("tiny", ("A",), ("online",), (0,), schedules="core")
+    with pytest.raises(RuntimeError):
+        run_suite(changed, out, progress=False)
+
+
+def test_presets_match_the_plan() -> None:
+    mechanism = preset("mechanism")
+    case_count = sum(len(cases.core_schedules(cases.build(f, "dev"))) for f in mechanism.families)
+    assert len(mechanism.families) == 6 and case_count == 24
+    assert case_count * len(mechanism.seeds) * len(mechanism.policies) == 1680
+    assert set(preset("boundary").families) == set(cases.BOUNDARY_FAMILIES)

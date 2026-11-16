@@ -20,9 +20,12 @@ PERSISTENCE = ("transient", "persistent", "until_detected")
 
 
 def logical_task(task_id: str) -> str:
-    """`planner:2` is the second visit of `planner`."""
-    head, _sep, tail = task_id.rpartition(":")
-    return head if head and tail.isdigit() else task_id
+    """`planner:2` is the second visit of `planner`; `planner:2:2` is a revisit of that visit."""
+    while True:
+        head, _sep, tail = task_id.rpartition(":")
+        if not head or not tail.isdigit():
+            return task_id
+        task_id = head
 
 
 @dataclass(frozen=True)

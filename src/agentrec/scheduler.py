@@ -15,6 +15,7 @@ import inspect
 from typing import Any, Awaitable, Callable
 
 from .contract import AgentAttempt, TaskNode
+from .fault_schedule import logical_task
 from .forward_recovery import superstep_levels
 from .monitor_runtime import CancelledAttempt, MonitorRuntime, Rejected
 from .protocol import ActionProposed, AttemptCompleted, CancellationAcknowledged, OutputProposed
@@ -154,11 +155,12 @@ class Scheduler:
         by_level: dict[int, list[str]] = {}
         for task_id, level in superstep_levels(plan.task_nodes, plan.dependency_edges).items():
             by_level.setdefault(level, []).append(task_id)
+        exempt = self.monitor.checker_tasks
         held: set[str] = set()
         closed = False
         for level in sorted(by_level):
             if closed:
-                held.update(by_level[level])
+                held.update(task_id for task_id in by_level[level] if logical_task(task_id) not in exempt)
             elif not all(self.monitor.task_output_verified(task_id) for task_id in by_level[level]):
                 closed = True
         return held

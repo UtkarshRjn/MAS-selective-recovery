@@ -107,10 +107,11 @@ CORE = (
         description="Verify-before: consumers read only verified evidence; same checker and corrector.",
     ),
     PolicyConfig(
-        "advisory", "online", correction=True, invalidation=False, fencing=False, cancellation=False,
-        advisory=True,
-        description="Version-aware advisory repair: publish a corrected version and notify consumers; "
-        "consumers decide whether to reread. No mechanical invalidation or fencing.",
+        "advisory", "local_repair", correction=True, invalidation=False, fencing=False, cancellation=False,
+        advisory=True, adaptation_of="CoAgent-style",
+        description="Version-aware advisory repair: publish a checked corrected version and notify every "
+        "consumer of a superseded version; each agent decides whether to reread and rerun. No mechanical "
+        "invalidation, cancellation, or fencing.",
     ),
 )
 
@@ -163,6 +164,16 @@ ABLATIONS = (
                  description="Ordinary per-path locking without artifact identity."),
     PolicyConfig("langgraph_style_nogate", "superstep", barrier="superstep", action_gate=False,
                  adaptation_of="LangGraph-style", description="Native checkpoint replay without an interrupt."),
+    PolicyConfig("online_cas", "online", correction=True, effect_consistency="cas",
+                 description="Online checked correction with target-side compare-and-set on observed resource versions."),
+    PolicyConfig("online_no_lock", "online", correction=True, effect_consistency="none",
+                 description="Online checked correction; effects dispatched without any resource serialization."),
+    PolicyConfig("naive_retry", "online", correction=True, reconcile="naive_retry",
+                 description="After a lost acknowledgment, retry without an idempotency key."),
+    PolicyConfig("no_reconcile", "online", correction=True, reconcile="none",
+                 description="After a lost acknowledgment, leave the outcome uncertain."),
+    PolicyConfig("no_applicability", "online", correction=True, enforce_applicability=False,
+                 description="Applicability check off: any passing report may approve any artifact."),
 )
 
 ALL = {config.name: config for config in (*CORE, *EXTENDED, *ABLATIONS)}

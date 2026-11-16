@@ -326,6 +326,8 @@ def main() -> None:
     sub = p.add_subparsers(dest="cmd", required=True)
     from .mbpp import add_cli
     add_cli(sub)
+    from .mechanism.cli import add_cli as add_mechanism_cli
+    add_mechanism_cli(sub)
 
     c = sub.add_parser("clean")
     c.add_argument("--tasks", type=int, default=10)

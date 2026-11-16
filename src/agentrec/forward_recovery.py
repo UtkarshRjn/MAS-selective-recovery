@@ -146,6 +146,46 @@ def revise_suffix(
     )
 
 
+def revise_producers(
+    *,
+    tasks: tuple[TaskNode, ...],
+    edges: tuple[tuple[str, str], ...],
+    goals: tuple[str, ...],
+    roots: tuple[str, ...],
+    base_version: int,
+    evidence_versions: tuple[EvidenceRef, ...],
+) -> PlanRevisionProposed:
+    """Rerun only the producers of the failed claims. Consumers are left as they are (local repair)."""
+    root_ids = set(roots)
+    producers = [node for node in tasks if set(node.writes) & root_ids]
+    producer_ids = {node.task_id for node in producers}
+    taken = {node.task_id for node in tasks}
+    added = [
+        TaskNode(_successor_id(node.task_id, taken), node.agent_id, node.goals, node.reads, node.writes)
+        for node in producers
+    ]
+    carry = tuple(node.task_id for node in tasks if node.task_id not in producer_ids)
+    carry_ids = set(carry)
+    new_edges = {(src, dst) for src, dst in edges if src in carry_ids and dst in carry_ids}
+    rebuilt = [*(node for node in tasks if node.task_id in carry_ids), *added]
+    for node in added:
+        for claim_id in node.reads:
+            for writer in rebuilt:
+                if claim_id in writer.writes and writer.task_id != node.task_id:
+                    new_edges.add((writer.task_id, node.task_id))
+    return PlanRevisionProposed(
+        attempt_id="monitor:recovery",
+        evidence_versions=evidence_versions,
+        base_version=base_version,
+        add_tasks=tuple(added),
+        remove_tasks=tuple(sorted(producer_ids)),
+        add_edges=tuple(sorted(new_edges)),
+        remove_edges=(),
+        required_goals=goals,
+        carry_forward=carry,
+    )
+
+
 def revise_from_cone(
     *,
     tasks: tuple[TaskNode, ...],
@@ -162,9 +202,10 @@ def revise_from_cone(
     relaunched. Every relaunched visit is a new task id.
     """
     spoiled = tainted_claims(tasks, roots)
+    root_set = set(roots)
     tainted = [
         node for node in tasks
-        if set(node.reads) & spoiled or set(node.writes) & spoiled
+        if set(node.reads) & spoiled or set(node.writes) & root_set
     ]
     tainted_ids = {node.task_id for node in tainted}
     kept = [node for node in tasks if node.task_id not in tainted_ids]
@@ -375,6 +416,16 @@ def decide_recovery(
     if policy in {"verify_before", "local_repair"}:
         if screen is not None:
             publish, _rejected = screen_proposals(claim_ids, corrections, screen=screen)
+        if policy == "local_repair" and not publish:
+            revision = revise_producers(
+                tasks=tasks,
+                edges=edges,
+                goals=goals,
+                roots=tuple(claim_ids),
+                base_version=base_version,
+                evidence_versions=evidence_versions,
+            )
+            return RecoveryDecision((), revision, False, False)
         return RecoveryDecision(publish, None, False, False)
     if policy == "none":
         return RecoveryDecision((), None, False, False)

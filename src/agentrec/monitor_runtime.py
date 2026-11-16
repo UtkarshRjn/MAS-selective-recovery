@@ -48,7 +48,7 @@ from .contract import (
     canonical,
 )
 from .effects import ConflictError, EffectLedger, EffectPhase, UncertainOutcome, idempotency_key
-from .fault_schedule import FaultSchedule
+from .fault_schedule import FaultSchedule, logical_task
 from .forward_recovery import RecoveryDecision, decide_recovery, select_suspects, tainted_claims
 from .instrumentation import RequestLog, TimedLock
 from .plan_manager import PlanError, apply_revision
@@ -209,6 +209,10 @@ class MonitorRuntime:
         self.policy = self.config.recovery
         self.correction_budget = correction_budget
         self.corrections_used = 0
+        # "run": one budget for the whole run (legacy). "claim": each failed claim gets its own
+        # budget, so independent faults do not compete for recovery rounds.
+        self.budget_scope = "run"
+        self.claim_rounds: dict[str, int] = {}
         self.truth = truth or {}
         self.corrections = corrections or {}
         self.allow_provisional = allow_provisional if config is None else self.config.consume_provisional
@@ -229,6 +233,12 @@ class MonitorRuntime:
         self.invariant_checked: set[tuple] = set()
         self.settle_timeout = settle_timeout
         self.defer_input_verification = False
+        # Claims checked without waiting for their inputs: a test report is a fact about
+        # the artifact it ran on, whether or not that artifact is correct.
+        self.eager_claims: set[str] = set()
+        # Logical ids of checking steps (test runners). A superstep barrier never holds them, and a
+        # published correction reruns them so the new version gets its own report.
+        self.checker_tasks: set[str] = set()
         self.concurrent_checks = False
         self.graph_fault = ""
         self.proposer = None
@@ -504,8 +514,14 @@ class MonitorRuntime:
         claim_id: str,
         *,
         applicable_to: tuple[ArtifactRef, ...] = (),
+        provisional_ok: bool | None = None,
     ) -> Evidence:
-        """Register the consumer before copying the value out of the monitor."""
+        """Register the consumer before copying the value out of the monitor.
+
+        `provisional_ok` overrides the policy for checking infrastructure, such as
+        a test runner, which must read an artifact before it can be verified.
+        """
+        allow = self.allow_provisional if provisional_ok is None else provisional_ok
         gate_name = f"register:{attempt_id}:{claim_id}"
         if self.gate.armed(gate_name):
             await self.gate.arrive(gate_name)
@@ -515,13 +531,13 @@ class MonitorRuntime:
                 async with self.lock:
                     self._ensure_eligible_locked(attempt_id)
                     evidence = self._allowed_locked(
-                        claim_id, verified_only=not self.allow_provisional, applicable_to=applicable_to,
+                        claim_id, verified_only=not allow, applicable_to=applicable_to,
                     )
                     if evidence is not None:
                         self.graph.register_consumption(attempt_id, evidence.ref)
                         return self._copy(evidence)
                     provisional = self._allowed_locked(claim_id, verified_only=False, applicable_to=applicable_to)
-                    if provisional is not None and not self.allow_provisional:
+                    if provisional is not None and not allow:
                         self.verification_waits += 1
                     else:
                         self.dependency_waits += 1
@@ -572,6 +588,7 @@ class MonitorRuntime:
                 self.stale_accepted += 1
                 self.graph.record("stale_output_accepted", message.attempt_id, {"claim_id": message.claim_id, "version": evidence.version})
             self.graph.record("output_accepted", message.attempt_id, {"claim_id": message.claim_id, "version": evidence.version})
+            self._notify_superseded_locked(evidence)
             return _Handled({"accepted": True, "ref": evidence.ref}, [f"evidence:{message.claim_id}", "progress"])
 
     # ----------------------------------------------------------------- actions
@@ -683,6 +700,8 @@ class MonitorRuntime:
                     task_in_plan=action.task_id in self.plan.task_ids(),
                     approved_canonical=approved_canonical,
                 )
+                if blocker is None and self.unresolved is not None:
+                    blocker = "run_unresolved"
                 if blocker is None and self._dead_in_support_locked(action.evidence_versions):
                     blocker = "stale_support"
                 if blocker is None and self._obligation_reaches_locked(action.evidence_versions):
@@ -876,7 +895,8 @@ class MonitorRuntime:
             self.verification_blocked.set()
             await self.verification_gate.wait()
         if self.policy == "coarse":
-            if self.defer_input_verification and not await self._inputs_settled(attempt_id):
+            deferred = self.defer_input_verification and not all(ref.claim_id in self.eager_claims for ref in refs)
+            if deferred and not await self._inputs_settled(attempt_id):
                 return
             await self._verify_coarse(attempt_id, refs)
             return
@@ -889,7 +909,8 @@ class MonitorRuntime:
             await self._submit_verdict(attempt_id, ref)
 
     async def _verify_one(self, attempt_id: str, ref: EvidenceRef) -> None:
-        if self.defer_input_verification and not await self._inputs_settled(attempt_id, ref):
+        deferred = self.defer_input_verification and ref.claim_id not in self.eager_claims
+        if deferred and not await self._inputs_settled(attempt_id, ref):
             return
         await self._submit_verdict(attempt_id, ref)
 
@@ -1093,6 +1114,73 @@ class MonitorRuntime:
         notifies.append("progress")
         return _Handled({"applied": True, "ok": False}, notifies, self._run_recovery)
 
+    def _notify_superseded_locked(self, evidence: Evidence) -> None:
+        """Advisory mode: tell consumers of older versions of this claim that a newer one exists."""
+        if not self.config.advisory:
+            return
+        for older in self.graph.versions(evidence.claim_id):
+            if older.version >= evidence.version:
+                continue
+            for attempt_id in sorted(self.graph.consumers.get((older.claim_id, older.version), ())):
+                if attempt_id == evidence.producer_attempt or attempt_id in MONITOR_ATTEMPTS:
+                    continue
+                queued = self.notices.setdefault(attempt_id, [])
+                if older.ref not in queued:
+                    queued.append(older.ref)
+                    self.record("advisory_notice", attempt_id, {"claim_id": older.claim_id, "version": older.version})
+
+    async def _rerun_checkers(self, claims: set[str]) -> None:
+        """Rerun checking steps that read a corrected claim, unless one is already pending or running."""
+        if not claims or not self.checker_tasks:
+            return
+        async with self.lock:
+            targets = []
+            for node in self.plan.task_nodes:
+                if logical_task(node.task_id) not in self.checker_tasks or not set(node.reads) & claims:
+                    continue
+                attempts = [
+                    attempt for attempt in self.graph.attempts.values()
+                    if attempt.task_id == node.task_id and attempt.attempt_id not in self.graph.obsolete_attempts
+                ]
+                if any(attempt.status in {AttemptStatus.PENDING, AttemptStatus.RUNNING} for attempt in attempts):
+                    continue
+                done = [attempt for attempt in attempts if attempt.status == AttemptStatus.COMPLETED]
+                if done:
+                    targets.append(done[-1].attempt_id)
+        for attempt_id in targets:
+            await self.request_rerun(attempt_id, reason="checker_rerun")
+
+    async def request_rerun(self, attempt_id: str, *, reason: str = "advisory_rerun") -> dict[str, Any]:
+        """Run one task again. Only that task is relaunched (advisory repair, checker reruns)."""
+        async with self.lock:
+            attempt = self.graph.attempts.get(attempt_id)
+            if attempt is None or attempt.task_id not in self.plan.task_ids():
+                return {"accepted": False, "reason": "task not in active plan"}
+            node = self.plan.node(attempt.task_id)
+            taken = self.plan.task_ids()
+            number = 2
+            while f"{attempt.task_id}:{number}" in taken:
+                number += 1
+            successor = TaskNode(f"{attempt.task_id}:{number}", node.agent_id, node.goals, node.reads, node.writes)
+            edges = tuple(
+                (src, successor.task_id if dst == node.task_id else dst)
+                for src, dst in self.plan.dependency_edges if src != node.task_id
+            ) + tuple((successor.task_id, dst) for src, dst in self.plan.dependency_edges if src == node.task_id)
+            revision = PlanRevisionProposed(
+                attempt_id=attempt_id,
+                evidence_versions=(),
+                base_version=self.plan.version,
+                add_tasks=(successor,),
+                remove_tasks=(node.task_id,),
+                add_edges=tuple(sorted(set(edges))),
+                remove_edges=tuple(self.plan.dependency_edges),
+                required_goals=self.plan.required_goals,
+                carry_forward=tuple(sorted(self.plan.task_ids() - {node.task_id})),
+            )
+            self.notices.pop(attempt_id, None)
+            self.record(f"{reason}_requested", attempt_id, {"task_id": node.task_id})
+        return await self.submit(revision)
+
     def _regret_effects_locked(self) -> None:
         """Flag dispatched effects whose support died after dispatch; compensate when allowed."""
         flagged = {record.action_id for record in self.ledger.phase(EffectPhase.SUPPORT_INVALIDATED)}
@@ -1145,10 +1233,14 @@ class MonitorRuntime:
                     pending = [item for item in self.obligations.values() if item.open and not item.handled]
                     if not pending:
                         return
+                    if self.budget_scope == "claim":
+                        used = max(self.claim_rounds.get(item.claim_id, 0) for item in pending)
+                    else:
+                        used = self.corrections_used
                     view = RecoveryView(
                         claims=tuple(item.claim_id for item in pending),
                         roots=tuple(EvidenceRef(item.claim_id, item.failed_version) for item in pending),
-                        budget=self.correction_budget - self.corrections_used,
+                        budget=self.correction_budget - used,
                         version=self.plan.version,
                         epoch=self.graph_epoch,
                         goals=self.plan.required_goals,
@@ -1171,6 +1263,7 @@ class MonitorRuntime:
                     decision = self._decide_locked(view, proposals, screened)
                     for claim_id in view.claims:
                         self.obligations[claim_id].handled = True
+                        self.claim_rounds[claim_id] = self.claim_rounds.get(claim_id, 0) + 1
                     handled = self._finish_recovery_locked(decision, [])
                 accepted = True
                 if handled.followup is not None:
@@ -1210,7 +1303,8 @@ class MonitorRuntime:
                     else:
                         value = await asyncio.to_thread(proposer, ref.claim_id)
                     self.proposal_cache[key] = value
-                proposals[ref.claim_id] = self.proposal_cache[key]
+                if self.proposal_cache[key] is not None:
+                    proposals[ref.claim_id] = self.proposal_cache[key]
         self.proposal_values.update(proposals)
         if isinstance(self.checker, OracleVerifier):
             return proposals, None
@@ -1218,11 +1312,9 @@ class MonitorRuntime:
         for claim_id, value in proposals.items():
             probe = Evidence(claim_id, 1, copy.deepcopy(value), "proposal", ())
             verdict = await self._run_check(probe)
-            while verdict.pending:
-                seen = self.progress_seq
-                await self._wait_progress_after(seen)
-                verdict = await self._run_check(probe)
-            screened[claim_id] = verdict.ok
+            # A pending screen means the check needs evidence about the new version itself
+            # (a report for its exact hash); publish it provisionally and verify it normally.
+            screened[claim_id] = verdict.ok or verdict.pending
         return proposals, screened
 
     def _decide_locked(
@@ -1288,14 +1380,20 @@ class MonitorRuntime:
         )
 
     def _verdict_applicable_locked(self, message: VerificationCompleted) -> bool:
+        """A verdict is about one evidence version, so it applies while that version is live.
+
+        A producer closed because a sibling failed, or replaced by a revision,
+        may still have a live output that consumers depend on. A failed verdict
+        on an obsolete attempt's output whose claim has a newer live version is
+        stale: the replacement is what consumers read.
+        """
         attempt = self.graph.attempts.get(message.target_attempt)
         if attempt is None:
             return False
-        if self.config.fencing:
-            if attempt.status in TERMINAL_ATTEMPTS or attempt.attempt_id in self.graph.obsolete_attempts:
-                return False
-            if message.plan_version != self.plan.version and attempt.task_id not in self.carried_forward:
-                if attempt.agent_id != "corrector":
+        if self.config.fencing and not message.ok and attempt.attempt_id in self.graph.obsolete_attempts:
+            for ref in message.target_evidence:
+                latest = self.latest_live_locked(ref.claim_id)
+                if latest is not None and latest.version > ref.version:
                     return False
         for ref in message.target_evidence:
             evidence = self.graph.get(ref)
@@ -1449,6 +1547,8 @@ class MonitorRuntime:
             async with self.lock:
                 self.recovery_applied = True
             await self._notify(["progress"])
+            if not closed:
+                await self._rerun_checkers({ref.claim_id for ref in published})
             return True
         revision = replace(decision.revision, evidence_versions=tuple(published))
         result = await self.submit(revision)
@@ -1484,8 +1584,14 @@ class MonitorRuntime:
                 "claim_id": claim_id,
                 "version": ref.version,
             })
+            self._notify_superseded_locked(evidence)
         await self._notify([f"evidence:{claim_id}", "progress"])
-        await self._submit_verdict(attempt.attempt_id, ref)
+        if self.concurrent_checks:
+            # The check may need evidence the pending revision produces (a report on this version).
+            attempt_id = attempt.attempt_id
+            self._spawn(lambda: self._submit_verdict(attempt_id, ref))
+        else:
+            await self._submit_verdict(attempt.attempt_id, ref)
         return ref
 
     async def _handle_revision(self, message: PlanRevisionProposed) -> _Handled:
@@ -1541,6 +1647,15 @@ class MonitorRuntime:
             "tasks": [node.task_id for node in revised.task_nodes],
             "carry_forward": sorted(self.carried_forward),
         })
+        used = set(revised.required_goals)
+        for node in revised.task_nodes:
+            used.update(node.reads)
+            used.update(node.writes)
+        for item in self.obligations.values():
+            if item.open and item.claim_id not in used:
+                item.discharged_at = self.graph.clock()[0] - (self.graph.origin or (0.0, 0.0))[0]
+                item.reason = "moot"
+                self.record("obligation_moot", self.recovery_id, {"claim_id": item.claim_id, "version": item.failed_version})
 
     async def _handle_cancel(self, message: CancellationAcknowledged) -> _Handled:
         async with self.lock:
