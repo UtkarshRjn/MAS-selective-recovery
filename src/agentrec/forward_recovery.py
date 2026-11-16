@@ -11,8 +11,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Iterable
 
-from .contract import EvidenceRef, EvidenceStatus, TaskNode
+from .contract import Evidence, EvidenceRef, EvidenceStatus, TaskNode
 from .protocol import PlanRevisionProposed
+from .verification import verify_claim
 
 
 @dataclass(frozen=True)
@@ -21,6 +22,7 @@ class RecoveryDecision:
     revision: PlanRevisionProposed | None
     restart: bool
     unresolved: bool
+    rejected: bool = False
 
 
 def select_suspects(
@@ -230,6 +232,29 @@ def revise_from_cone(
     )
 
 
+def screen_proposals(
+    claim_ids: Iterable[str],
+    corrections: dict[str, Any],
+    truth: dict[str, Any],
+) -> tuple[tuple[tuple[str, Any], ...], tuple[str, ...]]:
+    """Accept a repair only when it matches the required claim.
+
+    A rejected value is not published and cannot be cited by an action.
+    """
+    accepted: list[tuple[str, Any]] = []
+    rejected: list[str] = []
+    for claim_id in claim_ids:
+        if claim_id not in corrections:
+            continue
+        value = corrections[claim_id]
+        probe = Evidence(claim_id, 1, value, "proposal", ())
+        if verify_claim(probe, truth).ok:
+            accepted.append((claim_id, value))
+        else:
+            rejected.append(claim_id)
+    return tuple(accepted), tuple(rejected)
+
+
 def decide_recovery(
     *,
     policy: str,
@@ -241,8 +266,15 @@ def decide_recovery(
     tasks: tuple[TaskNode, ...],
     edges: tuple[tuple[str, str], ...],
     evidence_versions: tuple[EvidenceRef, ...],
+    truth: dict[str, Any] | None = None,
 ) -> RecoveryDecision:
-    """Choose the next graph edit. The monitor applies it after releasing its lock."""
+    """Choose the next graph edit. The monitor applies it after releasing its lock.
+
+    When `truth` is set, an online repair is published only after it matches
+    the required claim. A rejected repair spends the attempt. With budget left,
+    the revision is the support cone and the producer runs again. With no
+    budget left, nothing is published and nothing is booked.
+    """
     if budget_remaining <= 0:
         return RecoveryDecision((), None, False, True)
     claim_ids: list[str] = []
@@ -255,6 +287,22 @@ def decide_recovery(
     if policy == "restart":
         return RecoveryDecision((), None, True, False)
     if policy == "online":
+        rejected: tuple[str, ...] = ()
+        if truth is not None:
+            publish, rejected = screen_proposals(claim_ids, corrections, truth)
+        if rejected and not publish:
+            if budget_remaining <= 1:
+                return RecoveryDecision((), None, False, True, True)
+            revision = revise_from_cone(
+                tasks=tasks,
+                edges=edges,
+                goals=goals,
+                roots=tuple(claim_ids),
+                replaced=(),
+                base_version=base_version,
+                evidence_versions=evidence_versions,
+            )
+            return RecoveryDecision((), revision, False, False, True)
         revision = revise_from_cone(
             tasks=tasks,
             edges=edges,
