@@ -109,7 +109,8 @@ def _required(pool: AgentPool, step: StepSpec, claim_id: str, evidence: dict[str
     target = step.bind.get(claim_id)
     if target is None or target not in evidence:
         return ()
-    return (evidence[target].artifact, *pool.case.identity)
+    bound = tuple(evidence[item].artifact for item in step.context.get(claim_id, ()) if item in evidence)
+    return (evidence[target].artifact, *bound, *pool.case.identity)
 
 
 async def run_step(monitor: MonitorRuntime, attempt: AgentAttempt, node: TaskNode, *, pool: AgentPool) -> None:
@@ -124,6 +125,21 @@ async def run_step(monitor: MonitorRuntime, attempt: AgentAttempt, node: TaskNod
 
     def stop_requested() -> bool:
         return cancellable and monitor.cancel_requested(attempt_id)
+
+    def meter(prompt: int, completion: int, started: float, ended: float) -> None:
+        record = RequestRecord(attempt_id, started, ended, prompt, completion, cancellable=False)
+        record.completed = ended
+        record.billed_prompt = prompt
+        record.billed_completion = completion
+        record.delivered = True
+        if monitor.cancel_requested(attempt_id):
+            record.cancel_requested = started
+            record.observable = False
+        monitor.requests.requests.append(record)
+        account.log_usage(prompt, completion, task=step.task_id)
+
+    def context() -> StepContext:
+        return StepContext(pool.world, number, evidence, pool.case.identity, pool.llm, meter)
 
     async def read(claim_id: str) -> None:
         got = await monitor.request_evidence(
@@ -147,11 +163,12 @@ async def run_step(monitor: MonitorRuntime, attempt: AgentAttempt, node: TaskNod
             await read(claim_id)
         if stop_requested():
             raise CancelledAttempt()
-        record = await model_call(
-            monitor, pool, attempt_id, pool.duration(step, number), step.tokens, cancellable=cancellable,
-        )
-        account.log_usage(record.billed_prompt, record.billed_completion, task=step.task_id)
-        ctx = StepContext(pool.world, number, evidence, pool.case.identity, pool.llm)
+        if step.modeled:
+            record = await model_call(
+                monitor, pool, attempt_id, pool.duration(step, number), step.tokens, cancellable=cancellable,
+            )
+            account.log_usage(record.billed_prompt, record.billed_completion, task=step.task_id)
+        ctx = context()
         produced = step.compute(copy.deepcopy(values), ctx)
         if inspect.isawaitable(produced):
             produced = await produced
@@ -170,7 +187,7 @@ async def run_step(monitor: MonitorRuntime, attempt: AgentAttempt, node: TaskNod
                     monitor, pool, attempt_id, pool.duration(step, number) * 0.5, step.tokens, cancellable=cancellable,
                 )
                 account.log_usage(again.billed_prompt, again.billed_completion, task=step.task_id, reread=True)
-                ctx = StepContext(pool.world, number, evidence, pool.case.identity, pool.llm)
+                ctx = context()
                 produced = step.compute(copy.deepcopy(values), ctx)
                 if inspect.isawaitable(produced):
                     produced = await produced
@@ -192,7 +209,8 @@ async def run_step(monitor: MonitorRuntime, attempt: AgentAttempt, node: TaskNod
                 applies_to: tuple[ArtifactRef, ...] = ()
                 source = step.applies.get(claim_id)
                 if source is not None and source in evidence:
-                    applies_to = (evidence[source].artifact, *pool.case.identity)
+                    bound = tuple(evidence[item].artifact for item in step.context.get(claim_id, ()) if item in evidence)
+                    applies_to = (evidence[source].artifact, *bound, *pool.case.identity)
                 result = await monitor.submit(OutputProposed(
                     attempt_id=attempt_id,
                     claim_id=claim_id,
@@ -216,7 +234,7 @@ async def run_step(monitor: MonitorRuntime, attempt: AgentAttempt, node: TaskNod
                 monitor, pool, attempt_id, pool.duration(step, number) * 0.5, step.tokens, cancellable=cancellable,
             )
             account.log_usage(again.billed_prompt, again.billed_completion, task=step.task_id, revalidated=True)
-            ctx = StepContext(pool.world, number, evidence, pool.case.identity, pool.llm)
+            ctx = context()
             produced = step.compute(copy.deepcopy(values), ctx)
             if inspect.isawaitable(produced):
                 produced = await produced
@@ -255,13 +273,27 @@ def make_corrector(monitor: MonitorRuntime, pool: AgentPool):
         if case.corrector is None:
             return None
         attempt_id = f"corrector:{claim_id}:{monitor.corrector_calls}"
-        await model_call(monitor, pool, attempt_id, case.correction_latency, (500, 120), cancellable=True)
+        if case.correction_latency > 0:
+            await model_call(monitor, pool, attempt_id, case.correction_latency, (500, 120), cancellable=True)
+
+        def meter(prompt: int, completion: int, started: float, ended: float) -> None:
+            record = RequestRecord(attempt_id, started, ended, prompt, completion, cancellable=False)
+            record.completed = ended
+            record.billed_prompt = prompt
+            record.billed_completion = completion
+            record.delivered = True
+            monitor.requests.requests.append(record)
+
+        pool.world.meter = meter
         values: dict[str, Any] = {}
         for item in case.steps:
-            for read in item.all_reads:
+            for read in (*item.all_reads, *item.writes):
                 latest = monitor.latest_live_locked(read)
                 if latest is not None:
                     values[read] = copy.deepcopy(latest.value)
-        return case.corrector(claim_id, pool.world, values)
+        result = case.corrector(claim_id, pool.world, values)
+        if inspect.isawaitable(result):
+            result = await result
+        return result
 
     return propose

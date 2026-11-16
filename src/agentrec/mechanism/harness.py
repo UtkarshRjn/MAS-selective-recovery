@@ -66,6 +66,39 @@ class VerdictHolds:
     origin: float = 0.0
     used: set[str] = field(default_factory=set)
     realized: dict[str, dict[str, Any]] = field(default_factory=dict)
+    released: dict[str, asyncio.Event] = field(default_factory=dict)
+
+    def _release(self, fault_id: str) -> asyncio.Event:
+        if fault_id not in self.released:
+            self.released[fault_id] = asyncio.Event()
+        return self.released[fault_id]
+
+    def _cone_holds(self, monitor: MonitorRuntime, snapshot: Evidence) -> list[asyncio.Event]:
+        """Releases this check must wait for: fired faults its support reaches.
+
+        The faulted claim itself and outputs bound to the faulty artifact (its own
+        test reports) are exempt, since the scheduled check needs them.
+        """
+        waits = []
+        support = None
+        subject = next((step.applies[snapshot.claim_id] for step in self.case.steps
+                        if snapshot.claim_id in step.applies), None)
+        for fault_id in self.schedule.faults:
+            spec = monitor.faults.specs.get(fault_id)
+            state = monitor.faults.state.get(fault_id)
+            if spec is None or state is None or not state.fired or self._release(fault_id).is_set():
+                continue
+            if spec.claim_id in {snapshot.claim_id, subject}:
+                continue
+            faulty = [
+                item for item in monitor.graph.evidence.values()
+                if item.claim_id == spec.claim_id and item.producer_attempt in state.fired
+            ]
+            if support is None:
+                support = monitor.graph.support_closure([snapshot.ref])
+            if any((item.claim_id, item.version) in support for item in faulty):
+                waits.append(self._release(fault_id))
+        return waits
 
     def _trigger_for(self, monitor: MonitorRuntime, snapshot: Evidence) -> tuple[str, Trigger] | None:
         for fault_id in self.schedule.faults:
@@ -97,13 +130,21 @@ class VerdictHolds:
             if trigger.event == "activation" and opened and event.event_type in {"correction_published", "plan_revised"}:
                 return True
             if trigger.event not in {"obligation_opened", "activation"} and event.event_type == trigger.event:
-                if not trigger.claim or event.payload.get("claim_id") == trigger.claim:
+                subjects = {
+                    event.payload.get("claim_id"),
+                    event.payload.get("tool"),
+                    logical_task(str(event.payload.get("task_id", ""))),
+                }
+                if not trigger.claim or trigger.claim in subjects:
                     return True
         return False
 
     async def __call__(self, monitor: MonitorRuntime, snapshot: Evidence) -> None:
         loop = asyncio.get_running_loop()
         base = jitter(self.seed, f"check:{snapshot.claim_id}:{snapshot.version}", self.case.check_latency)
+        if self.case.hold_cone:
+            for event in self._cone_holds(monitor, snapshot):
+                await event.wait()
         found = self._trigger_for(monitor, snapshot)
         if found is None:
             await asyncio.sleep(base)
@@ -129,6 +170,7 @@ class VerdictHolds:
             await asyncio.sleep(trigger.delay)
         else:
             raise ValueError(f"unknown trigger kind {trigger.kind}")
+        self._release(key).set()
         self.realized[key] = {
             "released_at": round(loop.time() - self.origin, 4),
             "check_started": round(started - self.origin, 4),
@@ -252,7 +294,10 @@ def run_cell(
     horizon: float = 400.0,
     correction_budget: int = 3,
     keep_events: bool = False,
+    real_clock: bool = False,
+    llm: Any = None,
 ) -> RunResult:
+    """Run one cell. `real_clock` is required when steps do real work (model calls, test runs)."""
     if verifier not in VERIFIER_MODES:
         raise ValueError(f"unknown verifier mode {verifier}")
     if clean:
@@ -260,7 +305,8 @@ def run_cell(
     clock = VirtualClock()
     wall_started = time.perf_counter()
     try:
-        result = clock.run(_run(case, schedule, seed, policy, verifier, clean, horizon, correction_budget, keep_events))
+        body = _run(case, schedule, seed, policy, verifier, clean, horizon, correction_budget, keep_events, llm)
+        result = asyncio.run(body) if real_clock else clock.run(body)
     except Exception as exc:  # pragma: no cover - reported as a row
         result = RunResult(
             _base_row(case, schedule, seed, policy, verifier, clean) | {
@@ -298,13 +344,18 @@ async def _run(
     horizon: float,
     correction_budget: int,
     keep_events: bool,
+    llm: Any = None,
 ) -> RunResult:
     loop = asyncio.get_running_loop()
     origin = loop.time()
-    ref_sources = case.reference_sources(schedule) if (case.reference_sources and not clean) else None
-    clean_ref = reference(case, schedule, seed, ref_sources)
-    timeline_ref = reference(case, schedule, seed)
+    if case.reference_factory is not None:
+        clean_ref = timeline_ref = case.reference_factory(schedule, seed)
+    else:
+        ref_sources = case.reference_sources(schedule) if (case.reference_sources and not clean) else None
+        clean_ref = reference(case, schedule, seed, ref_sources)
+        timeline_ref = reference(case, schedule, seed)
     world = World(case, schedule)
+    world.scratch["seed"] = seed
     faults = FaultSchedule([case.fault(fault_id) for fault_id in schedule.faults])
     trust_model = schedule.trust_model or case.trust_model
     monitor = MonitorRuntime(
@@ -326,11 +377,11 @@ async def _run(
     monitor.budget_scope = "claim"
     monitor.reconciler = world.store.lookup
     monitor.concurrent_checks = True
-    monitor.defer_input_verification = True
+    monitor.defer_input_verification = policy.gate_lineage
     monitor.eager_claims = set(case.eager_claims)
     monitor.checker_tasks = {step.task_id for step in case.steps if step.checker_step}
     monitor.verification_gate = None
-    pool = AgentPool(case, schedule, seed, world)
+    pool = AgentPool(case, schedule, seed, world, llm)
     holds = VerdictHolds(case, schedule, seed, timeline_ref, pool, origin=origin)
     monitor.verdict_hold = holds
     if case.corrector is not None:
@@ -386,6 +437,8 @@ async def _run(
     row = _score(case, schedule, seed, policy, verifier, clean, monitor, world, pool, holds, clean_ref,
                  timed_out=timed_out, error=error, end=end, completed_at=completed_at[0] if completed_at else None)
     row["stalled"] = stalled.is_set()
+    if case.row_extras is not None:
+        row.update(case.row_extras(world))
     events = [_event_row(event) for event in monitor.graph.events] if keep_events else []
     effects = [{"tool": tool, "arguments": args} for tool, args in world.effects]
     return RunResult(row, events, effects)
@@ -481,7 +534,10 @@ def _score(
         latest = monitor.latest_live_locked(claim_id)
         final[claim_id] = None if latest is None else latest.value
         statuses[claim_id] = "missing" if latest is None else latest.verification_status.value
-    correct = all(final[claim_id] == ref.values.get(claim_id) for claim_id in case.answer_claims)
+    if case.answer_oracle is not None:
+        correct = all(value is not None for value in final.values()) and case.answer_oracle(final, world)
+    else:
+        correct = all(final[claim_id] == ref.values.get(claim_id) for claim_id in case.answer_claims)
     verified = all(status == "verified" for status in statuses.values())
     oracle = case.effect_oracle or default_effect_oracle
     effects = oracle(world.effects, ref.effects, world)

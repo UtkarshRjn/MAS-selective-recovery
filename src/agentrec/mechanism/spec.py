@@ -37,6 +37,9 @@ class StepContext:
     evidence: dict[str, Evidence]
     identity: tuple[ArtifactRef, ...] = ()
     llm: Any = None
+    # Records one real model request (prompt tokens, completion tokens, start, end) for a
+    # model-backed step; modeled steps leave it unused.
+    meter: Callable[[int, int, float, float], None] | None = None
 
 
 @dataclass(frozen=True)
@@ -59,12 +62,20 @@ class StepSpec:
     actions: tuple[ActionSpec, ...] = ()
     bind: dict[str, str] = field(default_factory=dict)
     applies: dict[str, str] = field(default_factory=dict)
+    # Further claims a written report is bound to, or a bound read must also apply
+    # to (the rest of an integrated test checkpoint).
+    context: dict[str, tuple[str, ...]] = field(default_factory=dict)
     goal: bool | None = None
     checker_step: bool = False
 
     @property
     def all_reads(self) -> tuple[str, ...]:
         return (*self.reads, *self.late_reads)
+
+    @property
+    def modeled(self) -> bool:
+        """False for a step whose compute does the real work and meters its own model requests."""
+        return self.duration > 0 or self.tokens != (0, 0)
 
 
 @dataclass(frozen=True)
@@ -138,6 +149,14 @@ class CaseSpec:
     eager_claims: tuple[str, ...] = ()
     # False when the hazard is the schedule itself (concurrent writers), so no fault-free twin exists.
     has_clean_condition: bool = True
+    # Model-backed cases: the clean reference (expected effects, planned timeline) without running
+    # agents, and a correctness judgment over the final answers (for example, the evaluator tests).
+    reference_factory: Callable[["Schedule", int], "Reference"] | None = None
+    answer_oracle: Callable[[Values, "World"], bool] | None = None
+    row_extras: Callable[["World"], dict[str, Any]] | None = None
+    # Checks whose support reaches a fired fault wait for that fault's release, so a
+    # downstream check cannot reveal the fault before the schedule says it is detected.
+    hold_cone: bool = False
 
     def invariants_for(self, schedule: Schedule) -> tuple[GlobalInvariant, ...]:
         if self.invariant_factory is not None:
@@ -272,6 +291,10 @@ class World:
         self.store.lose_ack = dict(schedule.lose_ack)
         self.effects: list[tuple[str, dict[str, Any]]] = []
         self.source_reads: list[tuple[float, str]] = []
+        # Set by the harness while a model-backed corrector runs, so its requests are billed.
+        self.meter: Callable[[int, int, float, float], None] | None = None
+        # Per-run scratch space for model-backed cases (workspaces, run directory).
+        self.scratch: dict[str, Any] = {}
         self.registry = ContractRegistry(case.contracts())
         self.tools = case.tools(self)
         read_only = {name for name, fn in self.tools.items() if getattr(fn, "read_only", False)}

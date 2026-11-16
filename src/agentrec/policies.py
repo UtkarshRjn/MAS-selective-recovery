@@ -34,6 +34,10 @@ Switches:
                     retries blindly; ``none`` leaves the outcome uncertain).
 ``compensate``      issue registered inverses for reversible effects whose
                     support was invalidated after dispatch.
+``reintegrate``     after a correction, rerun goal steps that read the
+                    corrected claim (a manager re-merging after a repair).
+``gate_lineage``    the gate also refuses actions whose transitive support
+                    contains dead evidence; off, only cited evidence counts.
 
 Adaptations of published systems are labeled "-style". Their failures in this
 harness are failures of the adaptation, not of the published system.
@@ -62,6 +66,8 @@ class PolicyConfig:
     reconcile: str = "reconcile"
     compensate: bool = False
     advisory: bool = False
+    reintegrate: bool = False
+    gate_lineage: bool = True
     adaptation_of: str = ""
     description: str = ""
 
@@ -139,6 +145,14 @@ EXTENDED = (
         adaptation_of="LangGraph-style",
         description="Superstep checkpoints; successful sibling writes kept; replay from the faulty "
         "superstep; tools behind an interrupt with the same checker.",
+    ),
+    PolicyConfig(
+        "asyncodebench_manager_style", "local_repair", correction=True, invalidation=False, fencing=True,
+        cancellation=False, action_gate=True, reintegrate=True, gate_lineage=False,
+        adaptation_of="AsynCodeBench Async-Manager-style",
+        description="A manager repairs the failing specialist's artifact with check feedback and lets running "
+        "consumers finish, then re-merges; merge is gated on passing checks of the merged artifacts, "
+        "without lineage tracking or dependency-cone invalidation.",
     ),
 )
 

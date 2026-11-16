@@ -101,12 +101,15 @@ def applicable_report_check(
     *,
     passed_field: str = "passed",
     extra: tuple[ArtifactRef, ...] = (),
+    context: tuple[str, ...] = (),
 ) -> ClaimCheck:
     """CI-style check of an artifact claim: it passes when a passing report applies to it.
 
     With applicability enforced, a report counts only when it is bound to this
     exact content hash and to the environment and suite identities in `extra`.
     Without it, the latest report counts, which is the unversioned handoff.
+    `context` names further claims the report must have been run against, at
+    their latest live versions (an integrated test checkpoint).
     """
 
     def check(evidence: Evidence, ctx: CheckContext) -> Verdict:
@@ -114,6 +117,13 @@ def applicable_report_check(
         if ctx.enforce_applicability:
             required = (evidence.artifact, *extra)
             reports = [item for item in reports if applies(item.applies_to, required)]
+            for claim in context:
+                live = live_versions(ctx, claim)
+                current = max(live, key=lambda item: item.version).artifact if live else None
+                reports = [
+                    item for item in reports
+                    if all(ref == current for ref in item.applies_to if ref.kind == claim)
+                ]
         if not reports:
             return pending(report_claim)
         settled = [item for item in reports if item.verification_status == EvidenceStatus.VERIFIED]

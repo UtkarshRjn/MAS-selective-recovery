@@ -474,6 +474,16 @@ class MonitorRuntime:
                 return True
         return False
 
+    def _gate_support_dead_locked(self, refs: tuple[EvidenceRef, ...] | list[EvidenceRef]) -> bool:
+        """The gate's lineage test; without `gate_lineage` only the directly cited evidence counts."""
+        if getattr(self.config, "gate_lineage", True):
+            return self._dead_in_support_locked(refs)
+        for ref in refs:
+            evidence = self.graph.get(ref)
+            if evidence is None or evidence.verification_status in DEAD_STATUSES:
+                return True
+        return False
+
     def _obligation_reaches_locked(self, refs: tuple[EvidenceRef, ...] | list[EvidenceRef]) -> str | None:
         """Name an open obligation whose cone reaches this support, if any."""
         open_claims = [item.claim_id for item in self.obligations.values() if item.open]
@@ -650,7 +660,7 @@ class MonitorRuntime:
                         not self._eligible_locked(action.proposing_attempt)
                         or action.task_id not in self.plan.task_ids()
                         or any(item is None or item.verification_status in DEAD_STATUSES for item in found)
-                        or self._dead_in_support_locked(action.evidence_versions)
+                        or self._gate_support_dead_locked(action.evidence_versions)
                     )
                     if ineligible:
                         action.approval_status = ApprovalStatus.REJECTED
@@ -702,7 +712,7 @@ class MonitorRuntime:
                 )
                 if blocker is None and self.unresolved is not None:
                     blocker = "run_unresolved"
-                if blocker is None and self._dead_in_support_locked(action.evidence_versions):
+                if blocker is None and self._gate_support_dead_locked(action.evidence_versions):
                     blocker = "stale_support"
                 if blocker is None and self._obligation_reaches_locked(action.evidence_versions):
                     blocker = "recovery_in_progress"
@@ -1130,13 +1140,20 @@ class MonitorRuntime:
                     self.record("advisory_notice", attempt_id, {"claim_id": older.claim_id, "version": older.version})
 
     async def _rerun_checkers(self, claims: set[str]) -> None:
-        """Rerun checking steps that read a corrected claim, unless one is already pending or running."""
-        if not claims or not self.checker_tasks:
+        """Rerun checking steps that read a corrected claim, unless one is already pending or running.
+
+        With `reintegrate`, goal steps that read the corrected claim are rerun too (a
+        manager re-merging after a repair); their other inputs are left as they are.
+        """
+        reintegrate = getattr(self.config, "reintegrate", False)
+        if not claims or not (self.checker_tasks or reintegrate):
             return
         async with self.lock:
+            goals = set(self.plan.required_goals) if reintegrate else set()
             targets = []
             for node in self.plan.task_nodes:
-                if logical_task(node.task_id) not in self.checker_tasks or not set(node.reads) & claims:
+                rerun = logical_task(node.task_id) in self.checker_tasks or bool(set(node.goals) & goals)
+                if not rerun or not set(node.reads) & claims:
                     continue
                 attempts = [
                     attempt for attempt in self.graph.attempts.values()
