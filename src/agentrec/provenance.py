@@ -2,7 +2,17 @@ from __future__ import annotations
 
 from collections import defaultdict, deque
 from dataclasses import asdict, dataclass, field
-from typing import Any
+from typing import Any, Iterable
+
+from .contract import (
+    AgentAttempt,
+    AttemptStatus,
+    Evidence,
+    EvidenceRef,
+    EvidenceStatus,
+    MonitorEvent,
+    transition_evidence,
+)
 
 
 @dataclass
@@ -83,6 +93,47 @@ class Provenance:
         """
         self.edges.append((evidence_id, dependent_id, "support"))
 
+    def consumers_of(self, evidence_id: str) -> list[str]:
+        """Attempts and steps that cite `evidence_id` as support or consumption."""
+        found = []
+        for src, dst, etype in self.edges:
+            if src != evidence_id or etype not in {"support", "consumes"}:
+                continue
+            node = self.nodes.get(dst)
+            if node is not None and node.kind in {"step", "attempt"}:
+                found.append(dst)
+        return found
+
+    def consumption_closure(self, start_ids: Iterable[str]) -> set[str]:
+        """Walk claim → consuming attempt → dependent output, transitively.
+
+        Support edges reach the attempt. The attempt's output edges reach the
+        claims it produced. A support-only walk stops on the attempt, so it
+        misses those outputs and any later consumer of them. Verified nodes are
+        not entered and do not spread invalidation.
+        """
+        seen: set[str] = set()
+        queue: deque[str] = deque()
+        for nid in start_ids:
+            node = self.nodes.get(nid)
+            if node is not None and node.data.get("verification_status") == "verified":
+                continue
+            queue.append(nid)
+        while queue:
+            nid = queue.popleft()
+            if nid in seen or nid not in self.nodes:
+                continue
+            node = self.nodes[nid]
+            if node.data.get("verification_status") == "verified":
+                continue
+            seen.add(nid)
+            for dst in self._targets(nid, "support") + self._targets(nid, "consumes"):
+                queue.append(dst)
+            if node.kind in {"step", "attempt"}:
+                for dst in self._targets(nid, "output"):
+                    queue.append(dst)
+        return seen
+
     def descendants(self, nid: str, etypes: set[str] | None = None) -> set[str]:
         """Nodes reachable from `nid`, including itself.
 
@@ -110,6 +161,159 @@ class Provenance:
             "nodes": [asdict(n) for n in sorted(self.nodes.values(), key=lambda n: n.seq)],
             "edges": [{"src": s, "dst": d, "type": t} for s, d, t in self.edges],
         }
+
+
+@dataclass
+class Invalidation:
+    evidence: tuple[EvidenceRef, ...]
+    attempts: tuple[str, ...]
+
+
+class ExecutionGraph:
+    """Live, versioned dependency graph owned by the online monitor.
+
+    The offline `Provenance` log stays append-only and coarse. This graph is
+    the one the monitor updates: evidence versions, the attempts that consumed
+    them, support links from those attempts to the claims they produced, plan
+    membership, and the recovery events that changed the graph.
+    """
+
+    def __init__(self) -> None:
+        self.evidence: dict[tuple[str, int], Evidence] = {}
+        self.attempts: dict[str, AgentAttempt] = {}
+        self.consumers: dict[tuple[str, int], set[str]] = defaultdict(set)
+        self.produced_by: dict[str, list[EvidenceRef]] = defaultdict(list)
+        self.support_links: list[tuple[EvidenceRef, str, EvidenceRef]] = []
+        self.plan_tasks: dict[int, set[str]] = {}
+        self.obsolete_attempts: set[str] = set()
+        self.events: list[MonitorEvent] = []
+        self._event_seq = 0
+
+    def add_attempt(self, attempt: AgentAttempt) -> None:
+        self.attempts[attempt.attempt_id] = attempt
+
+    def versions(self, claim_id: str) -> list[Evidence]:
+        return [item for (cid, _), item in self.evidence.items() if cid == claim_id]
+
+    def get(self, ref: EvidenceRef) -> Evidence | None:
+        return self.evidence.get((ref.claim_id, ref.version))
+
+    def add_evidence(self, evidence: Evidence) -> None:
+        key = (evidence.claim_id, evidence.version)
+        if key in self.evidence:
+            raise ValueError(f"evidence {evidence.claim_id}@{evidence.version} already exists")
+        self.evidence[key] = evidence
+        self.produced_by[evidence.producer_attempt].append(evidence.ref)
+        self._append("evidence_added", evidence.producer_attempt, {
+            "claim_id": evidence.claim_id,
+            "version": evidence.version,
+            "status": evidence.verification_status.value,
+        })
+
+    def register_consumption(self, attempt_id: str, ref: EvidenceRef) -> None:
+        """Record a consumer before the evidence value is delivered."""
+        self.consumers[(ref.claim_id, ref.version)].add(attempt_id)
+        attempt = self.attempts[attempt_id]
+        if ref not in attempt.consumed_evidence_versions:
+            attempt.consumed_evidence_versions = (*attempt.consumed_evidence_versions, ref)
+        self._append("consumption_registered", attempt_id, {
+            "claim_id": ref.claim_id,
+            "version": ref.version,
+        })
+
+    def link_support(self, consumed: EvidenceRef, attempt_id: str, produced: EvidenceRef) -> None:
+        self.support_links.append((consumed, attempt_id, produced))
+        self._append("support_linked", attempt_id, {
+            "consumed": [consumed.claim_id, consumed.version],
+            "produced": [produced.claim_id, produced.version],
+        })
+
+    def set_status(self, ref: EvidenceRef, status: EvidenceStatus) -> Evidence | None:
+        current = self.get(ref)
+        if current is None or current.verification_status == status:
+            return current
+        if current.verification_status != EvidenceStatus.PROVISIONAL:
+            return current
+        updated = transition_evidence(current, status)
+        self.evidence[(ref.claim_id, ref.version)] = updated
+        return updated
+
+    def invalidate(self, roots: Iterable[EvidenceRef]) -> Invalidation:
+        """Invalidate provisional roots and the attempts and outputs that consumed them.
+
+        Verified evidence is left in place and does not spread. The producer of
+        an invalidated claim is closed so it cannot add further outputs, but its
+        other claims are not invalidated with it.
+        """
+        invalid_evidence: list[EvidenceRef] = []
+        invalid_attempts: list[str] = []
+        seen_evidence: set[tuple[str, int]] = set()
+        seen_attempts: set[str] = set()
+        queue = deque(roots)
+        while queue:
+            ref = queue.popleft()
+            key = (ref.claim_id, ref.version)
+            if key in seen_evidence:
+                continue
+            current = self.get(ref)
+            if current is None or current.verification_status == EvidenceStatus.VERIFIED:
+                continue
+            seen_evidence.add(key)
+            if current.verification_status == EvidenceStatus.PROVISIONAL:
+                self.evidence[key] = transition_evidence(current, EvidenceStatus.INVALID)
+            invalid_evidence.append(ref)
+            producer = current.producer_attempt
+            if producer not in seen_attempts and producer in self.attempts:
+                seen_attempts.add(producer)
+                invalid_attempts.append(producer)
+                self._close_attempt(producer)
+            for attempt_id in list(self.consumers.get(key, ())):
+                if attempt_id in seen_attempts:
+                    continue
+                seen_attempts.add(attempt_id)
+                invalid_attempts.append(attempt_id)
+                self._close_attempt(attempt_id)
+                for produced in self.produced_by.get(attempt_id, ()):
+                    queue.append(produced)
+        self._append("invalidated", "monitor:recovery", {
+            "evidence": [[ref.claim_id, ref.version] for ref in invalid_evidence],
+            "attempts": list(invalid_attempts),
+        })
+        return Invalidation(tuple(invalid_evidence), tuple(invalid_attempts))
+
+    def _close_attempt(self, attempt_id: str) -> None:
+        attempt = self.attempts.get(attempt_id)
+        if attempt is None:
+            return
+        if attempt.status not in {AttemptStatus.OBSOLETE, AttemptStatus.CANCELLED, AttemptStatus.INVALIDATED}:
+            attempt.status = AttemptStatus.INVALIDATED
+        self.obsolete_attempts.add(attempt_id)
+
+    def mark_plan(self, version: int, task_ids: Iterable[str]) -> None:
+        self.plan_tasks[version] = set(task_ids)
+        self._append("plan_activated", "monitor:recovery", {
+            "version": version,
+            "tasks": sorted(self.plan_tasks[version]),
+        })
+
+    def mark_obsolete(self, attempt_id: str) -> None:
+        attempt = self.attempts.get(attempt_id)
+        if attempt is not None and attempt.status != AttemptStatus.CANCELLED:
+            attempt.status = AttemptStatus.OBSOLETE
+        self.obsolete_attempts.add(attempt_id)
+        self._append("attempt_obsolete", attempt_id, {})
+
+    def record(self, event_type: str, attempt_id: str, payload: dict[str, Any]) -> None:
+        self._append(event_type, attempt_id, payload)
+
+    def _append(self, event_type: str, attempt_id: str, payload: dict[str, Any]) -> None:
+        self._event_seq += 1
+        self.events.append(MonitorEvent(
+            event_id=f"event:{self._event_seq}",
+            originating_attempt=attempt_id or "monitor:recovery",
+            event_type=event_type,
+            payload=payload,
+        ))
 
 
 # Measure provenance writes only; excludes graph traversal, serialization and audit.
