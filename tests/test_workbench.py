@@ -210,3 +210,13 @@ def test_frozen_pilot_refuses_a_changed_config(wb, tmp_path: Path) -> None:
     (tmp_path / "pilot.json").write_text(json.dumps(config))
     with pytest.raises(RuntimeError):
         run(tmp_path, reference=True, rows=(92,), policies=("online",), progress=False)
+
+
+def test_null_content_from_a_reasoning_model_is_an_empty_reply() -> None:
+    from agentrec.llm import ServerLLM
+
+    llm = ServerLLM(base_url="http://unused/v1", model="m")
+    data = {"choices": [{"message": {"content": None, "reasoning_content": "thinking"}}],
+            "usage": {"prompt_tokens": 3, "completion_tokens": 5}}
+    text, usage = llm._consume(data, 0.0)
+    assert text == "" and usage["completion_tokens"] == 5

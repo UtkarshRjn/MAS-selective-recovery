@@ -128,7 +128,8 @@ class ServerLLM:
         self.usage.prompt_tokens += prompt_tokens
         self.usage.completion_tokens += completion_tokens
         self.usage.latency_s += elapsed
-        return data["choices"][0]["message"]["content"], {
+        # Reasoning models can end a turn with content null (everything in reasoning_content).
+        return data["choices"][0]["message"].get("content") or "", {
             "calls": 1,
             "prompt_tokens": prompt_tokens,
             "completion_tokens": completion_tokens,
