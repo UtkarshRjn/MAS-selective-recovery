@@ -224,3 +224,30 @@ def test_a_pending_scheduled_release_is_not_a_stall() -> None:
     row = run_cell(case, slow, 0, policies.get("online"), horizon=400, correction_budget=3).row
     assert not row["stalled"] and row["outcome"] == "safe_completion"
     assert row["realized_ordering"]["first"]["fallback"]
+
+
+def test_activation_trigger_ignores_repairs_of_other_claims() -> None:
+    from types import SimpleNamespace
+
+    from agentrec.mechanism.harness import VerdictHolds
+    from agentrec.mechanism.spec import Trigger
+
+    events: list = []
+    monitor = SimpleNamespace(graph=SimpleNamespace(events=events))
+    holds = VerdictHolds(None, None, 0, None, None)
+    trigger = Trigger("after_event", event="activation", claim="a")
+
+    def add(kind: str, **payload) -> bool:
+        events.append(SimpleNamespace(event_type=kind, payload=payload))
+        return holds._event_seen(monitor, trigger)
+
+    assert not add("obligation_opened", claim_id="a", version=1)
+    assert not add("obligation_opened", claim_id="b", version=1)
+    assert not add("correction_published", claim_id="b", version=2)
+    assert not add("recovery_round", claims=["b"], plan=1)
+    assert not add("plan_activated", version=2)
+    assert not add("recovery_round", claims=["a"], plan=2)
+    assert add("plan_activated", version=3)
+    events.clear()
+    assert not add("obligation_opened", claim_id="a", version=1)
+    assert add("correction_published", claim_id="a", version=2)

@@ -67,6 +67,8 @@ class VerdictHolds:
     used: set[str] = field(default_factory=set)
     realized: dict[str, dict[str, Any]] = field(default_factory=dict)
     released: dict[str, asyncio.Event] = field(default_factory=dict)
+    # Checks currently waiting on a scheduled release; a pending release is not a stall.
+    waiting: int = 0
 
     def _release(self, fault_id: str) -> asyncio.Event:
         if fault_id not in self.released:
@@ -122,13 +124,20 @@ class VerdictHolds:
 
     def _event_seen(self, monitor: MonitorRuntime, trigger: Trigger) -> bool:
         opened = False
+        # A plan revision or activation repairs `trigger.claim` only after a recovery round that handled it.
+        round_handled = False
         for event in monitor.graph.events:
             if event.event_type == "obligation_opened" and event.payload.get("claim_id") == trigger.claim:
                 opened = True
                 if trigger.event == "obligation_opened":
                     return True
-            if trigger.event == "activation" and opened and event.event_type in {"correction_published", "plan_revised"}:
-                return True
+            if trigger.event == "activation" and opened:
+                if event.event_type == "recovery_round" and trigger.claim in event.payload.get("claims", ()):
+                    round_handled = True
+                if event.event_type == "correction_published" and event.payload.get("claim_id") == trigger.claim:
+                    return True
+                if round_handled and event.event_type in {"plan_revised", "plan_activated"}:
+                    return True
             if trigger.event not in {"obligation_opened", "activation"} and event.event_type == trigger.event:
                 subjects = {
                     event.payload.get("claim_id"),
@@ -151,6 +160,21 @@ class VerdictHolds:
             return
         key, trigger = found
         started = loop.time()
+        self.waiting += 1
+        try:
+            fallback = await self._wait(monitor, key, trigger, base, started)
+        finally:
+            self.waiting -= 1
+        self._release(key).set()
+        self.realized[key] = {
+            "released_at": round(loop.time() - self.origin, 4),
+            "check_started": round(started - self.origin, 4),
+            "fallback": fallback,
+            **ordering(monitor, self.pool, snapshot),
+        }
+
+    async def _wait(self, monitor: MonitorRuntime, key: str, trigger: Trigger, base: float, started: float) -> bool:
+        loop = asyncio.get_running_loop()
         fallback = False
         if trigger.kind == "delay":
             await asyncio.sleep(max(0.0, trigger.delay) + (base if trigger.delay >= 0 else 0.0))
@@ -170,13 +194,7 @@ class VerdictHolds:
             await asyncio.sleep(trigger.delay)
         else:
             raise ValueError(f"unknown trigger kind {trigger.kind}")
-        self._release(key).set()
-        self.realized[key] = {
-            "released_at": round(loop.time() - self.origin, 4),
-            "check_started": round(started - self.origin, 4),
-            "fallback": fallback,
-            **ordering(monitor, self.pool, snapshot),
-        }
+        return fallback
 
 
 def ordering(monitor: MonitorRuntime, pool: AgentPool, snapshot: Evidence) -> dict[str, bool]:
@@ -409,7 +427,7 @@ async def _run(
     error = ""
     stalled = asyncio.Event()
     drive = asyncio.create_task(scheduler.run())
-    kick = asyncio.create_task(_kick(monitor, pool, stalled))
+    kick = asyncio.create_task(_kick(monitor, pool, stalled, holds))
     stall_wait = asyncio.create_task(stalled.wait())
     done, _pending = await asyncio.wait({drive, stall_wait}, timeout=horizon, return_when=asyncio.FIRST_COMPLETED)
     if drive in done:
@@ -447,7 +465,7 @@ async def _run(
 STALL_WINDOW = 30.0
 
 
-async def _kick(monitor: MonitorRuntime, pool: AgentPool, stalled: asyncio.Event) -> None:
+async def _kick(monitor: MonitorRuntime, pool: AgentPool, stalled: asyncio.Event, holds: VerdictHolds | None = None) -> None:
     """Housekeeping on the loop clock.
 
     Re-evaluates the release rule after background work, delivers advisory
@@ -484,7 +502,7 @@ async def _kick(monitor: MonitorRuntime, pool: AgentPool, stalled: asyncio.Event
             monitor.progress_event.set()
             await monitor._notify(["progress"])
         seen = (monitor.progress_seq, len(monitor.graph.events))
-        if seen != last_seen or pool.active:
+        if seen != last_seen or pool.active or (holds is not None and holds.waiting):
             last_seen = seen
             last_change = loop.time()
         elif loop.time() - last_change > STALL_WINDOW:

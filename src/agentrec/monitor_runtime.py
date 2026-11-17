@@ -1281,6 +1281,7 @@ class MonitorRuntime:
                     for claim_id in view.claims:
                         self.obligations[claim_id].handled = True
                         self.claim_rounds[claim_id] = self.claim_rounds.get(claim_id, 0) + 1
+                    self.record("recovery_round", self.recovery_id, {"claims": list(view.claims), "plan": view.version})
                     handled = self._finish_recovery_locked(decision, [])
                 accepted = True
                 if handled.followup is not None:
