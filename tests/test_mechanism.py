@@ -226,6 +226,32 @@ def test_a_pending_scheduled_release_is_not_a_stall() -> None:
     assert row["realized_ordering"]["first"]["fallback"]
 
 
+def test_a_slow_real_model_call_is_not_a_stall() -> None:
+    import asyncio
+    import dataclasses
+
+    from agentrec.mechanism.spec import reference
+
+    case = cases.build("PR_disjoint_2", "dev")
+    schedule = case.schedule("simultaneous")
+    expected = reference(case, schedule, 0)
+    case.reference_factory = lambda _schedule, _seed: expected
+
+    def slow(step):
+        async def delayed(values, ctx):
+            await asyncio.sleep(45.0)
+            return step.compute(values, ctx)
+
+        # Checks recompute synchronously (no context, or attempt number 0); agent attempts are slow.
+        def compute(values, ctx):
+            return delayed(values, ctx) if ctx is not None and ctx.attempt_number >= 1 else step.compute(values, ctx)
+        return dataclasses.replace(step, compute=compute)
+
+    case.steps = tuple(slow(step) if step.task_id == "response" else step for step in case.steps)
+    row = run_cell(case, schedule, 0, policies.get("online"), clean=True, horizon=400).row
+    assert not row["stalled"] and row["outcome"] == "safe_completion"
+
+
 def test_activation_trigger_ignores_repairs_of_other_claims() -> None:
     from types import SimpleNamespace
 

@@ -38,6 +38,8 @@ class AgentPool:
     world: World
     llm: Any = None
     active: dict[str, RequestRecord] = field(default_factory=dict)
+    # Step computations and corrector calls in progress; a real model call can outlast the stall window.
+    computing: int = 0
     attempts_by_task: dict[str, int] = field(default_factory=dict)
     advisory_rereads: int = 0
     advisory_ignored: int = 0
@@ -105,6 +107,17 @@ async def model_call(
         pool.active.pop(attempt_id, None)
 
 
+async def _compute(pool: AgentPool, fn: Any, *args: Any) -> Any:
+    pool.computing += 1
+    try:
+        result = fn(*args)
+        if inspect.isawaitable(result):
+            result = await result
+        return result
+    finally:
+        pool.computing -= 1
+
+
 def _required(pool: AgentPool, step: StepSpec, claim_id: str, evidence: dict[str, Evidence]) -> tuple[ArtifactRef, ...]:
     target = step.bind.get(claim_id)
     if target is None or target not in evidence:
@@ -169,9 +182,7 @@ async def run_step(monitor: MonitorRuntime, attempt: AgentAttempt, node: TaskNod
             )
             account.log_usage(record.billed_prompt, record.billed_completion, task=step.task_id)
         ctx = context()
-        produced = step.compute(copy.deepcopy(values), ctx)
-        if inspect.isawaitable(produced):
-            produced = await produced
+        produced = await _compute(pool, step.compute, copy.deepcopy(values), ctx)
         produced, fired = monitor.faults.apply(node.task_id, attempt_id, produced)
         if fired:
             monitor.record("fault_fired", attempt_id, {"faults": fired})
@@ -188,9 +199,7 @@ async def run_step(monitor: MonitorRuntime, attempt: AgentAttempt, node: TaskNod
                 )
                 account.log_usage(again.billed_prompt, again.billed_completion, task=step.task_id, reread=True)
                 ctx = context()
-                produced = step.compute(copy.deepcopy(values), ctx)
-                if inspect.isawaitable(produced):
-                    produced = await produced
+                produced = await _compute(pool, step.compute, copy.deepcopy(values), ctx)
                 produced, _fired = monitor.faults.apply(node.task_id, attempt_id, produced)
                 monitor.notices.pop(attempt_id, None)
             else:
@@ -235,9 +244,7 @@ async def run_step(monitor: MonitorRuntime, attempt: AgentAttempt, node: TaskNod
             )
             account.log_usage(again.billed_prompt, again.billed_completion, task=step.task_id, revalidated=True)
             ctx = context()
-            produced = step.compute(copy.deepcopy(values), ctx)
-            if inspect.isawaitable(produced):
-                produced = await produced
+            produced = await _compute(pool, step.compute, copy.deepcopy(values), ctx)
             produced, _fired = monitor.faults.apply(node.task_id, attempt_id, produced)
         refs = tuple(account.consumed)
         cited = (*refs, *own)
@@ -291,9 +298,6 @@ def make_corrector(monitor: MonitorRuntime, pool: AgentPool):
                 latest = monitor.latest_live_locked(read)
                 if latest is not None:
                     values[read] = copy.deepcopy(latest.value)
-        result = case.corrector(claim_id, pool.world, values)
-        if inspect.isawaitable(result):
-            result = await result
-        return result
+        return await _compute(pool, case.corrector, claim_id, pool.world, values)
 
     return propose

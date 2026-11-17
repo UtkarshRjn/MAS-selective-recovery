@@ -502,7 +502,7 @@ async def _kick(monitor: MonitorRuntime, pool: AgentPool, stalled: asyncio.Event
             monitor.progress_event.set()
             await monitor._notify(["progress"])
         seen = (monitor.progress_seq, len(monitor.graph.events))
-        if seen != last_seen or pool.active or (holds is not None and holds.waiting):
+        if seen != last_seen or pool.active or pool.computing or (holds is not None and holds.waiting):
             last_seen = seen
             last_change = loop.time()
         elif loop.time() - last_change > STALL_WINDOW:
