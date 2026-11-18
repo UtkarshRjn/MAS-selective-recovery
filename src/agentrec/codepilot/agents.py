@@ -140,8 +140,9 @@ class ModelAgent:
         system = (
             f"You are the {assignment.role} on a team implementing a Python repository. "
             f"You may change only these files: {', '.join(assignment.writable_paths)}. "
-            "Do not change tests. Reply with the complete new content of the requested file in a single "
-            "```python code block and nothing else."
+            "Do not change tests. Write a working implementation from the task, the tests and the files "
+            "you are given; do not try to reproduce the original library's source from memory. Reply with "
+            "the complete new content of the requested file in a single ```python code block and nothing else."
         )
         user = [
             f"Task:\n{request.task.problem_statement}",
