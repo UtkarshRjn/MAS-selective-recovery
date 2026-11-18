@@ -173,6 +173,28 @@ def test_downstream_check_waits_for_the_scheduled_release(base: Path, tmp_path: 
     assert verdicts[0]["payload"]["claim_id"] == "patch:key_agent"
 
 
+@dataclass
+class SlowConsumer(ScriptedAgent):
+    """The consumer is still working when the repaired producer lands, so its first output is stale."""
+
+    def solve(self, request: SolveRequest, meter) -> dict[str, str]:
+        if any(path.endswith("deco.py") for path in request.assignment.writable_paths):
+            time.sleep(1.0)
+        return super().solve(request, meter)
+
+
+def test_a_carried_consumer_whose_output_is_fenced_runs_again(base: Path, tmp_path: Path):
+    record = task()
+    site = {"dependency_id": "toy.keys_to_deco", "producer": "key_agent", "consumer": "decorator_agent",
+            "path": "pkg/keys.py", "function": "hashkey", "upstream_failures": ["tests/test_keys.py::test_hashkey"]}
+    agent = SlowConsumer()
+    case = CodingCase(record, base=base, workdir=tmp_path / "work", agent=agent, executor=FakeExecutor(),
+                      handoff=handoff_order(record), fault=site, corrector=agent).build()
+    result = run(case, "inflight", "asyncodebench_manager_style")
+    assert any(event["type"] == "output_rejected" for event in result.events)
+    assert not result.row["stalled"] and result.row["outcome"] == "safe_completion"
+
+
 def test_reports_bind_the_whole_checkpoint(base: Path, tmp_path: Path):
     _coding, case = build(base, tmp_path)
     result = run(case, "inflight", "online")

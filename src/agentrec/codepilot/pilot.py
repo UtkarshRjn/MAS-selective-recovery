@@ -95,8 +95,8 @@ def make_executor(kind: str, registry=None):
     raise ValueError(f"unknown executor {kind}")
 
 
-# Well above one 8k-token generation; a request still silent after this is retried as a hang.
-REQUEST_TIMEOUT_S = 300.0
+# Well above one full-length generation; a request still silent after this is retried as a hang.
+REQUEST_TIMEOUT_S = 600.0
 
 
 def llm_factory(spec: ModelSpec):

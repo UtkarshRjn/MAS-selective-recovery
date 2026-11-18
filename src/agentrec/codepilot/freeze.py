@@ -165,7 +165,8 @@ class ModelSpec:
     model: str
     base_url: str
     temperature: float = 0.0
-    max_tokens: int = 8192
+    # Reasoning models spend most of a reply thinking; 8192 truncated whole files before the code block.
+    max_tokens: int = 32768
 
 
 @dataclass

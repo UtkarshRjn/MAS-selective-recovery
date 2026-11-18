@@ -122,8 +122,12 @@ class Scheduler:
                 if key in self.launched:
                     continue
                 if node.task_id in self.monitor.carried_forward and self._live_attempt_locked(node.task_id):
-                    self.launched.add(key)
-                    continue
+                    if self.monitor.task_output_ready(node.task_id):
+                        self.launched.add(key)
+                        continue
+                    if self._running_attempt_locked(node.task_id):
+                        continue
+                    # The carried attempt finished without an accepted output (e.g. fenced as stale): run it again.
                 predecessors = [src for src, dst in self.monitor.plan.dependency_edges if dst == node.task_id]
                 if not all(self.monitor.task_output_ready(src) for src in predecessors):
                     continue
@@ -172,6 +176,12 @@ class Scheduler:
             if attempt.status.value in {"pending", "running", "completed"}:
                 return True
         return False
+
+    def _running_attempt_locked(self, task_id: str) -> bool:
+        return any(
+            attempt.task_id == task_id and attempt.status.value in {"pending", "running"}
+            for attempt in self.monitor.graph.attempts.values()
+        )
 
     def _reap(self) -> None:
         finished = {task for task in self.tasks if task.done()}
