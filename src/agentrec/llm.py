@@ -13,6 +13,8 @@ import httpx
 from .agents import Messages, read_field
 
 OBS_PREFIX = "OBSERVATION: "
+# Names a request that kept failing at the transport level; such runs are infrastructure errors.
+TRANSPORT_FAILURE = "model transport failure"
 
 
 @dataclass

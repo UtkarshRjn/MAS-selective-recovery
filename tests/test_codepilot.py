@@ -212,3 +212,82 @@ def test_extract_code_takes_the_largest_block():
     text = "```python\nx = 1\n```\nand\n```python\ndef f():\n    return 2\n```"
     assert extract_code(text) == "def f():\n    return 2\n"
     assert extract_code("no code") is None
+
+
+def _endpoint(replies):
+    import httpx
+
+    from agentrec.llm import ServerLLM
+
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        reply = replies[min(len(calls), len(replies)) - 1]
+        if isinstance(reply, Exception):
+            raise reply
+        return reply
+
+    llm = ServerLLM(base_url="http://endpoint/v1", model="m")
+    llm.client = httpx.Client(base_url="http://endpoint/v1", transport=httpx.MockTransport(handler))
+    return llm, calls
+
+
+def test_call_model_retries_transient_failures(monkeypatch):
+    import httpx
+
+    from agentrec.codepilot import agents
+
+    monkeypatch.setattr(agents, "RETRY_DELAYS_S", (0.0, 0.0))
+    ok = httpx.Response(200, json={"choices": [{"message": {"content": "hi"}}],
+                                   "usage": {"prompt_tokens": 2, "completion_tokens": 1}})
+    llm, calls = _endpoint([httpx.ReadTimeout("slow"), httpx.Response(503), ok])
+    assert agents.call_model(llm, [{"role": "user", "content": "x"}], 8) == ("hi", 2, 1)
+    assert len(calls) == 3
+
+
+def test_call_model_names_a_persistent_transport_failure(monkeypatch):
+    import httpx
+
+    from agentrec.codepilot import agents
+    from agentrec.llm import TRANSPORT_FAILURE
+
+    monkeypatch.setattr(agents, "RETRY_DELAYS_S", (0.0, 0.0))
+    llm, calls = _endpoint([httpx.ReadTimeout("slow")])
+    with pytest.raises(RuntimeError, match=TRANSPORT_FAILURE):
+        agents.call_model(llm, [{"role": "user", "content": "x"}], 8)
+    assert len(calls) == 3
+    llm, calls = _endpoint([httpx.Response(400)])
+    with pytest.raises(httpx.HTTPStatusError):
+        agents.call_model(llm, [{"role": "user", "content": "x"}], 8)
+    assert len(calls) == 1
+
+
+def test_a_transport_failure_is_an_infrastructure_error_and_is_rerun():
+    import dataclasses
+
+    from agentrec.llm import TRANSPORT_FAILURE
+    from agentrec.mechanism import cases
+    from agentrec.mechanism.spec import reference
+    from agentrec.mechanism.suite import finished_cells, latest_by_cell
+
+    case = cases.build("PR_disjoint_2", "dev")
+    schedule = case.schedule("simultaneous")
+    expected = reference(case, schedule, 0)
+    case.reference_factory = lambda _schedule, _seed: expected
+
+    def broken(step):
+        def compute(values, ctx):
+            if ctx is not None and ctx.attempt_number >= 1:
+                raise RuntimeError(f"{TRANSPORT_FAILURE}: ReadTimeout")
+            return step.compute(values, ctx)
+        return dataclasses.replace(step, compute=compute)
+
+    case.steps = tuple(broken(step) if step.task_id == "response" else step for step in case.steps)
+    row = run_cell(case, schedule, 0, policies.get("online"), clean=True, horizon=400).row
+    assert row["outcome"] == "infrastructure_error" and TRANSPORT_FAILURE in row["error"]
+
+    rows = [{"cell": "a", "outcome": "infrastructure_error"}, {"cell": "b", "outcome": "safe_completion"},
+            {"cell": "a", "outcome": "safe_but_incomplete"}, {"cell": "c", "outcome": "infrastructure_error"}]
+    assert finished_cells(rows) == {"a", "b"}
+    assert [row["outcome"] for row in latest_by_cell(rows)] == ["safe_but_incomplete", "safe_completion", "infrastructure_error"]

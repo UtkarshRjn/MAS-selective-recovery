@@ -22,7 +22,7 @@ from typing import Any, Iterator
 
 from .. import policies as policy_registry
 from ..mechanism.harness import run_cell
-from ..mechanism.suite import _git, load_rows
+from ..mechanism.suite import _git, finished_cells, load_rows
 from .agents import ModelAgent, ReferenceAgent
 from .case import CodingCase, choose_fault
 from .freeze import (
@@ -149,7 +149,7 @@ def run(
     registry = load_registry(root, allow_unpinned=not config.registry.get("pinned", True))
     cache = RepoCache(benchmark_root=registry.root)
     executor = make_executor(config.executor, registry)
-    done = {row["cell"] for row in load_rows(rows_dir)}
+    done = finished_cells(load_rows(rows_dir))
     models = (REFERENCE,) if reference else config.models
     workdir = directory / "work"
     built: dict[tuple[str, str], Any] = {}

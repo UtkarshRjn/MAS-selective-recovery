@@ -20,7 +20,7 @@ from .. import policies as policy_registry
 from ..codepilot.freeze import ModelSpec
 from ..codepilot.pilot import llm_factory
 from ..mechanism.harness import run_cell
-from ..mechanism.suite import _git, load_rows
+from ..mechanism.suite import _git, finished_cells, load_rows
 from .agents import ModelAgent, ReferenceAgent
 from .case import INTERVENTIONS, PROTOCOL, WorkBenchCase
 from .source import WorkBench, action_string
@@ -165,7 +165,7 @@ def run(directory: str | Path, *, reference: bool = False, rows: tuple[int, ...]
         manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True, default=str))
     wb = WorkBench(config.source["root"], commit=config.source["commit"])
     tasks = {task.index: task for task in wb.tasks()}
-    done = {row["cell"] for row in load_rows(out)}
+    done = finished_cells(load_rows(out))
     models = (REFERENCE,) if reference else config.models
     built: dict[tuple[int, str], Any] = {}
     ran = skipped = 0

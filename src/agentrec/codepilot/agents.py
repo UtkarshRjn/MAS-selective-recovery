@@ -22,6 +22,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Protocol
 
+import httpx
+
+from ..llm import TRANSPORT_FAILURE
 from .registry import Assignment, TaskRecord
 from .workspace import RepoCache, write_files
 
@@ -70,15 +73,37 @@ def extract_code(text: str) -> str | None:
     return max(blocks, key=len)
 
 
+RETRY_DELAYS_S = (5.0, 20.0)
+
+
+def _transient(exc: Exception) -> bool:
+    if isinstance(exc, httpx.HTTPStatusError):
+        return exc.response.status_code == 429 or exc.response.status_code >= 500
+    return isinstance(exc, httpx.TransportError)
+
+
 def call_model(llm: Any, messages: list[dict[str, str]], max_tokens: int) -> tuple[str, int, int]:
-    """One request; returns (text, prompt tokens, completion tokens) for this call alone."""
+    """One request; returns (text, prompt tokens, completion tokens) for this call alone.
+
+    Timeouts, dropped connections, 429 and 5xx are retried; if they persist the error names
+    `TRANSPORT_FAILURE` so the run is scored as an infrastructure error, not a model outcome.
+    """
     if hasattr(llm, "client") and hasattr(llm, "_consume"):
         body = llm._body(messages, json_mode=False, max_tokens=max_tokens)
-        started = time.perf_counter()
-        response = llm.client.post("/chat/completions", json=body)
-        response.raise_for_status()
-        text, usage = llm._consume(response.json(), started)
-        return text, int(usage["prompt_tokens"]), int(usage["completion_tokens"])
+        for delay in (*RETRY_DELAYS_S, None):
+            started = time.perf_counter()
+            try:
+                response = llm.client.post("/chat/completions", json=body)
+                response.raise_for_status()
+            except Exception as exc:
+                if not _transient(exc):
+                    raise
+                if delay is None:
+                    raise RuntimeError(f"{TRANSPORT_FAILURE}: {exc!r}") from exc
+                time.sleep(delay)
+                continue
+            text, usage = llm._consume(response.json(), started)
+            return text, int(usage["prompt_tokens"]), int(usage["completion_tokens"])
     text = llm.complete(messages, max_tokens=max_tokens)
     return text, sum(len(item["content"]) for item in messages) // 4, len(text) // 4
 

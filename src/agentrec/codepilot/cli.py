@@ -48,9 +48,9 @@ def cmd_run(args: argparse.Namespace) -> None:
 
 def cmd_summary(args: argparse.Namespace) -> None:
     from ..mechanism.stats import crsr_safe, summarize
-    from ..mechanism.suite import load_rows
+    from ..mechanism.suite import latest_by_cell, load_rows
 
-    rows = load_rows(Path(args.dir))
+    rows = latest_by_cell(load_rows(Path(args.dir)))
     for row in rows:
         row["condition"] = "clean" if row.get("intervention") == "clean" else "fault"
     groups = sorted({row.get("model", "") for row in rows})

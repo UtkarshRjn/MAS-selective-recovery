@@ -154,6 +154,17 @@ def load_rows(path: str | Path) -> list[dict[str, Any]]:
     return [json.loads(line) for line in target.read_text().splitlines() if line.strip()]
 
 
+def latest_by_cell(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The last row of each pilot cell; a rerun of an infrastructure error supersedes it."""
+    latest = {row["cell"]: row for row in rows}
+    return list(latest.values())
+
+
+def finished_cells(rows: list[dict[str, Any]]) -> set[str]:
+    """Pilot cells that need no rerun: their latest row is not an infrastructure error."""
+    return {row["cell"] for row in latest_by_cell(rows) if row.get("outcome") != "infrastructure_error"}
+
+
 def run_suite(config: SuiteConfig, out: str | Path, *, progress: bool = True) -> dict[str, Any]:
     """Run every missing cell of a frozen suite; return counts."""
     directory = Path(out)
@@ -202,4 +213,4 @@ def run_suite(config: SuiteConfig, out: str | Path, *, progress: bool = True) ->
     return {"ran": ran, "skipped": skipped, "infrastructure_errors": errors, "out": str(directory)}
 
 
-__all__ = ["BOUNDARY_ABLATIONS", "SuiteConfig", "cells", "load_rows", "manifest", "preset", "run_suite"]
+__all__ = ["BOUNDARY_ABLATIONS", "SuiteConfig", "cells", "finished_cells", "latest_by_cell", "load_rows", "manifest", "preset", "run_suite"]

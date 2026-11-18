@@ -25,6 +25,7 @@ from typing import Any
 from ..contract import DEAD_STATUSES, ApprovalStatus, AttemptStatus, Evidence, EvidenceStatus, canonical
 from ..fault_schedule import FaultSchedule, logical_task
 from ..instrumentation import VirtualClock
+from ..llm import TRANSPORT_FAILURE
 from ..monitor_runtime import MonitorRuntime
 from ..policies import PolicyConfig
 from ..scheduler import Scheduler
@@ -450,6 +451,8 @@ async def _run(
     if hook_task is not None:
         hook_task.cancel()
         await asyncio.gather(hook_task, return_exceptions=True)
+    if not error and monitor.unresolved and TRANSPORT_FAILURE in monitor.unresolved:
+        error = monitor.unresolved
     end = loop.time() - origin
     await monitor.abort()
     row = _score(case, schedule, seed, policy, verifier, clean, monitor, world, pool, holds, clean_ref,
