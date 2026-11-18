@@ -260,6 +260,7 @@ async def run_case(
         required_action={"flight_id": "FL1"},
     )
     monitor.fault_name = fault
+    monitor.legacy_fault_switch = True
     held = {"research_flights"}
     if fault == "restaurant_date" and policy in {"online", "support", "coarse", "suffix", "restart"}:
         held.update({"transfer", "planner"})

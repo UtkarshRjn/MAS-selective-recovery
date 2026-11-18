@@ -198,6 +198,22 @@ uv run agentrec who-when download
 uv run agentrec who-when summary
 ```
 
+## Online monitor evaluation
+
+An extended evaluation tests the online claim-level monitor against restart, suffix replay, producer-level and claim-level selective recovery, verify-before, advisory repair, and adaptations of Atomix-, STORM-, LangGraph-, and AsynCodeBench-style recovery. Every policy uses the same tool gateway, checker, corrector, and detection timing. The evaluation has four parts:
+
+- a deterministic mechanism suite and a boundary suite;
+- two-fault motifs derived from ParaRecover;
+- a coding pilot derived from AsynCodeBench;
+- a stateful pilot derived from WorkBench.
+
+All four are new experimental conditions rather than official benchmark results. The [monitor evaluation guide](evals/monitor-evaluation.md) covers the frozen configurations, commands, and limitations.
+
+```bash
+uv run agentrec mechanism run --suite mechanism --seeds 10 --out runs/
+uv run agentrec mechanism summary runs/mechanism-dev-source_check
+```
+
 ## Repository guide
 
 | Location | Contents |
@@ -207,6 +223,9 @@ uv run agentrec who-when summary
 | [evals/mbpp-50.json](evals/mbpp-50.json) | Manifest for the 50 prepared coding tasks. |
 | [evals/README.md](evals/README.md) | Coding protocol, configuration, and run instructions. |
 | [evals/travel-and-external.md](evals/travel-and-external.md) | Travel, graph, and external benchmark instructions. |
+| [evals/monitor-evaluation.md](evals/monitor-evaluation.md) | Online monitor evaluation: suites, pilots, frozen configuration, and limitations. |
+| [src/agentrec/mechanism/](src/agentrec/mechanism/) | Mechanism and boundary cases, harness, statistics, and the frozen suite runner. |
+| [src/agentrec/codepilot/](src/agentrec/codepilot/), [workbench/](src/agentrec/workbench/), [pararecover/](src/agentrec/pararecover/) | AsynCodeBench, WorkBench, and ParaRecover adaptations. |
 | [artifacts/phase1/](artifacts/phase1/) | Committed Qwen results, traces, and source revisions. |
 | [analysis/phase1_tables.py](analysis/phase1_tables.py) | Rebuilds the Qwen tables from saved rows. |
 | [docs/phase1_report.tex](docs/phase1_report.tex) | Report source. From `docs/`, run `pdflatex` twice. The figure is `monitor_compact.pdf`. |

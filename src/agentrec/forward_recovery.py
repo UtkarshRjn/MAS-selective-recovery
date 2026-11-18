@@ -9,7 +9,7 @@ and are left running. Old attempts stay in the history.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Iterable
+from typing import Any, Callable, Iterable
 
 from .contract import Evidence, EvidenceRef, EvidenceStatus, TaskNode
 from .protocol import PlanRevisionProposed
@@ -146,6 +146,46 @@ def revise_suffix(
     )
 
 
+def revise_producers(
+    *,
+    tasks: tuple[TaskNode, ...],
+    edges: tuple[tuple[str, str], ...],
+    goals: tuple[str, ...],
+    roots: tuple[str, ...],
+    base_version: int,
+    evidence_versions: tuple[EvidenceRef, ...],
+) -> PlanRevisionProposed:
+    """Rerun only the producers of the failed claims. Consumers are left as they are (local repair)."""
+    root_ids = set(roots)
+    producers = [node for node in tasks if set(node.writes) & root_ids]
+    producer_ids = {node.task_id for node in producers}
+    taken = {node.task_id for node in tasks}
+    added = [
+        TaskNode(_successor_id(node.task_id, taken), node.agent_id, node.goals, node.reads, node.writes)
+        for node in producers
+    ]
+    carry = tuple(node.task_id for node in tasks if node.task_id not in producer_ids)
+    carry_ids = set(carry)
+    new_edges = {(src, dst) for src, dst in edges if src in carry_ids and dst in carry_ids}
+    rebuilt = [*(node for node in tasks if node.task_id in carry_ids), *added]
+    for node in added:
+        for claim_id in node.reads:
+            for writer in rebuilt:
+                if claim_id in writer.writes and writer.task_id != node.task_id:
+                    new_edges.add((writer.task_id, node.task_id))
+    return PlanRevisionProposed(
+        attempt_id="monitor:recovery",
+        evidence_versions=evidence_versions,
+        base_version=base_version,
+        add_tasks=tuple(added),
+        remove_tasks=tuple(sorted(producer_ids)),
+        add_edges=tuple(sorted(new_edges)),
+        remove_edges=(),
+        required_goals=goals,
+        carry_forward=carry,
+    )
+
+
 def revise_from_cone(
     *,
     tasks: tuple[TaskNode, ...],
@@ -162,9 +202,10 @@ def revise_from_cone(
     relaunched. Every relaunched visit is a new task id.
     """
     spoiled = tainted_claims(tasks, roots)
+    root_set = set(roots)
     tainted = [
         node for node in tasks
-        if set(node.reads) & spoiled or set(node.writes) & spoiled
+        if set(node.reads) & spoiled or set(node.writes) & root_set
     ]
     tainted_ids = {node.task_id for node in tainted}
     kept = [node for node in tasks if node.task_id not in tainted_ids]
@@ -232,14 +273,98 @@ def revise_from_cone(
     )
 
 
+def superstep_levels(tasks: tuple[TaskNode, ...], edges: tuple[tuple[str, str], ...]) -> dict[str, int]:
+    """Bulk-synchronous level of each task: one more than its deepest predecessor."""
+    ids = {node.task_id for node in tasks}
+    preds: dict[str, list[str]] = {task_id: [] for task_id in ids}
+    for src, dst in edges:
+        if src in ids and dst in ids:
+            preds[dst].append(src)
+    levels: dict[str, int] = {}
+
+    def level(task_id: str, stack: tuple[str, ...] = ()) -> int:
+        if task_id in levels:
+            return levels[task_id]
+        if task_id in stack:
+            raise ValueError("plan is not a DAG")
+        value = 0 if not preds[task_id] else 1 + max(level(src, (*stack, task_id)) for src in preds[task_id])
+        levels[task_id] = value
+        return value
+
+    for node in tasks:
+        level(node.task_id)
+    return levels
+
+
+def revise_superstep(
+    *,
+    tasks: tuple[TaskNode, ...],
+    edges: tuple[tuple[str, str], ...],
+    goals: tuple[str, ...],
+    roots: tuple[str, ...],
+    base_version: int,
+    evidence_versions: tuple[EvidenceRef, ...],
+) -> PlanRevisionProposed:
+    """Replay from the checkpoint before the faulty superstep.
+
+    Earlier supersteps are kept. In the faulty superstep, siblings that did not
+    write a suspect keep their pending writes. The faulty task and every later
+    superstep run again, whether or not they read the fault.
+    """
+    levels = superstep_levels(tasks, edges)
+    root_ids = set(roots)
+    producers = [node for node in tasks if set(node.writes) & root_ids]
+    fault_level = min((levels[node.task_id] for node in producers), default=0)
+    rerun = [
+        node for node in tasks
+        if levels[node.task_id] > fault_level or (set(node.writes) & root_ids)
+    ]
+    rerun_ids = {node.task_id for node in rerun}
+    kept = [node for node in tasks if node.task_id not in rerun_ids]
+    taken = {node.task_id for node in tasks}
+    added = [
+        TaskNode(_successor_id(node.task_id, taken), node.agent_id, node.goals, node.reads, node.writes)
+        for node in rerun
+    ]
+    carry = tuple(node.task_id for node in kept)
+    carry_ids = set(carry)
+    rebuilt = [*kept, *added]
+    new_edges: set[tuple[str, str]] = set()
+    for src, dst in edges:
+        if src in carry_ids and dst in carry_ids:
+            new_edges.add((src, dst))
+    for node in added:
+        for claim_id in node.reads:
+            for writer in rebuilt:
+                if claim_id in writer.writes and writer.task_id != node.task_id:
+                    new_edges.add((writer.task_id, node.task_id))
+    return PlanRevisionProposed(
+        attempt_id="monitor:recovery",
+        evidence_versions=evidence_versions,
+        base_version=base_version,
+        add_tasks=tuple(added),
+        remove_tasks=tuple(node.task_id for node in rerun),
+        add_edges=tuple(sorted(new_edges)),
+        remove_edges=(),
+        required_goals=goals,
+        carry_forward=carry,
+    )
+
+
+Screen = Callable[[str, Any], bool]
+
+
 def screen_proposals(
     claim_ids: Iterable[str],
     corrections: dict[str, Any],
-    truth: dict[str, Any],
+    truth: dict[str, Any] | None = None,
+    screen: Screen | None = None,
 ) -> tuple[tuple[tuple[str, Any], ...], tuple[str, ...]]:
-    """Accept a repair only when it matches the required claim.
+    """Accept a repair only when the checker accepts it.
 
-    A rejected value is not published and cannot be cited by an action.
+    `screen` is the runtime checker's verdict on the proposed value. `truth` is
+    the legacy oracle screen. A rejected value is not published and cannot be
+    cited by an action.
     """
     accepted: list[tuple[str, Any]] = []
     rejected: list[str] = []
@@ -247,8 +372,12 @@ def screen_proposals(
         if claim_id not in corrections:
             continue
         value = corrections[claim_id]
-        probe = Evidence(claim_id, 1, value, "proposal", ())
-        if verify_claim(probe, truth).ok:
+        if screen is not None:
+            ok = screen(claim_id, value)
+        else:
+            probe = Evidence(claim_id, 1, value, "proposal", ())
+            ok = verify_claim(probe, truth or {}).ok
+        if ok:
             accepted.append((claim_id, value))
         else:
             rejected.append(claim_id)
@@ -267,13 +396,15 @@ def decide_recovery(
     edges: tuple[tuple[str, str], ...],
     evidence_versions: tuple[EvidenceRef, ...],
     truth: dict[str, Any] | None = None,
+    screen: Screen | None = None,
 ) -> RecoveryDecision:
     """Choose the next graph edit. The monitor applies it after releasing its lock.
 
-    When `truth` is set, an online repair is published only after it matches
-    the required claim. A rejected repair spends the attempt. With budget left,
-    the revision is the support cone and the producer runs again. With no
-    budget left, nothing is published and nothing is booked.
+    When `screen` (the runtime checker) or the legacy `truth` is set, an online
+    repair is published only after it is accepted. A rejected repair spends
+    the attempt. With budget left, the revision is the support cone and the
+    producer runs again. With no budget left, nothing is published and nothing
+    is booked.
     """
     if budget_remaining <= 0:
         return RecoveryDecision((), None, False, True)
@@ -282,14 +413,38 @@ def decide_recovery(
         if ref.claim_id not in claim_ids:
             claim_ids.append(ref.claim_id)
     publish = tuple((claim_id, corrections[claim_id]) for claim_id in claim_ids if claim_id in corrections)
-    if policy == "verify_before":
+    if policy in {"verify_before", "local_repair"}:
+        if screen is not None:
+            publish, _rejected = screen_proposals(claim_ids, corrections, screen=screen)
+        if policy == "local_repair" and not publish:
+            revision = revise_producers(
+                tasks=tasks,
+                edges=edges,
+                goals=goals,
+                roots=tuple(claim_ids),
+                base_version=base_version,
+                evidence_versions=evidence_versions,
+            )
+            return RecoveryDecision((), revision, False, False)
         return RecoveryDecision(publish, None, False, False)
+    if policy == "none":
+        return RecoveryDecision((), None, False, False)
     if policy == "restart":
         return RecoveryDecision((), None, True, False)
+    if policy == "superstep":
+        revision = revise_superstep(
+            tasks=tasks,
+            edges=edges,
+            goals=goals,
+            roots=tuple(claim_ids),
+            base_version=base_version,
+            evidence_versions=evidence_versions,
+        )
+        return RecoveryDecision((), revision, False, False)
     if policy == "online":
         rejected: tuple[str, ...] = ()
-        if truth is not None:
-            publish, rejected = screen_proposals(claim_ids, corrections, truth)
+        if screen is not None or truth is not None:
+            publish, rejected = screen_proposals(claim_ids, corrections, truth, screen)
         if rejected and not publish:
             if budget_remaining <= 1:
                 return RecoveryDecision((), None, False, True, True)

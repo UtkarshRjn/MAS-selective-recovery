@@ -165,6 +165,7 @@ async def run_graph_case(
         allow_provisional=True,
     )
     monitor.graph_fault = fault
+    monitor.legacy_fault_switch = True
     monitor.defer_input_verification = True
     if llm is not None:
         monitor.proposer = lambda claim_id, llm=llm, template=template, clean=clean: _propose_graph(

@@ -1,0 +1,1796 @@
+{
+ "exclusions": {
+  "a tag that does not corrupt a node output": 280,
+  "disjoint class already full": 23,
+  "error analysis names fewer than two tool nodes": 69,
+  "fewer than two error tags": 944,
+  "nested class already full": 59,
+  "plan has a dangling dependency": 1,
+  "plan size outside 3..12 tool nodes": 3
+ },
+ "motifs": {
+  "disjoint": [
+   {
+    "error_reason": "节点5使用了不存在的工具'get_user_location'，属于工具名称错误；节点2调用get_credible_website时参数列表缺少参数名'criteria'，属于参数名称错误；节点1、3、4中参数值使用了占位符字符串（'current_location'、'website_url'、'store_id'、'ingredients'）而非实际值，属于参数值非法；节点2和3（获取可信网站和下载食谱）是冗余的，因为用户已经拥有从可信网站下载的食谱。",
+    "funcall_times_gt": 4,
+    "nodes": [
+     {
+      "deps": [],
+      "effect": null,
+      "id": "1",
+      "recorded_result": "Error: Parameter 'user_location' value 'current_location' is not a valid location. Please provide a specific address or coordinates.",
+      "schema": {
+       "description": "Finds the nearest grocery store based on the user's location.",
+       "name": "find_nearest_grocery_store",
+       "parameters": {
+        "user_location": {
+         "description": "The user's current location.",
+         "type": "string"
+        }
+       },
+       "required": [
+        "user_location"
+       ]
+      },
+      "tool": "find_nearest_grocery_store"
+     },
+     {
+      "deps": [],
+      "effect": null,
+      "id": "2",
+      "recorded_result": "Error: Invalid parameter format. Expected an object with key 'criteria', but received an array.",
+      "schema": {
+       "description": "Fetches the URL of the most credible cooking website based on specified criteria.",
+       "name": "get_credible_website",
+       "parameters": {
+        "criteria": {
+         "description": "Criteria for determining website credibility.",
+         "type": "string"
+        }
+       },
+       "required": [
+        "criteria"
+       ]
+      },
+      "tool": "get_credible_website"
+     },
+     {
+      "deps": [
+       "2"
+      ],
+      "effect": null,
+      "id": "3",
+      "recorded_result": null,
+      "schema": {
+       "description": "Downloads a recipe from a specified cooking website.",
+       "name": "download_recipe",
+       "parameters": {
+        "website_url": {
+         "description": "The URL of the cooking website.",
+         "type": "string"
+        }
+       },
+       "required": [
+        "website_url"
+       ]
+      },
+      "tool": "download_recipe"
+     },
+     {
+      "deps": [
+       "3",
+       "1"
+      ],
+      "effect": null,
+      "id": "4",
+      "recorded_result": null,
+      "schema": {
+       "description": "Checks the availability of a list of ingredients in the specified grocery store.",
+       "name": "check_ingredient_availability",
+       "parameters": {
+        "ingredients": {
+         "description": "A list of ingredients to check for availability.",
+         "type": "array"
+        },
+        "store_id": {
+         "description": "The ID of the grocery store.",
+         "type": "string"
+        }
+       },
+       "required": [
+        "store_id",
+        "ingredients"
+       ]
+      },
+      "tool": "check_ingredient_availability"
+     },
+     {
+      "deps": [],
+      "effect": null,
+      "id": "5",
+      "recorded_result": "Error: Tool 'get_user_location' is not found in the available tools list.",
+      "schema": {},
+      "tool": "get_user_location"
+     }
+    ],
+    "query": "Hi, I'd like to create a shopping list for a pumpkin pie recipe. I have a recipe that I downloaded from a credible cooking website, and I'd also like to make sure the ingredients are available at the nearest grocery store. Can you assist me with this?",
+    "query_id": 512,
+    "record_id": 1619,
+    "relation": "disjoint",
+    "response_deps": [
+     "4"
+    ],
+    "round_gt": 4,
+    "sites": [
+     "5",
+     "2"
+    ],
+    "tags": [
+     "wrong tool name",
+     "parameter name error",
+     "illegal parameter value"
+    ],
+    "tags_zh": [
+     "工具名称错误",
+     "参数名称错误",
+     "参数值非法"
+    ]
+   },
+   {
+    "error_reason": "节点7调用getProductSpecifications时，参数应为命名参数{productId: \"TIRE-004\"}，但传入的是数组[\"TIRE-004\"]，缺少参数名，属于参数名称错误。节点8的依赖项包含节点3、4、5，但未包含节点7（重试获取TIRE-004规格），导致比较结果可能遗漏该产品，存在依赖关系缺失。",
+    "funcall_times_gt": 8,
+    "nodes": [
+     {
+      "deps": [],
+      "effect": null,
+      "id": "1",
+      "recorded_result": null,
+      "schema": {
+       "description": "Search for products in a catalog or database based on specified criteria.",
+       "name": "searchProducts",
+       "parameters": {
+        "category": {
+         "description": "The category of the product.",
+         "type": "string"
+        },
+        "productType": {
+         "description": "The type of product to search for.",
+         "type": "string"
+        },
+        "size": {
+         "description": "The size specification for the product.",
+         "type": "string"
+        }
+       },
+       "required": [
+        "productType",
+        "size",
+        "category"
+       ]
+      },
+      "tool": "searchProducts"
+     },
+     {
+      "deps": [],
+      "effect": null,
+      "id": "2",
+      "recorded_result": null,
+      "schema": {
+       "description": "Retrieve a list of the most popular brands for a given product category.",
+       "name": "getPopularBrands",
+       "parameters": {
+        "category": {
+         "description": "The category for which to find popular brands.",
+         "type": "string"
+        }
+       },
+       "required": [
+        "category"
+       ]
+      },
+      "tool": "getPopularBrands"
+     },
+     {
+      "deps": [
+       "1"
+      ],
+      "effect": null,
+      "id": "3",
+      "recorded_result": "Error: Invalid argument format. The tool 'getProductSpecifications' expects an object with key 'productId' (string), but an array was provided. Please check the parameter structure and try again.",
+      "schema": {
+       "description": "Retrieve the specifications of a given product.",
+       "name": "getProductSpecifications",
+       "parameters": {
+        "productId": {
+         "description": "The ID of the product for which to retrieve specifications.",
+         "type": "string"
+        }
+       },
+       "required": [
+        "productId"
+       ]
+      },
+      "tool": "getProductSpecifications"
+     },
+     {
+      "deps": [
+       "1"
+      ],
+      "effect": null,
+      "id": "4",
+      "recorded_result": "Error: Invalid argument format. The tool 'getProductSpecifications' expects an object with key 'productId' (string), but an array was provided. Please check the parameter structure and try again.",
+      "schema": {
+       "description": "Retrieve the specifications of a given product.",
+       "name": "getProductSpecifications",
+       "parameters": {
+        "productId": {
+         "description": "The ID of the product for which to retrieve specifications.",
+         "type": "string"
+        }
+       },
+       "required": [
+        "productId"
+       ]
+      },
+      "tool": "getProductSpecifications"
+     },
+     {
+      "deps": [
+       "1"
+      ],
+      "effect": null,
+      "id": "5",
+      "recorded_result": "Error: Invalid argument format. The tool 'getProductSpecifications' expects an object with key 'productId' (string), but an array was provided. Please check the parameter structure and try again.",
+      "schema": {
+       "description": "Retrieve the specifications of a given product.",
+       "name": "getProductSpecifications",
+       "parameters": {
+        "productId": {
+         "description": "The ID of the product for which to retrieve specifications.",
+         "type": "string"
+        }
+       },
+       "required": [
+        "productId"
+       ]
+      },
+      "tool": "getProductSpecifications"
+     },
+     {
+      "deps": [
+       "1"
+      ],
+      "effect": null,
+      "id": "6",
+      "recorded_result": "Error: Invalid argument format. The tool 'getProductSpecifications' expects an object with key 'productId' (string), but an array was provided. Please check the parameter structure and try again.",
+      "schema": {
+       "description": "Retrieve the specifications of a given product.",
+       "name": "getProductSpecifications",
+       "parameters": {
+        "productId": {
+         "description": "The ID of the product for which to retrieve specifications.",
+         "type": "string"
+        }
+       },
+       "required": [
+        "productId"
+       ]
+      },
+      "tool": "getProductSpecifications"
+     },
+     {
+      "deps": [
+       "6"
+      ],
+      "effect": null,
+      "id": "7",
+      "recorded_result": "Error: Invalid argument format. The tool 'getProductSpecifications' expects an object with key 'productId' (string), but an array was provided. Please check the parameter structure and try again.",
+      "schema": {
+       "description": "Retrieve the specifications of a given product.",
+       "name": "getProductSpecifications",
+       "parameters": {
+        "productId": {
+         "description": "The ID of the product for which to retrieve specifications.",
+         "type": "string"
+        }
+       },
+       "required": [
+        "productId"
+       ]
+      },
+      "tool": "getProductSpecifications"
+     },
+     {
+      "deps": [
+       "3",
+       "4",
+       "5"
+      ],
+      "effect": null,
+      "id": "8",
+      "recorded_result": "Error: Invalid argument format. The tool 'compareSpecifications' expects an object with keys 'baseSpecifications' (object) and 'otherProductsSpecifications' (array), but an array was provided. Please check the parameter structure and try again.",
+      "schema": {
+       "description": "Compare the specifications of a given product to a list of other products.",
+       "name": "compareSpecifications",
+       "parameters": {
+        "baseSpecifications": {
+         "description": "The specifications of the base product.",
+         "type": "object"
+        },
+        "otherProductsSpecifications": {
+         "description": "A list of specifications for other products to compare against.",
+         "type": "array"
+        }
+       },
+       "required": [
+        "baseSpecifications",
+        "otherProductsSpecifications"
+       ]
+      },
+      "tool": "compareSpecifications"
+     }
+    ],
+    "query": "Hi, I am looking for a 26-inch bicycle tire suitable for a mountain bike. I need to compare its specifications with those of tires from the most popular brands to find the best match. Could you help me with that?",
+    "query_id": 1734,
+    "record_id": 1654,
+    "relation": "disjoint",
+    "response_deps": [
+     "8"
+    ],
+    "round_gt": 6,
+    "sites": [
+     "7",
+     "8"
+    ],
+    "tags": [
+     "parameter name error",
+     "missing dependency"
+    ],
+    "tags_zh": [
+     "参数名称错误",
+     "依赖关系缺失"
+    ]
+   },
+   {
+    "error_reason": "节点6使用了不存在的工具名'print_flyer_retry'，节点7使用了不存在的工具名'schedule_social_media_post_retry'，均属于工具名称错误；节点5的para参数未使用正确的参数名称（flyer_template和location_list），而是直接以数组形式提供值，属于参数名称错误。",
+    "funcall_times_gt": 6,
+    "nodes": [
+     {
+      "deps": [],
+      "effect": "reversible",
+      "id": "1",
+      "recorded_result": null,
+      "schema": {
+       "description": "Generates a flyer template with specified event details.",
+       "name": "create_flyer_template",
+       "parameters": {
+        "event_details": {
+         "description": "Details of the event including time, date, location, contact information, and activities",
+         "properties": {
+          "activities": {
+           "description": "Activities at the event",
+           "type": "string"
+          },
+          "contact_info": {
+           "description": "Contact information for the event",
+           "type": "string"
+          },
+          "date": {
+           "description": "Date of the event",
+           "type": "string"
+          },
+          "location": {
+           "description": "Location of the event",
+           "type": "string"
+          },
+          "time": {
+           "description": "Time of the event",
+           "type": "string"
+          }
+         },
+         "required": [
+          "time",
+          "date",
+          "location",
+          "contact_info",
+          "activities"
+         ],
+         "type": "object"
+        }
+       }
+      },
+      "tool": "create_flyer_template"
+     },
+     {
+      "deps": [
+       "1"
+      ],
+      "effect": null,
+      "id": "2",
+      "recorded_result": "成功打印了100份传单，模板ID：FLYER_20230422_001",
+      "schema": {
+       "description": "Prints the flyer using the provided template.",
+       "name": "print_flyer",
+       "parameters": {
+        "flyer_template": {
+         "description": "Template of the flyer to be printed",
+         "type": "string"
+        },
+        "quantity": {
+         "description": "Number of copies to print",
+         "type": "number"
+        }
+       },
+       "required": [
+        "flyer_template",
+        "quantity"
+       ]
+      },
+      "tool": "print_flyer"
+     },
+     {
+      "deps": [],
+      "effect": "reversible",
+      "id": "3",
+      "recorded_result": null,
+      "schema": {
+       "description": "Generates a social media post with specified event details.",
+       "name": "create_social_media_post",
+       "parameters": {
+        "event_details": {
+         "description": "Details of the event including time, date, location, contact information, and activities",
+         "properties": {
+          "activities": {
+           "description": "Activities at the event",
+           "type": "string"
+          },
+          "contact_info": {
+           "description": "Contact information for the event",
+           "type": "string"
+          },
+          "date": {
+           "description": "Date of the event",
+           "type": "string"
+          },
+          "location": {
+           "description": "Location of the event",
+           "type": "string"
+          },
+          "time": {
+           "description": "Time of the event",
+           "type": "string"
+          }
+         },
+         "required": [
+          "time",
+          "date",
+          "location",
+          "contact_info",
+          "activities"
+         ],
+         "type": "object"
+        }
+       }
+      },
+      "tool": "create_social_media_post"
+     },
+     {
+      "deps": [
+       "3"
+      ],
+      "effect": "reversible",
+      "id": "4",
+      "recorded_result": "已安排社交媒体帖子于2023年4月21日上午10:00在Facebook、Twitter、Instagram上发布。",
+      "schema": {
+       "description": "Schedules the social media post for publishing.",
+       "name": "schedule_social_media_post",
+       "parameters": {
+        "platforms": {
+         "description": "List of social media platforms to post on",
+         "items": {
+          "type": "string"
+         },
+         "type": "array"
+        },
+        "post_content": {
+         "description": "Content of the social media post",
+         "type": "string"
+        },
+        "publish_time": {
+         "description": "Time to publish the post",
+         "type": "string"
+        }
+       },
+       "required": [
+        "post_content",
+        "platforms",
+        "publish_time"
+       ]
+      },
+      "tool": "schedule_social_media_post"
+     },
+     {
+      "deps": [
+       "2"
+      ],
+      "effect": null,
+      "id": "5",
+      "recorded_result": null,
+      "schema": {
+       "description": "Distributes printed flyers within the community.",
+       "name": "distribute_flyers",
+       "parameters": {
+        "flyer_template": {
+         "description": "Template of the printed flyer",
+         "type": "string"
+        },
+        "location_list": {
+         "description": "List of locations to distribute flyers",
+         "items": {
+          "type": "string"
+         },
+         "type": "array"
+        }
+       },
+       "required": [
+        "flyer_template",
+        "location_list"
+       ]
+      },
+      "tool": "distribute_flyers"
+     },
+     {
+      "deps": [
+       "1"
+      ],
+      "effect": null,
+      "id": "6",
+      "recorded_result": "错误：未知的工具名称 'print_flyer_retry'。可用工具包括：create_social_media_post, print_flyer, create_flyer_template, schedule_social_media_post, distribute_flyers, post_on_social_media",
+      "schema": {},
+      "tool": "print_flyer_retry"
+     },
+     {
+      "deps": [
+       "3"
+      ],
+      "effect": "reversible",
+      "id": "7",
+      "recorded_result": "错误：未知的工具名称 'schedule_social_media_post_retry'。可用工具包括：create_social_media_post, print_flyer, create_flyer_template, schedule_social_media_post, distribute_flyers, post_on_social_media",
+      "schema": {},
+      "tool": "schedule_social_media_post_retry"
+     }
+    ],
+    "query": "Hi! I need help promoting a community gardening event. I want to print flyers with the event details and also design a social media post to advertise it. Here are the details:\n\n- Event Name: Spring Community Gardening Day\n- Date: April 22, 2023\n- Time: 10:00 AM - 2:00 PM\n- Location: Maple Park, near the community center\n- Activities: Planting flowers, vegetable gardening, and a garden tour\n- Contact Info: Email - gardencommunity@example.com, Phone - 555-123-4567\n\nCould you help me create the flyer and the social media post? Afterwards, I need to distribute the printed flyers and post the advertisement on social media.",
+    "query_id": 3697,
+    "record_id": 1657,
+    "relation": "disjoint",
+    "response_deps": [
+     "2",
+     "4",
+     "5",
+     "6",
+     "7"
+    ],
+    "round_gt": 4,
+    "sites": [
+     "6",
+     "7"
+    ],
+    "tags": [
+     "wrong tool name",
+     "parameter name error"
+    ],
+    "tags_zh": [
+     "工具名称错误",
+     "参数名称错误"
+    ]
+   },
+   {
+    "error_reason": "1. 节点5调用了不存在的工具'find_nearby_veterinary_clinics_retry'，属于工具名称错误；2. 节点4的参数'clinic_id'和'date_time'使用了占位文字而非有效值，属于参数值非法；3. 节点4未提供有效的clinic_id和date_time具体值，属于必要参数缺失；4. 节点4仅依赖节点3，但实际应依赖节点2（访问收容所）以符合用户'先访问后预约'的顺序，属于依赖关系缺失；5. 节点5与节点3功能完全相同且无异常前提，属于工具调用冗余。",
+    "funcall_times_gt": 6,
+    "nodes": [
+     {
+      "deps": [],
+      "effect": null,
+      "id": "1",
+      "recorded_result": null,
+      "schema": {
+       "description": "Checks for available kittens at a given animal shelter.",
+       "name": "check_available_kittens",
+       "parameters": {
+        "shelter_id": {
+         "description": "The ID of the animal shelter to check for available kittens.",
+         "type": "string"
+        }
+       },
+       "required": [
+        "shelter_id"
+       ]
+      },
+      "tool": "check_available_kittens"
+     },
+     {
+      "deps": [
+       "1"
+      ],
+      "effect": "reversible",
+      "id": "2",
+      "recorded_result": null,
+      "schema": {
+       "description": "Schedules a visit to an animal shelter at a specific date and time.",
+       "name": "schedule_visit",
+       "parameters": {
+        "date_time": {
+         "description": "The date and time for the visit in ISO 8601 format.",
+         "type": "string"
+        },
+        "shelter_id": {
+         "description": "The ID of the animal shelter where the visit is to be scheduled.",
+         "type": "string"
+        }
+       },
+       "required": [
+        "shelter_id",
+        "date_time"
+       ]
+      },
+      "tool": "schedule_visit"
+     },
+     {
+      "deps": [],
+      "effect": null,
+      "id": "3",
+      "recorded_result": null,
+      "schema": {
+       "description": "Finds veterinary clinics near a specified location.",
+       "name": "find_nearby_veterinary_clinics",
+       "parameters": {
+        "location": {
+         "description": "The location to search for nearby veterinary clinics.",
+         "type": "string"
+        }
+       },
+       "required": [
+        "location"
+       ]
+      },
+      "tool": "find_nearby_veterinary_clinics"
+     },
+     {
+      "deps": [
+       "3"
+      ],
+      "effect": "reversible",
+      "id": "4",
+      "recorded_result": null,
+      "schema": {
+       "description": "Schedules a veterinary appointment at a specific clinic and time.",
+       "name": "schedule_veterinary_appointment",
+       "parameters": {
+        "clinic_id": {
+         "description": "The ID of the veterinary clinic where the appointment is to be scheduled.",
+         "type": "string"
+        },
+        "date_time": {
+         "description": "The date and time for the appointment in ISO 8601 format.",
+         "type": "string"
+        }
+       },
+       "required": [
+        "clinic_id",
+        "date_time"
+       ]
+      },
+      "tool": "schedule_veterinary_appointment"
+     },
+     {
+      "deps": [],
+      "effect": null,
+      "id": "5",
+      "recorded_result": null,
+      "schema": {},
+      "tool": "find_nearby_veterinary_clinics_retry"
+     }
+    ],
+    "query": "Hi, I need some help coordinating a visit to the local animal shelter to see the available kittens this Friday at 10 AM. Afterward, I would like to arrange a follow-up veterinary appointment for any kittens I decide to adopt. Can you help me with this?",
+    "query_id": 1719,
+    "record_id": 1787,
+    "relation": "disjoint",
+    "response_deps": [
+     "2",
+     "4"
+    ],
+    "round_gt": 4,
+    "sites": [
+     "5",
+     "4"
+    ],
+    "tags": [
+     "wrong tool name",
+     "illegal parameter value",
+     "missing required parameter"
+    ],
+    "tags_zh": [
+     "工具名称错误",
+     "参数值非法",
+     "必要参数缺失"
+    ]
+   }
+  ],
+  "nested": [
+   {
+    "error_reason": "节点2（compose_email）的参数传递方式错误，缺少参数名称，应为对象形式如{'subject':'...','body':'...'}，而实际传了两个字符串，属于参数名称错误；节点5（log_rsvp_responses）的参数responses_list需要类型为数组，但传了字符串占位符，属于参数类型错误。",
+    "funcall_times_gt": 5,
+    "nodes": [
+     {
+      "deps": [],
+      "effect": null,
+      "id": "1",
+      "recorded_result": null,
+      "schema": {
+       "description": "Fetches a list of all community members.",
+       "name": "get_all_community_members",
+       "parameters": {},
+       "required": []
+      },
+      "tool": "get_all_community_members"
+     },
+     {
+      "deps": [
+       "1"
+      ],
+      "effect": null,
+      "id": "2",
+      "recorded_result": "Error: Invalid argument format. Expected an object with keys 'subject' and 'body', received an array.",
+      "schema": {
+       "description": "Composes an email with the given subject and body.",
+       "name": "compose_email",
+       "parameters": {
+        "body": {
+         "description": "The body content of the email.",
+         "type": "string"
+        },
+        "subject": {
+         "description": "The subject of the email.",
+         "type": "string"
+        }
+       },
+       "required": [
+        "subject",
+        "body"
+       ]
+      },
+      "tool": "compose_email"
+     },
+     {
+      "deps": [
+       "1",
+       "2"
+      ],
+      "effect": "irreversible",
+      "id": "3",
+      "recorded_result": null,
+      "schema": {
+       "description": "Sends an email to a list of recipients.",
+       "name": "send_bulk_emails",
+       "parameters": {
+        "email_content": {
+         "description": "The content of the email to be sent.",
+         "type": "object"
+        },
+        "recipients_list": {
+         "description": "An array of recipient email addresses.",
+         "type": "array"
+        }
+       },
+       "required": [
+        "recipients_list",
+        "email_content"
+       ]
+      },
+      "tool": "send_bulk_emails"
+     },
+     {
+      "deps": [
+       "3"
+      ],
+      "effect": null,
+      "id": "4",
+      "recorded_result": null,
+      "schema": {
+       "description": "Fetches RSVP responses from community members.",
+       "name": "fetch_rsvp_responses",
+       "parameters": {},
+       "required": []
+      },
+      "tool": "fetch_rsvp_responses"
+     },
+     {
+      "deps": [
+       "4"
+      ],
+      "effect": "reversible",
+      "id": "5",
+      "recorded_result": null,
+      "schema": {
+       "description": "Logs RSVP responses for future reference.",
+       "name": "log_rsvp_responses",
+       "parameters": {
+        "responses_list": {
+         "description": "An array of RSVP responses to be logged.",
+         "type": "array"
+        }
+       },
+       "required": [
+        "responses_list"
+       ]
+      },
+      "tool": "log_rsvp_responses"
+     }
+    ],
+    "query": "Hello! I need to send an email invitation to all community members with details about an upcoming event. The email should include the event date, time, and location. Additionally, I need to track the RSVP responses from the recipients. Could you help me with this?",
+    "query_id": 1809,
+    "record_id": 1568,
+    "relation": "nested",
+    "response_deps": [
+     "3",
+     "5"
+    ],
+    "round_gt": 5,
+    "sites": [
+     "2",
+     "5"
+    ],
+    "tags": [
+     "parameter name error",
+     "parameter type error"
+    ],
+    "tags_zh": [
+     "参数名称错误",
+     "参数类型错误"
+    ]
+   },
+   {
+    "error_reason": "1. 工具名称错误：节点1使用了工具名\"retrieve_valid_animal_id\"，该工具不在可用工具列表中；2. 参数名称错误：节点2调用locate_animal_position时使用了参数名\"valid_animal_id\"，而工具要求的参数名应为\"animal_id\"；3. 参数值非法：节点3调用place_trap时，position参数值仅包含\"latitude\"，缺少必要的坐标信息（如经度），且参数格式不符合工具要求；4. 异常应对错误：前序root节点因动物ID无效导致调用失败，智能体并未有效归因（如询问用户动物ID），而是规划了一个不存在的工具来获取ID，属于无效的异常处理。",
+    "funcall_times_gt": "funcall_times_gt",
+    "nodes": [
+     {
+      "deps": [],
+      "effect": null,
+      "id": "1",
+      "recorded_result": null,
+      "schema": {},
+      "tool": "retrieve_valid_animal_id"
+     },
+     {
+      "deps": [
+       "1"
+      ],
+      "effect": null,
+      "id": "2",
+      "recorded_result": null,
+      "schema": {
+       "description": "Retrieve the known position of the animal.",
+       "name": "locate_animal_position",
+       "parameters": {
+        "animal_id": {
+         "description": "A unique identifier for the animal.",
+         "type": "string"
+        }
+       },
+       "required": [
+        "animal_id"
+       ]
+      },
+      "tool": "locate_animal_position"
+     },
+     {
+      "deps": [
+       "2"
+      ],
+      "effect": "irreversible",
+      "id": "3",
+      "recorded_result": null,
+      "schema": {
+       "description": "Place a cage trap at a specified location.",
+       "name": "place_trap",
+       "parameters": {
+        "position": {
+         "description": "Coordinates of where to place the trap.",
+         "type": "object"
+        },
+        "trap_id": {
+         "description": "A unique identifier for the trap.",
+         "type": "string"
+        }
+       },
+       "required": [
+        "trap_id",
+        "position"
+       ]
+      },
+      "tool": "place_trap"
+     },
+     {
+      "deps": [
+       "3"
+      ],
+      "effect": "reversible",
+      "id": "4",
+      "recorded_result": null,
+      "schema": {
+       "description": "Add bait to the placed trap.",
+       "name": "add_bait_to_trap",
+       "parameters": {
+        "bait_type": {
+         "description": "Type of bait to be used.",
+         "type": "string"
+        },
+        "trap_id": {
+         "description": "A unique identifier for the trap.",
+         "type": "string"
+        }
+       },
+       "required": [
+        "trap_id",
+        "bait_type"
+       ]
+      },
+      "tool": "add_bait_to_trap"
+     },
+     {
+      "deps": [
+       "4"
+      ],
+      "effect": null,
+      "id": "5",
+      "recorded_result": null,
+      "schema": {
+       "description": "Check the status of the trap to see if it has caught anything.",
+       "name": "check_trap_status",
+       "parameters": {
+        "trap_id": {
+         "description": "A unique identifier for the trap.",
+         "type": "string"
+        }
+       },
+       "required": [
+        "trap_id"
+       ]
+      },
+      "tool": "check_trap_status"
+     }
+    ],
+    "query": "Hi, I need to place a cage trap with bait at an animal's known location and then check if the animal has been caught. The animal has been spotted several times near a large oak tree in my backyard. Could you guide me through this process?",
+    "query_id": 5473,
+    "record_id": 1574,
+    "relation": "nested",
+    "response_deps": [
+     "5"
+    ],
+    "round_gt": "round_gt",
+    "sites": [
+     "1",
+     "2"
+    ],
+    "tags": [
+     "wrong tool name",
+     "parameter name error",
+     "illegal parameter value"
+    ],
+    "tags_zh": [
+     "工具名称错误",
+     "参数名称错误",
+     "参数值非法"
+    ]
+   },
+   {
+    "error_reason": "节点2（locate_animal_position）的para为列表形式，缺少参数名称（应指定'animal_id'），属于参数名称错误；节点3（place_trap）的para中position参数使用了占位符字符串而非有效坐标，属于参数值非法；节点2依赖节点1（generate_valid_animal_id，该工具不存在且无用），导致依赖关系错误（节点2不应依赖无效节点）。",
+    "funcall_times_gt": 4,
+    "nodes": [
+     {
+      "deps": [],
+      "effect": null,
+      "id": "1",
+      "recorded_result": null,
+      "schema": {},
+      "tool": "generate_valid_animal_id"
+     },
+     {
+      "deps": [
+       "1"
+      ],
+      "effect": null,
+      "id": "2",
+      "recorded_result": "Error: Invalid arguments format. Expected an object with key 'animal_id', but received an array.",
+      "schema": {
+       "description": "Retrieve the known position of the animal.",
+       "name": "locate_animal_position",
+       "parameters": {
+        "animal_id": {
+         "description": "A unique identifier for the animal.",
+         "type": "string"
+        }
+       },
+       "required": [
+        "animal_id"
+       ]
+      },
+      "tool": "locate_animal_position"
+     },
+     {
+      "deps": [
+       "2"
+      ],
+      "effect": "irreversible",
+      "id": "3",
+      "recorded_result": null,
+      "schema": {
+       "description": "Place a cage trap at a specified location.",
+       "name": "place_trap",
+       "parameters": {
+        "position": {
+         "description": "Coordinates of where to place the trap.",
+         "type": "object"
+        },
+        "trap_id": {
+         "description": "A unique identifier for the trap.",
+         "type": "string"
+        }
+       },
+       "required": [
+        "trap_id",
+        "position"
+       ]
+      },
+      "tool": "place_trap"
+     },
+     {
+      "deps": [
+       "3"
+      ],
+      "effect": "reversible",
+      "id": "4",
+      "recorded_result": null,
+      "schema": {
+       "description": "Add bait to the placed trap.",
+       "name": "add_bait_to_trap",
+       "parameters": {
+        "bait_type": {
+         "description": "Type of bait to be used.",
+         "type": "string"
+        },
+        "trap_id": {
+         "description": "A unique identifier for the trap.",
+         "type": "string"
+        }
+       },
+       "required": [
+        "trap_id",
+        "bait_type"
+       ]
+      },
+      "tool": "add_bait_to_trap"
+     },
+     {
+      "deps": [
+       "4"
+      ],
+      "effect": null,
+      "id": "5",
+      "recorded_result": null,
+      "schema": {
+       "description": "Check the status of the trap to see if it has caught anything.",
+       "name": "check_trap_status",
+       "parameters": {
+        "trap_id": {
+         "description": "A unique identifier for the trap.",
+         "type": "string"
+        }
+       },
+       "required": [
+        "trap_id"
+       ]
+      },
+      "tool": "check_trap_status"
+     }
+    ],
+    "query": "Hi, I need to place a cage trap with bait at an animal's known location and then check if the animal has been caught. The animal has been spotted several times near a large oak tree in my backyard. Could you guide me through this process?",
+    "query_id": 5473,
+    "record_id": 1575,
+    "relation": "nested",
+    "response_deps": [
+     "5"
+    ],
+    "round_gt": 5,
+    "sites": [
+     "2",
+     "3"
+    ],
+    "tags": [
+     "parameter name error",
+     "illegal parameter value",
+     "wrong dependency"
+    ],
+    "tags_zh": [
+     "参数名称错误",
+     "参数值非法",
+     "依赖关系错误"
+    ]
+   },
+   {
+    "error_reason": "本轮新规划中的节点2、3、4调用参数格式不符合工具定义，应为键值对对象，实际使用列表，缺少参数名，属于参数名称错误；节点4的参数值为字符串（\"task2中输出的欧元金额\"、\"task3中输出的汇率\"），而非数字类型，属于参数类型错误和参数值非法（无法解析为有效数值）；节点3（获取EUR->GBP汇率）依赖节点2（转换USD->EUR），但获取汇率不需要依赖转换结果，应依赖root或节点1，导致不必要的串行，属于依赖关系错误和错误串行。",
+    "funcall_times_gt": 4,
+    "nodes": [
+     {
+      "deps": [],
+      "effect": null,
+      "id": "1",
+      "recorded_result": null,
+      "schema": {
+       "description": "Fetch the current exchange rate between two currencies.",
+       "name": "get_current_exchange_rate",
+       "parameters": {
+        "from_currency": {
+         "description": "The currency code of the source currency.",
+         "type": "string"
+        },
+        "to_currency": {
+         "description": "The currency code of the target currency.",
+         "type": "string"
+        }
+       },
+       "required": [
+        "from_currency",
+        "to_currency"
+       ]
+      },
+      "tool": "get_current_exchange_rate"
+     },
+     {
+      "deps": [
+       "1"
+      ],
+      "effect": null,
+      "id": "2",
+      "recorded_result": "92.0",
+      "schema": {
+       "description": "Convert an amount from one currency to another based on an exchange rate.",
+       "name": "convert_currency",
+       "parameters": {
+        "amount": {
+         "description": "The amount of money to be converted.",
+         "type": "number"
+        },
+        "exchange_rate": {
+         "description": "The exchange rate to be used for the conversion.",
+         "type": "number"
+        }
+       },
+       "required": [
+        "amount",
+        "exchange_rate"
+       ]
+      },
+      "tool": "convert_currency"
+     },
+     {
+      "deps": [
+       "2"
+      ],
+      "effect": null,
+      "id": "3",
+      "recorded_result": null,
+      "schema": {
+       "description": "Fetch the current exchange rate between two currencies.",
+       "name": "get_current_exchange_rate",
+       "parameters": {
+        "from_currency": {
+         "description": "The currency code of the source currency.",
+         "type": "string"
+        },
+        "to_currency": {
+         "description": "The currency code of the target currency.",
+         "type": "string"
+        }
+       },
+       "required": [
+        "from_currency",
+        "to_currency"
+       ]
+      },
+      "tool": "get_current_exchange_rate"
+     },
+     {
+      "deps": [
+       "2",
+       "3"
+      ],
+      "effect": null,
+      "id": "4",
+      "recorded_result": "92.0",
+      "schema": {
+       "description": "Convert an amount from one currency to another based on an exchange rate.",
+       "name": "convert_currency",
+       "parameters": {
+        "amount": {
+         "description": "The amount of money to be converted.",
+         "type": "number"
+        },
+        "exchange_rate": {
+         "description": "The exchange rate to be used for the conversion.",
+         "type": "number"
+        }
+       },
+       "required": [
+        "amount",
+        "exchange_rate"
+       ]
+      },
+      "tool": "convert_currency"
+     }
+    ],
+    "query": "Hi! I need to convert 100 USD to Euros based on the current exchange rate, and then convert that amount to British Pounds. Could you help me with this?",
+    "query_id": 2298,
+    "record_id": 1579,
+    "relation": "nested",
+    "response_deps": [
+     "4"
+    ],
+    "round_gt": 4,
+    "sites": [
+     "2",
+     "3"
+    ],
+    "tags": [
+     "parameter name error",
+     "parameter type error",
+     "illegal parameter value"
+    ],
+    "tags_zh": [
+     "参数名称错误",
+     "参数类型错误",
+     "参数值非法"
+    ]
+   }
+  ],
+  "overlap": [
+   {
+    "error_reason": "节点2（filter_vegetables_by_climate）的依赖中缺少节点3（get_seasonal_vegetables），导致其硬编码的蔬菜列表并非从实际季节蔬菜中获取，违背了任务逻辑；节点4（get_vegetable_prices）的参数中包含了工具未定义的参数'seasonal_list'，属于参数名称错误。",
+    "funcall_times_gt": 4,
+    "nodes": [
+     {
+      "deps": [],
+      "effect": null,
+      "id": "1",
+      "recorded_result": null,
+      "schema": {
+       "description": "Fetch the local climate information.",
+       "name": "get_local_climate",
+       "parameters": {
+        "location": {
+         "description": "The geographic location for which the climate is to be fetched.",
+         "type": "string"
+        }
+       },
+       "required": [
+        "location"
+       ]
+      },
+      "tool": "get_local_climate"
+     },
+     {
+      "deps": [
+       "1"
+      ],
+      "effect": null,
+      "id": "2",
+      "recorded_result": "[\"tomato\", \"carrot\", \"cabbage\"]",
+      "schema": {
+       "description": "Filter a list of vegetables based on their suitability for the local climate.",
+       "name": "filter_vegetables_by_climate",
+       "parameters": {
+        "climate_data": {
+         "description": "An object containing climate information.",
+         "type": "object"
+        },
+        "vegetable_list": {
+         "description": "An array of vegetables to be filtered.",
+         "type": "array"
+        }
+       },
+       "required": [
+        "vegetable_list",
+        "climate_data"
+       ]
+      },
+      "tool": "filter_vegetables_by_climate"
+     },
+     {
+      "deps": [],
+      "effect": null,
+      "id": "3",
+      "recorded_result": null,
+      "schema": {
+       "description": "Retrieve a list of vegetables that are available in the current season.",
+       "name": "get_seasonal_vegetables",
+       "parameters": {
+        "season": {
+         "description": "The current season (e.g., spring, summer, autumn, winter).",
+         "type": "string"
+        }
+       },
+       "required": [
+        "season"
+       ]
+      },
+      "tool": "get_seasonal_vegetables"
+     },
+     {
+      "deps": [
+       "2",
+       "3"
+      ],
+      "effect": null,
+      "id": "4",
+      "recorded_result": null,
+      "schema": {
+       "description": "Fetch the prices of a list of vegetables.",
+       "name": "get_vegetable_prices",
+       "parameters": {
+        "vegetable_list": {
+         "description": "An array of vegetables for which to fetch prices.",
+         "type": "array"
+        }
+       },
+       "required": [
+        "vegetable_list"
+       ]
+      },
+      "tool": "get_vegetable_prices"
+     }
+    ],
+    "query": "Hello! I'm trying to determine the average price of each vegetable that is suitable for the local climate and available seasonally. For this, I suppose we need to consider the types of vegetables that thrive in my local climate, the current season, and their respective prices. Could you help me gather this information and calculate the averages?",
+    "query_id": 4098,
+    "record_id": 1598,
+    "relation": "overlap",
+    "response_deps": [
+     "4"
+    ],
+    "round_gt": 4,
+    "sites": [
+     "2",
+     "3"
+    ],
+    "tags": [
+     "missing dependency",
+     "parameter name error"
+    ],
+    "tags_zh": [
+     "依赖关系缺失",
+     "参数名称错误"
+    ]
+   },
+   {
+    "error_reason": "节点1和节点2调用的get_child_desires和extract_vegetables工具要求参数为sign_up_list（数组类型），但规划中给出的参数名称是child_name和desired_vegetable，且参数类型为对象，不符合工具定义，导致参数名称错误、参数类型错误以及必要参数sign_up_list缺失；节点3和节点4的参数格式为列表而非所需的字典结构，同样存在参数类型错误，且缺少必要的具体参数值。",
+    "funcall_times_gt": 4,
+    "nodes": [
+     {
+      "deps": [],
+      "effect": null,
+      "id": "1",
+      "recorded_result": null,
+      "schema": {
+       "description": "Extract each child's desired vegetable from the sign-up list.",
+       "name": "get_child_desires",
+       "parameters": {
+        "sign_up_list": {
+         "description": "List containing each child's sign-up information including their desired vegetable.",
+         "type": "array"
+        }
+       },
+       "required": [
+        "sign_up_list"
+       ]
+      },
+      "tool": "get_child_desires"
+     },
+     {
+      "deps": [],
+      "effect": null,
+      "id": "2",
+      "recorded_result": null,
+      "schema": {
+       "description": "Extract a list of all vegetables from the sign-up list.",
+       "name": "extract_vegetables",
+       "parameters": {
+        "sign_up_list": {
+         "description": "List containing each child's sign-up information including their desired vegetable.",
+         "type": "array"
+        }
+       },
+       "required": [
+        "sign_up_list"
+       ]
+      },
+      "tool": "extract_vegetables"
+     },
+     {
+      "deps": [
+       "2"
+      ],
+      "effect": null,
+      "id": "3",
+      "recorded_result": null,
+      "schema": {
+       "description": "Check the seed inventory for the amount of each type of seed available.",
+       "name": "check_seed_inventory",
+       "parameters": {
+        "seed_inventory": {
+         "description": "An inventory of available seeds with their quantities.",
+         "type": "object"
+        },
+        "vegetable_list": {
+         "description": "List of vegetables to check seed availability for.",
+         "type": "array"
+        }
+       },
+       "required": [
+        "vegetable_list",
+        "seed_inventory"
+       ]
+      },
+      "tool": "check_seed_inventory"
+     },
+     {
+      "deps": [
+       "1",
+       "3"
+      ],
+      "effect": "reversible",
+      "id": "4",
+      "recorded_result": null,
+      "schema": {
+       "description": "Assign each child a garden plot based on their desired vegetable.",
+       "name": "assign_garden_plots",
+       "parameters": {
+        "available_plots": {
+         "description": "List of available garden plots.",
+         "type": "array"
+        },
+        "child_desires": {
+         "description": "A mapping of each child to their desired vegetable.",
+         "type": "object"
+        }
+       },
+       "required": [
+        "child_desires",
+        "available_plots"
+       ]
+      },
+      "tool": "assign_garden_plots"
+     }
+    ],
+    "query": "Hello! I need some help assigning garden plots to children based on their desired vegetable from a sign-up list. Additionally, I need to ensure there are enough seeds available for the vegetables they've chosen. Here's the information you'll need:\n\n1. A list of children and the vegetables they want to grow.\n2. The number of garden plots available.\n3. The number of seeds available for each vegetable type.\n\nCan you help me with this task?",
+    "query_id": 4257,
+    "record_id": 1625,
+    "relation": "overlap",
+    "response_deps": [
+     "1",
+     "2",
+     "3",
+     "4"
+    ],
+    "round_gt": 4,
+    "sites": [
+     "1",
+     "2"
+    ],
+    "tags": [
+     "parameter name error",
+     "parameter type error",
+     "missing required parameter"
+    ],
+    "tags_zh": [
+     "参数名称错误",
+     "参数类型错误",
+     "必要参数缺失"
+    ]
+   },
+   {
+    "error_reason": "1. 参数类型错误：identify_issues的'updates'参数要求为object对象，但智能体在para字段中给出了数组（列表）形式。2. 参数名称错误：para字段未按工具定义使用参数名称'updates'，而是直接放置值。3. 参数值非法：schedule_meetings的para使用了占位符字符串'issues_placeholder'和'availability_placeholder'，非实际数据。4. 必要参数缺失：schedule_meetings缺少实际的issues和availability参数。5. 必要工具缺失：未调用get_meeting_agenda和extract_project_updates来获取会议议程和提取项目更新，导致后续任务无法获取正确输入。6. 依赖关系错误：节点2、3、4（获取可用性）依赖节点1（识别问题），但实际应先提取项目更新，且节点1本身应依赖提取更新的结果，依赖链不正确。",
+    "funcall_times_gt": 7,
+    "nodes": [
+     {
+      "deps": [],
+      "effect": null,
+      "id": "1",
+      "recorded_result": "Error: Parameter 'updates' must be an object (key-value pairs of team member ids to updates), but received an array. Please provide a single object with all team member updates.",
+      "schema": {
+       "description": "Identify issues from the project updates.",
+       "name": "identify_issues",
+       "parameters": {
+        "updates": {
+         "description": "An object where keys are team member ids and values are their project updates.",
+         "type": "object"
+        }
+       },
+       "required": [
+        "updates"
+       ]
+      },
+      "tool": "identify_issues"
+     },
+     {
+      "deps": [
+       "1"
+      ],
+      "effect": null,
+      "id": "2",
+      "recorded_result": null,
+      "schema": {
+       "description": "Retrieve the weekly availability schedule for a team member.",
+       "name": "get_team_member_availability",
+       "parameters": {
+        "team_member_id": {
+         "description": "The identifier for a team member.",
+         "type": "string"
+        }
+       },
+       "required": [
+        "team_member_id"
+       ]
+      },
+      "tool": "get_team_member_availability"
+     },
+     {
+      "deps": [
+       "1"
+      ],
+      "effect": null,
+      "id": "3",
+      "recorded_result": null,
+      "schema": {
+       "description": "Retrieve the weekly availability schedule for a team member.",
+       "name": "get_team_member_availability",
+       "parameters": {
+        "team_member_id": {
+         "description": "The identifier for a team member.",
+         "type": "string"
+        }
+       },
+       "required": [
+        "team_member_id"
+       ]
+      },
+      "tool": "get_team_member_availability"
+     },
+     {
+      "deps": [
+       "1"
+      ],
+      "effect": null,
+      "id": "4",
+      "recorded_result": null,
+      "schema": {
+       "description": "Retrieve the weekly availability schedule for a team member.",
+       "name": "get_team_member_availability",
+       "parameters": {
+        "team_member_id": {
+         "description": "The identifier for a team member.",
+         "type": "string"
+        }
+       },
+       "required": [
+        "team_member_id"
+       ]
+      },
+      "tool": "get_team_member_availability"
+     },
+     {
+      "deps": [
+       "1",
+       "2",
+       "3",
+       "4"
+      ],
+      "effect": "reversible",
+      "id": "5",
+      "recorded_result": null,
+      "schema": {
+       "description": "Schedule follow-up meetings based on the identified issues and team members' availability.",
+       "name": "schedule_meetings",
+       "parameters": {
+        "availability": {
+         "description": "An object where keys are team member ids and values are their weekly availability schedules.",
+         "type": "object"
+        },
+        "issues": {
+         "description": "An object where keys are team member ids and values are the identified issues.",
+         "type": "object"
+        }
+       },
+       "required": [
+        "issues",
+        "availability"
+       ]
+      },
+      "tool": "schedule_meetings"
+     }
+    ],
+    "query": "Hello! I need to schedule follow-up meetings based on the project updates for each team member from our weekly team meeting agenda. Each follow-up meeting should fit within their weekly availability and avoid any scheduling conflicts. I have the agenda details and the team members' availability schedules ready. Can you help me with this?",
+    "query_id": 1750,
+    "record_id": 1635,
+    "relation": "overlap",
+    "response_deps": [
+     "5"
+    ],
+    "round_gt": 5,
+    "sites": [
+     "2",
+     "3"
+    ],
+    "tags": [
+     "parameter type error",
+     "parameter name error",
+     "illegal parameter value"
+    ],
+    "tags_zh": [
+     "参数类型错误",
+     "参数名称错误",
+     "参数值非法"
+    ]
+   },
+   {
+    "error_reason": "节点2、3、4、5的参数格式错误：工具要求参数为对象（包含指定键名），但实际传入了数组。这导致参数类型不匹配（应为对象，实为数组），同时因缺少必要的参数键名（如assembly_code、elements等），导致必要参数缺失。节点1参数正确，无错误。",
+    "funcall_times_gt": 5,
+    "nodes": [
+     {
+      "deps": [],
+      "effect": null,
+      "id": "1",
+      "recorded_result": "; Assembly code for a simple 2D game\n; Function: _start\n_start:\n    mov ax, 0\n    call init_graphics\n    call game_loop\n    ret\n\n; Function: init_graphics\ninit_graphics:\n    push bp\n    mov bp, sp\n    mov ax, 0x13\n    int 0x10\n    pop bp\n    ret\n\n; Function: game_loop\ngame_loop:\n    push bp\n    mov bp, sp\n.loop:\n    call handle_input\n    call update_player\n    call draw_sprite\n    call check_collision\n    jmp .loop\n    pop bp\n    ret\n\n; Function: handle_input\nhandle_input:\n    push bp\n    mov bp, sp\n    mov ah, 0x01\n    int 0x16\n    jz .no_key\n    mov ah, 0x00\n    int 0x16\n    cmp al, 'w'\n    je .up\n    cmp al, 's'\n    je .down\n    cmp al, 'a'\n    je .left\n    cmp al, 'd'\n    je .right\n.no_key:\n    pop bp\n    ret\n.up:\n    ; handle up\n    pop bp\n    ret\n.down:\n    ; handle down\n    pop bp\n    ret\n.left:\n    ; handle left\n    pop bp\n    ret\n.right:\n    ; handle right\n    pop bp\n    ret\n\n; Function: update_player\nupdate_player:\n    push bp\n    mov bp, sp\n    ; update position based on input\n    pop bp\n    ret\n\n; Function: draw_sprite\ndraw_sprite:\n    push bp\n    mov bp, sp\n    ; draw player sprite at current position\n    pop bp\n    ret\n\n; Function: check_collision\ncheck_collision:\n    push bp\n    mov bp, sp\n    ; check for collision with walls or enemies\n    pop bp\n    ret\n",
+      "schema": {
+       "description": "Reads the contents of a given file",
+       "name": "read_file",
+       "parameters": {
+        "file_path": {
+         "description": "The path to the file to be read",
+         "type": "string"
+        }
+       },
+       "required": [
+        "file_path"
+       ]
+      },
+      "tool": "read_file"
+     },
+     {
+      "deps": [
+       "1"
+      ],
+      "effect": null,
+      "id": "2",
+      "recorded_result": null,
+      "schema": {
+       "description": "Extracts all functions or subroutines from the given assembly code",
+       "name": "extract_functions",
+       "parameters": {
+        "assembly_code": {
+         "description": "The assembly code from which to extract functions",
+         "type": "string"
+        }
+       },
+       "required": [
+        "assembly_code"
+       ]
+      },
+      "tool": "extract_functions"
+     },
+     {
+      "deps": [
+       "1"
+      ],
+      "effect": null,
+      "id": "3",
+      "recorded_result": null,
+      "schema": {
+       "description": "Extracts all opcodes from the given assembly code",
+       "name": "extract_opcodes",
+       "parameters": {
+        "assembly_code": {
+         "description": "The assembly code from which to extract opcodes",
+         "type": "string"
+        }
+       },
+       "required": [
+        "assembly_code"
+       ]
+      },
+      "tool": "extract_opcodes"
+     },
+     {
+      "deps": [
+       "3"
+      ],
+      "effect": null,
+      "id": "4",
+      "recorded_result": null,
+      "schema": {
+       "description": "Finds the unique elements in a given list",
+       "name": "find_unique_elements",
+       "parameters": {
+        "elements": {
+         "description": "List of elements to filter for uniqueness",
+         "type": "array"
+        }
+       },
+       "required": [
+        "elements"
+       ]
+      },
+      "tool": "find_unique_elements"
+     },
+     {
+      "deps": [
+       "2",
+       "4"
+      ],
+      "effect": null,
+      "id": "5",
+      "recorded_result": null,
+      "schema": {
+       "description": "Maps each element to the containers (e.g., functions) they appear in",
+       "name": "map_elements_to_containers",
+       "parameters": {
+        "containers": {
+         "description": "List of containers (e.g., functions) where elements might appear",
+         "type": "array"
+        },
+        "elements": {
+         "description": "List of elements to map (e.g., opcodes)",
+         "type": "array"
+        }
+       },
+       "required": [
+        "elements",
+        "containers"
+       ]
+      },
+      "tool": "map_elements_to_containers"
+     }
+    ],
+    "query": "Hi! I'm working on analyzing a video game assembly code file named \"game_code.asm.\" I need to find the functions or subroutines within the code and identify where each unique opcode is used. Can you help me with this?",
+    "query_id": 686,
+    "record_id": 1788,
+    "relation": "overlap",
+    "response_deps": [
+     "5"
+    ],
+    "round_gt": 5,
+    "sites": [
+     "2",
+     "3"
+    ],
+    "tags": [
+     "parameter type error",
+     "missing required parameter"
+    ],
+    "tags_zh": [
+     "参数类型错误",
+     "必要参数缺失"
+    ]
+   }
+  ]
+ },
+ "official_result_eligible": false,
+ "rule": ", over `data/LEVEL-2/LEVEL-2_real_rollout.jsonl` in file\norder:\n\n1. at least two error tags (coexisting errors), every tag a value error that\n   corrupts a node's output (parameter type/name/value, missing parameter,\n   wrong tool name/selection, wrong or missing dependency, wrong\n   parallelization); missing-tool, redundant-call, exception-handling, and\n   wrong-serialization records are excluded because no single node output is\n   wrong;\n2. the plan parses, every dependency exists, and it has 3 to 12 tool nodes;\n3. the error analysis names at least two distinct tool nodes; the first two\n   named are the fault sites;\n4. the two sites' cones (the node and its descendants, excluding the final\n   response) are classified as nested, overlapping, or disjoint, and the first\n   four records of each class are taken: two `dev`, two held-out `test`.",
+ "source": {
+  "commit": "24eadb96f6460317d4203522e1d3958a03dfa2bf",
+  "copyright": "Copyright (c) 2026 ParaRecover Contributors",
+  "file": "data/LEVEL-2/LEVEL-2_real_rollout.jsonl",
+  "license": "MIT",
+  "repository": "ParaRecover",
+  "sha256": "c02995bfd640138864405ca210c66d8394558d8690f41d07e81b80eafd9dc583"
+ }
+}
