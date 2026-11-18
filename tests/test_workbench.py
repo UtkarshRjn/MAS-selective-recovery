@@ -55,6 +55,13 @@ def wb():
     return WorkBench(ROOT)
 
 
+@needs_checkout
+def test_tool_descriptions_carry_the_upstream_argument_formats(wb):
+    text = wb.describe(("calendar.create_event", "project_management.create_task"))
+    assert "Duration of the event in minutes." in text
+    assert 'One of: "Back end", "Front end", "Design".' in text
+
+
 def _row(wb, template_key: str, index: int):
     return next(task for task in wb.tasks() if task.index == index)
 

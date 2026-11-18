@@ -14,6 +14,7 @@ import json
 import os
 import subprocess
 import sys
+import textwrap
 import threading
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -97,11 +98,12 @@ class WorkBench:
             return raw
 
     def describe(self, names: tuple[str, ...]) -> str:
+        """Each tool's signature and its full upstream docstring, which states argument formats."""
         lines = []
         for name in names:
             tool = self.tools[name]
-            summary = (tool.description or "").strip().split("\n\n")[0]
-            lines.append(f"- {tool.signature_str}: {summary}")
+            doc = textwrap.indent(textwrap.dedent(tool.description or "").strip(), "    ")
+            lines.append(f"- {tool.signature_str}\n{doc}")
         return "\n".join(lines)
 
     def score(self, actions: list[str], ground_truth: list[str]) -> dict[str, bool]:
