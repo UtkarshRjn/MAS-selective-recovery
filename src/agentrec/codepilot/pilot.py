@@ -95,13 +95,17 @@ def make_executor(kind: str, registry=None):
     raise ValueError(f"unknown executor {kind}")
 
 
+# Well above one 8k-token generation; a request still silent after this is retried as a hang.
+REQUEST_TIMEOUT_S = 300.0
+
+
 def llm_factory(spec: ModelSpec):
     from ..llm import ServerLLM
 
     def build(seed: int):
         return ServerLLM(
             base_url=spec.base_url, model=spec.model, temperature=spec.temperature, seed=seed,
-            max_tokens=spec.max_tokens, api_key=os.environ.get("AGENTREC_API_KEY") or os.environ.get("OPENAI_API_KEY"),
+            max_tokens=spec.max_tokens, timeout_s=REQUEST_TIMEOUT_S, api_key=os.environ.get("AGENTREC_API_KEY") or os.environ.get("OPENAI_API_KEY"),
         )
 
     return build
