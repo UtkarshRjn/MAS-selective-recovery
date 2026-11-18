@@ -42,6 +42,7 @@ def cmd_run(args: argparse.Namespace) -> None:
         args.dir, reference=args.reference,
         tasks=tuple(args.tasks.split(",")) if args.tasks else None,
         policies=tuple(args.policies.split(",")) if args.policies else None,
+        model_names=tuple(args.models.split(",")) if args.models else None,
     )
     print(json.dumps(result, indent=2))
 
@@ -93,6 +94,8 @@ def add_cli(sub) -> None:
     run.add_argument("--reference", action="store_true", help="reference agent instead of models (validation only)")
     run.add_argument("--tasks", default="")
     run.add_argument("--policies", default="")
+    run.add_argument("--models", default="",
+                     help="comma-separated model names; run each in its own copy of the frozen directory")
     run.set_defaults(fn=cmd_run)
 
     summary = commands.add_parser("summary", help="per-model, per-policy summary and CRSR_safe")

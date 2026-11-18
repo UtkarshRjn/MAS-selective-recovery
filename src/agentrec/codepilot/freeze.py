@@ -165,8 +165,8 @@ class ModelSpec:
     model: str
     base_url: str
     temperature: float = 0.0
-    # Reasoning models spend most of a reply thinking; 8192 truncated whole files before the code block.
-    max_tokens: int = 32768
+    # Reasoning models can think for tens of thousands of tokens before writing a file; let them finish.
+    max_tokens: int = 131072
 
 
 @dataclass
@@ -186,8 +186,8 @@ class PilotConfig:
     executor: str = "local"
     agent_steps: int = 3
     tests_per_agent: int = 3
-    token_limit_per_agent: int = 60000
-    wall_clock_limit_s: float = 1800.0
+    token_limit_per_agent: int = 500000
+    wall_clock_limit_s: float = 14400.0
     correction_budget: int = 2
     termination: str = "stop at safe completion, budget exhaustion, a stall of 30 min, or the wall-clock limit"
     official_result_eligible: bool = False

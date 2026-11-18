@@ -96,7 +96,7 @@ def make_executor(kind: str, registry=None):
 
 
 # Well above one full-length generation; a request still silent after this is retried as a hang.
-REQUEST_TIMEOUT_S = 600.0
+REQUEST_TIMEOUT_S = 1800.0
 
 
 def llm_factory(spec: ModelSpec):
@@ -130,6 +130,7 @@ def run(
     reference: bool = False,
     tasks: tuple[str, ...] | None = None,
     policies: tuple[str, ...] | None = None,
+    model_names: tuple[str, ...] | None = None,
     progress: bool = True,
 ) -> dict[str, Any]:
     """Run every missing cell. `reference` swaps every model for the reference agent (pipeline validation)."""
@@ -155,6 +156,11 @@ def run(
     executor = make_executor(config.executor, registry)
     done = finished_cells(load_rows(rows_dir))
     models = (REFERENCE,) if reference else config.models
+    if model_names and not reference:
+        unknown = set(model_names) - {model.name for model in models}
+        if unknown:
+            raise ValueError(f"unknown models {sorted(unknown)}")
+        models = tuple(model for model in models if model.name in model_names)
     workdir = directory / "work"
     built: dict[tuple[str, str], Any] = {}
     ran = skipped = 0
