@@ -84,6 +84,8 @@ class RunContext:
     consumed: set[str] = field(default_factory=set)
     # set on a recovery rerun; included only in prompts for steps that are actually redone
     fault_note: dict[str, Any] | None = None
+    # pre-commit gate for bookings and emails: None, "G1" (fault lineage) or "G2" (consistency)
+    gate: str | None = None
 
 
 # These faults rewrite one claim. The findings artifact stays unmarked so support
@@ -370,7 +372,15 @@ class TravelWorkflow:
     # Verification and reuse.
 
     def _check(self, ctx: RunContext, kind: str, evidence: Any, item: Any) -> tuple[bool, str]:
-        """Verifier call used by the always-verify baseline; a no-op otherwise."""
+        """Verifier call used by the always-verify baseline; a no-op otherwise.
+
+        A run with a pre-commit gate checks each booking and email before it executes.
+        """
+        if kind == "action" and ctx.gate is not None:
+            from .residue import gate_action
+            held = gate_action(ctx, item)
+            if held:
+                return False, held
         if not ctx.verify:
             return True, ""
         out = ctx.llm.chat("verifier", agents.verifier_messages(ctx.task, kind, evidence, item))
