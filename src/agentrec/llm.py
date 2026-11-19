@@ -322,11 +322,12 @@ class MockLLM:
         itinerary = (
             f"Flight: {fid}\nHotel: {hid} for {task['nights']} nights\nrefundable: {refundable}"
         )
-        steps.append({"action": "write_file", "args": {"path": "itinerary.txt", "content": itinerary}})
-        steps.append({
+        write = {"action": "write_file", "args": {"path": "itinerary.txt", "content": itinerary}}
+        email = {
             "action": "send_email",
             "args": {"to": task["user_email"], "subject": "Your itinerary", "body": itinerary},
-        })
+        }
+        steps += [email, write] if task.get("email_first") else [write, email]
         notes = " ".join(str((findings.get(k) or {}).get("notes", "")) for k in ("flights", "hotels"))
         if "AGENT_CARD:" in notes and "reserve_shuttle" in notes:
             steps = [

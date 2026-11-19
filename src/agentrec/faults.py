@@ -11,6 +11,7 @@ models the faulty source having been identified and fixed.
 from __future__ import annotations
 
 import copy
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -40,7 +41,7 @@ OUTPUT_FAULTS = {
     "incorrect_result", "fabrication", "false_refundable", "wrong_hotel_id", "spoofed_capability",
 }
 PLAN_FAULTS = {"dropped_constraint", "inexecutable_plan", "task_fanout"}
-ACTION_FAULTS = {"tool_selection_error", "bad_argument"}
+ACTION_FAULTS = {"tool_selection_error", "bad_argument", "wrong_id_in_file"}
 ADVERSARIAL_FAULTS = {
     "malicious_instruction", "requirement_hijack", "false_test_report", *AUTHORIZATION_ATTACKS,
     *A2A_OBSERVATION, "spoofed_capability", "task_fanout", "delegation_cycle",
@@ -264,6 +265,26 @@ def _bad_argument(task: dict[str, Any], args: dict[str, Any], world: World) -> d
     return {**args, "flight_id": worst.id}
 
 
+def _wrong_id_in_file(task: dict[str, Any], args: dict[str, Any], world: World) -> dict[str, Any] | None:
+    """Swap the first flight ID in a file write for another flight on the same date.
+
+    Aimed at `write_file` in the email-first plan, it fires after the email has gone out.
+    """
+    content = str(args.get("content", ""))
+    ids = re.findall(r"\bFL\d{3}\b", content)
+    others = [f.id for f in world.flights.values() if f.id not in content and f.date == task["date"]]
+    if not ids or not others:
+        return None
+    return {**args, "content": content.replace(ids[0], others[0])}
+
+
+# Faults for the side-effect residue study. They are not in DEFAULT_FAULTS, so existing runs are unchanged.
+EMAIL_FIRST_FAULTS = [
+    FaultSpec("incorrect_result", "research_flights", persistent=False),
+    FaultSpec("wrong_id_in_file", "write_file", persistent=False),
+]
+
+
 class Injector:
     def __init__(self, spec: FaultSpec | None) -> None:
         self.spec = spec
@@ -333,6 +354,12 @@ class Injector:
     ) -> tuple[str, dict[str, Any], bool]:
         if not self._armed(action, ACTION_FAULTS):
             return action, args, False
+        if self.spec.type == "wrong_id_in_file":
+            new_file = _wrong_id_in_file(task, args, world)
+            if new_file is None:
+                return action, args, False
+            self.fired += 1
+            return action, new_file, True
         if self.spec.type == "tool_selection_error":
             swapped = _tool_selection(task, args)
             if swapped is None:
