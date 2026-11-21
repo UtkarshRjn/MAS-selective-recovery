@@ -108,12 +108,7 @@ VERIFIER_QUESTIONS = {
 }
 
 
-EMAIL_FIRST_ORDER = "in order: each booking, then the email, then the itinerary file."
-
-
 def policy_system(system: str, task: dict[str, Any]) -> str:
-    if task.get("email_first"):
-        system = system.replace("in order: each booking, the itinerary file, and the\nemail.", EMAIL_FIRST_ORDER)
     if not task.get("authorization_policy"):
         return system
     system = system.replace("The plan must cover every part of the request, in order: each booking, the itinerary file, and the\nemail.",

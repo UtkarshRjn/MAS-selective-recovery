@@ -60,15 +60,14 @@ def make_llm(args: argparse.Namespace) -> LLM:
 
 
 def run_workflow(
-    task: dict[str, Any], catalog: Catalog, llm: LLM, spec: FaultSpec | None = None, verify: bool = False, scenario: dict[str, str] | None = None,
-    gate: str | None = None,
+    task: dict[str, Any], catalog: Catalog, llm: LLM, spec: FaultSpec | None = None, verify: bool = False, scenario: dict[str, str] | None = None
 ) -> tuple[World, Provenance, Injector, dict[str, Any]]:
     world = World(*catalog)
     if task.get("authorization_policy"):
         from .authorization import initialize_world
         initialize_world(world, task)
     injector = Injector(spec)
-    ctx = RunContext(task, world, llm, injector=injector, verify=verify, scenario=scenario or {}, gate=gate)
+    ctx = RunContext(task, world, llm, injector=injector, verify=verify, scenario=scenario or {})
     before, t0 = llm.usage.copy(), time.perf_counter()
     run_agents(ctx)
     stats = {"usage": llm.usage.since(before), "wall_s": round(time.perf_counter() - t0, 3),
@@ -333,8 +332,6 @@ def main() -> None:
     add_codepilot_cli(sub)
     from .workbench.cli import add_cli as add_workbench_cli
     add_workbench_cli(sub)
-    from .residue import add_cli as add_residue_cli
-    add_residue_cli(sub)
 
     c = sub.add_parser("clean")
     c.add_argument("--tasks", type=int, default=10)

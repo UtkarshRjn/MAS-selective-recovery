@@ -1,5 +1,5 @@
 """3-role agent (planner -> executor -> writer) for the pilot. Deviation from plan_v3's 4-role pipeline (disclosed).
-The shared UCSD key is read from /workspace/war_room/e1/.env only; it is never printed, logged or copied."""
+The API key is read from the environment or from a local dotenv file. It is never printed, logged or copied."""
 import json, os, re, threading, time
 import httpx
 import tasks as T
@@ -36,7 +36,28 @@ _L = threading.Lock()
 _ledger = json.load(open(LEDGER)) if os.path.exists(LEDGER) else {'baseline_server_spend': None, 'models': {}, 'calls': 0}
 
 def _env():
-    return dict(l.strip().split('=', 1) for l in open('/workspace/war_room/e1/.env') if '=' in l)
+    """API settings from the environment, or from a dotenv file.
+
+    PILOT_ENV_FILE overrides the file path. The default is .env next to this
+    module and is not committed. Values are never printed.
+    """
+    path = os.environ.get('PILOT_ENV_FILE', os.path.join(HERE, '.env'))
+    out = {}
+    if os.path.exists(path):
+        for line in open(path):
+            line = line.strip()
+            if not line or line.startswith('#') or '=' not in line:
+                continue
+            key, val = line.split('=', 1)
+            out[key.strip()] = val
+    for key in ('OPENAI_API_KEY', 'OPENAI_BASE_URL'):
+        if os.environ.get(key):
+            out[key] = os.environ[key]
+    if 'OPENAI_API_KEY' not in out and os.environ.get('MODEL_API_KEY'):
+        out['OPENAI_API_KEY'] = os.environ['MODEL_API_KEY']
+    if 'OPENAI_BASE_URL' not in out and os.environ.get('MODEL_API_URL'):
+        out['OPENAI_BASE_URL'] = os.environ['MODEL_API_URL']
+    return out
 
 def server_spend():
     env = _env()
