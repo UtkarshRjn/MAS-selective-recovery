@@ -44,3 +44,11 @@ Traces are written under `pilot/traces_confirm_gaps_v3_nov21/` and are gitignore
 - `pilot/confirm_gaps_v3_nov21_results.txt`
 - `pilot/confirm_gaps_v3_nov21_results.json`
 - `pilot/confirm_gaps_v3_nov21_hand_audit.json` (43 of 432 traces sampled, 0 mismatches)
+
+## S0 screen (composition law and channel correlation)
+
+A second, cheaper screen with no executor, only summarizer calls. Plan: `pilot/plan_s0_nov21.md` (v4). Freeze: `pilot/freeze_hashes_s0_v4.json`. Results: `pilot/s0_nov21_results.txt`, with predictions locked after depth 1 in `pilot/freeze_s0_predictions.json`. No kill rule fired. Spend was $0.59070 new. Offline checks: `python3 -m unittest test_s0_nov21` and `python3 run_s0_cost_watch.py --jobs-only`. A paid run goes only through `run_s0_cost_watch.py`.
+
+## Handover
+
+`HANDOVER.md` explains how to set up, run, and extend both lines, how API access and spend work, and what to ask before spending.
