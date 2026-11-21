@@ -224,6 +224,7 @@ uv run agentrec mechanism summary runs/mechanism-dev-source_check
 | [evals/README.md](evals/README.md) | Coding protocol, configuration, and run instructions. |
 | [evals/travel-and-external.md](evals/travel-and-external.md) | Travel, graph, and external benchmark instructions. |
 | [evals/monitor-evaluation.md](evals/monitor-evaluation.md) | Online monitor evaluation: suites, pilots, frozen configuration, and limitations. |
+| [evals/residue.md](evals/residue.md) | Side-effect residue after travel recovery, pre-commit gates, and the email-first timing control. |
 | [src/agentrec/mechanism/](src/agentrec/mechanism/) | Mechanism and boundary cases, harness, statistics, and the frozen suite runner. |
 | [src/agentrec/codepilot/](src/agentrec/codepilot/), [workbench/](src/agentrec/workbench/), [pararecover/](src/agentrec/pararecover/) | AsynCodeBench, WorkBench, and ParaRecover adaptations. |
 | [artifacts/phase1/](artifacts/phase1/) | Committed Qwen results, traces, and source revisions. |
