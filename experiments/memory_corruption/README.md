@@ -13,6 +13,8 @@ Primary cells only: 4 arms × 6 templates × seeds 16–21 = 144 runs per model.
 
 The pre-registered pattern, conflict-triggered asking, holds.
 
+Two analysis corrections were made after the grid, and neither changes the decision. See `pilot/analysis_corrections_v3.md`. The results file reports zero-width multinomial-logit intervals as significant; those equations are not estimable (deepseek both equations, GLM follow_summary). The rule-secondary p-values come from an invalid z test; exact McNemar gives p_holm 1.0 (deepseek) and 0.5 (GLM).
+
 ## Frozen plan
 
 The final plan is `pilot/plan_gaps_confirm_nov21_v3.md`. Its freeze hashes are `pilot/freeze_hashes_gaps_confirm_v3.json`. `pilot/addendum_v3_nov21.md` is the analysis addendum written before the grid; the results file records its hash. `pilot/forking_paths_nov21.md` records the earlier designs this plan replaced. `pilot/freeze_hashes_v3.json` is an earlier measurement freeze that the unit tests still check.

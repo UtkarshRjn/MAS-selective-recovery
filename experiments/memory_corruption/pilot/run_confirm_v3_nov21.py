@@ -15,6 +15,7 @@ import run_pilot as R
 import templates_v3 as TV
 import grade_v3 as GV
 import perturb_gaps as PG
+import stats_exact as SX
 
 HERE = A.HERE
 OUT = os.path.join(HERE, 'traces_confirm_gaps_v3_nov21')
@@ -332,7 +333,15 @@ def fit_mnlogit(rows, n_boot=2000, seed=20261121):
     out = {'ok': bool(fit.success), 'n': len(recs), 'n_boot': len(boots),
            'outcome_ref': 'ask_or_hold', 'covariates': names,
            'counts': {str(int(k)): int(v) for k,v in Counter(Y).items()}, 'converged': bool(fit.success)}
+    # Separation check (analysis correction, see stats_exact.py). An equation with zero
+    # events in any 2x2 design cell has no finite MLE; BFGS may still report success.
+    sep = SX.separation_report(recs, outcomes=(0, 1), ref=2)
+    out['separation'] = {'follow_verbatim_vs_ask': sep[0], 'follow_summary_vs_ask': sep[1]}
+
     def pack(label, k):
+        if not sep[k[0]]['estimable']:
+            return {'est': None, 'lo': None, 'hi': None, 'excludes_zero': False,
+                    'estimable': False}
         est = None if beta_hat is None else float(beta_hat[k])
         if boots:
             col = np.array([b[k] for b in boots])
@@ -340,7 +349,7 @@ def fit_mnlogit(rows, n_boot=2000, seed=20261121):
         else:
             lo = hi = None
         return {'est': est, 'lo': lo, 'hi': hi,
-                'excludes_zero': (lo is not None and hi is not None and (lo > 0 or hi < 0))}
+                'excludes_zero': SX.ci_excludes_zero(lo, hi), 'estimable': True}
     if beta_hat is not None:
         out['follow_verbatim_vs_ask'] = {names[j]: pack((0, j), (0, j)) for j in range(4)}
         out['follow_summary_vs_ask'] = {names[j]: pack((1, j), (1, j)) for j in range(4)}
@@ -348,36 +357,8 @@ def fit_mnlogit(rows, n_boot=2000, seed=20261121):
 
 
 def holm(ps):
-    """Holm step-down on a list of (name, p). Returns dict name -> {p, p_adj, reject_05}."""
-    m = len(ps)
-    ordered = sorted(ps, key=lambda x: x[1])
-    out = {}
-    rejected = True
-    for i, (name, p) in enumerate(ordered):
-        thresh = 0.05 / (m - i)
-        adj = min(1.0, p * (m - i))
-        if rejected and p <= thresh:
-            reject = True
-        else:
-            reject = False
-            rejected = False
-        out[name] = {'p': p, 'p_holm': adj, 'reject_05': reject, 'holm_threshold': thresh}
-    return out
-
-
-def two_prop_p(k1, n1, k2, n2):
-    """Two-sided two-proportion z test."""
-    if n1 == 0 or n2 == 0:
-        return None
-    p1, p2 = k1 / n1, k2 / n2
-    p = (k1 + k2) / (n1 + n2)
-    se = math.sqrt(p * (1 - p) * (1 / n1 + 1 / n2))
-    if se == 0:
-        return 1.0 if p1 == p2 else 0.0
-    z = (p1 - p2) / se
-    # scipy norm
-    from scipy.stats import norm
-    return float(2 * norm.sf(abs(z)))
+    """Holm step-down on a list of (name, p), with monotone adjusted p-values."""
+    return SX.holm(ps)
 
 
 def analyze(rows, start, now, complete):
@@ -461,6 +442,11 @@ def analyze(rows, start, now, complete):
             model_fit.get('converged'), model_fit.get('n')))
         if model_fit.get('ok'):
             for outcome in ('follow_verbatim_vs_ask', 'follow_summary_vs_ask'):
+                sp = (model_fit.get('separation') or {}).get(outcome) or {}
+                if sp and not sp.get('estimable'):
+                    p('  %s: not estimable (separation; events per design cell %s, total %d)' % (
+                        outcome, sp.get('cells'), sp.get('n_events', 0)))
+                    continue
                 p('  %s:' % outcome)
                 for name, est in (model_fit.get(outcome) or {}).items():
                     p('    %s  est=%s  CI [%s, %s]  excl0=%s' % (
@@ -486,12 +472,18 @@ def analyze(rows, start, now, complete):
                 rule, cts_r['n'], cts_r['ask_rate'] or 0, cts_r['wrong_action'],
                 cts_r['silent_wrong'], cts_r['flag_and_proceed_wrong'],
                 base, cts_b['ask_rate'] or 0, cts_b['wrong_action']))
-            pv = two_prop_p(cts_r['ask_or_hold'], cts_r['n'] or 1, cts_b['ask_or_hold'], cts_b['n'] or 1)
-            tests.append((rule + ':ask_vs_matched', pv if pv is not None else 1.0))
+            # Exact test: McNemar when rule and matched runs pair on (template, seed),
+            # else Fisher. The z test used before is invalid at ask rates near 100%.
+            pv, method, detail = SX.paired_ask_test(
+                rr, br, lambda r: _choice(r) == 'ask_or_hold')
+            tests.append((rule + ':ask_vs_matched', pv))
+            payload['models'][model]['rule'][rule]['test'] = {'method': method, **detail}
         holm_res = holm(tests)
         payload['models'][model]['holm'] = holm_res
         for name, h in holm_res.items():
-            p('  Holm %s  p=%.4f  p_holm=%.4f  reject_05=%s' % (name, h['p'], h['p_holm'], h['reject_05']))
+            meth = payload['models'][model]['rule'][name.split(':')[0]]['test']['method']
+            p('  Holm %s  %s p=%.4f  p_holm=%.4f  reject_05=%s' % (
+                name, meth, h['p'], h['p_holm'], h['reject_05']))
 
         payload['models'][model]['conflict_triggered_asking'] = {
             'all_4_cells_ge_70': cell_ok_ask,
