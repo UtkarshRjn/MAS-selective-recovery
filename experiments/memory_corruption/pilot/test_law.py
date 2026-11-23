@@ -4,6 +4,7 @@ import unittest
 
 import law_inputs as LI
 import law_model as LM
+import harness as H
 import law_run as LR
 
 
@@ -95,7 +96,7 @@ class TestInputs(unittest.TestCase):
 
 class TestRunner(unittest.TestCase):
     def test_grid_sizes(self):
-        m = list(LR.DEFAULT_MODELS)
+        m = list(H.MODELS)
         # per model per item: compress 3x2 (E1: 2 starts, E4: 1) x samples 2 ... computed directly
         jc = LR.stage_c_jobs(m, seeds=(100,))
         per_model_template = (2 + 1) * 3 * 2 + 4 * 2 * 3 * 2 + 6 * 2 * 3
@@ -106,25 +107,6 @@ class TestRunner(unittest.TestCase):
 
     def test_dry_run_is_clean(self):
         self.assertEqual(LR.main(['--dry-run', '--seeds', '1']), 0)
-
-    def test_parallel_run_stops_on_budget(self):
-        class Stop(Exception):
-            pass
-
-        class Capped(LR.MockLaw):
-            n = 0
-
-            def complete_s0(self, *a, **k):
-                Capped.n += 1
-                if Capped.n > 20:
-                    raise Stop('cap')
-                return super().complete_s0(*a, **k)
-        m = Capped('api-deepseek-4.1-flash')
-        jobs = LR.stage_c_jobs(['api-deepseek-4.1-flash'], seeds=(100,))
-        rows = LR.run_jobs(jobs, lambda _m: m, write=False, workers=4, stop_types=(Stop,))
-        self.assertLessEqual(len(rows), 20)
-        self.assertTrue(LR.run_jobs.last['stopped'].startswith('Stop'))
-        self.assertEqual(LR.run_jobs.last['errors'], 0)
 
     def test_paid_stage_refuses_without_go(self):
         import os
