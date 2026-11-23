@@ -51,6 +51,47 @@ Traces are written under `pilot/traces_confirm_gaps_v3_nov21/` and are gitignore
 
 A second, cheaper screen with no executor, only summarizer calls. Plan: `pilot/plan_s0_nov21.md` (v4). Freeze: `pilot/freeze_hashes_s0_v4.json`. Results: `pilot/s0_nov21_results.txt`, with predictions locked after depth 1 in `pilot/freeze_s0_predictions.json`. No kill rule fired. Spend was $0.59070 new. Offline checks: `python3 -m unittest test_s0_nov21` and `python3 run_s0_cost_watch.py --jobs-only`. A paid run goes only through `run_s0_cost_watch.py`.
 
+## Handoff law (L1 and L2)
+
+A third line asks a simple question: when one agent hands work to the next, how often does a wrong value survive, and does the true value get lost?
+
+Each handoff text is in one of four states for the target value:
+
+- V: the wrong value and the true value are both present (a visible conflict, so the agent can ask)
+- S: only the wrong value is present (a silent error, so the agent acts on it)
+- T: only the true value is present
+- N: the value was dropped
+
+**L1** measures single handoffs, predicts larger systems (chains, a diamond, trees), and then tests the predictions. Results: `pilot/law_l1_results.md`.
+
+**L2** tests whether the loss of the true value depends on how much a handoff compresses its input. Plan: `pilot/plan_law_l2_draft.md`. Results: `pilot/law_l2_results.md`.
+
+Files:
+
+| File | What it does |
+|---|---|
+| `pilot/harness.py` | Runs jobs: model calls, grading, parallel runs, resume, budget stop, paid-run checks |
+| `pilot/law_model.py` | The math: 4x4 state matrices, chains, merges, trees, the snowball number R |
+| `pilot/law_inputs.py` | L1 worlds, error types and handoff texts |
+| `pilot/l2_inputs.py` | L2 handoff texts padded to a set length |
+| `pilot/law_run.py`, `pilot/l2_run.py` | The L1 and L2 experiments: grid, fit, predictions, scores |
+
+Offline checks, from `pilot/`:
+
+```bash
+python3 -m unittest test_harness test_law test_l2
+```
+
+```bash
+python3 law_run.py --dry-run
+```
+
+```bash
+python3 l2_run.py --dry-run
+```
+
+The freeze files (`freeze_hashes_law_l1.json`, `freeze_hashes_law_l2.json`) hash the code as it ran, in commit `462a76f`. Later commits reorganize that code without changing what it computes: the cleaned code gives the same prediction hashes and the same scores from the same traces.
+
 ## Handover
 
 `HANDOVER.md` explains how to set up, run, and extend both lines, how API access and spend work, and what to ask before spending.
