@@ -1,7 +1,7 @@
 # L3 results (23 November 2026, PT)
 
 Plan: `plan_law_l3_draft.md` (decisions in section 7). Freeze: `freeze_hashes_law_l3.json`
-(code as run: commit 2e25241). Predictions for the budget-80 cells were written before any
+(code as run: commit fa851f5). Predictions for the budget-80 cells were written before any
 budget-80 data existed: `l3_predictions.json` (sha256 7c05f39e...). Scores: `l3_scores.txt`,
 `l3_scores.json`. Traces (not in git): `traces_law_l3/`.
 

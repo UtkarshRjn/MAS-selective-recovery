@@ -1,7 +1,7 @@
 # L2 results (23 November 2026, PT)
 
 Plan: `plan_law_l2_draft.md` (decisions in section 5a). Cap change: `l2_cap_amendment.md`.
-Freeze: `freeze_hashes_law_l2.json` (code as run: commit 462a76f).
+Freeze: `freeze_hashes_law_l2.json` (code as run: commit 3209a35).
 Predictions, written from stage C2 before stage P2: `l2_predictions.json` (sha256 3791bb6d...).
 Scores: `l2_scores.txt`, `l2_scores.json`. Traces (not in git): `traces_law_l2/`.
 
@@ -72,7 +72,7 @@ Summary length, at 800 words in, values together:
 - With F2, almost no loss happened, so the F2 slopes cannot be estimated. The frozen code
   still prints "excl0=True" and "OUTSIDE" for them, because the bootstrap intervals have zero
   width. Those F2 lines carry no information. Tests 1 and 2 are read on the plain prompt (F0).
-- The cleaned code (commit 7289d37 and later) gives the same predictions hash and identical
+- The cleaned code (commit 865c93b and later) gives the same predictions hash and identical
   scores from the same traces.
 
 ## What this means

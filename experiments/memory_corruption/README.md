@@ -92,7 +92,7 @@ python3 law_run.py --dry-run
 python3 l2_run.py --dry-run
 ```
 
-The freeze files (`freeze_hashes_law_l1.json`, `freeze_hashes_law_l2.json`) hash the code as it ran, in commit `462a76f`. Later commits reorganize that code without changing what it computes: the cleaned code gives the same prediction hashes and the same scores from the same traces.
+The freeze files (`freeze_hashes_law_l1.json`, `freeze_hashes_law_l2.json`) hash the code as it ran, in commit `3209a35`. Later commits reorganize that code without changing what it computes: the cleaned code gives the same prediction hashes and the same scores from the same traces.
 
 ## Handover
 
