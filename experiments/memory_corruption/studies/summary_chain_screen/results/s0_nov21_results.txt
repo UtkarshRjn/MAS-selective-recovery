@@ -1,0 +1,94 @@
+S0 results (composition law + channel correlation)
+complete=True  n_traces=400
+new spend $0.59070  cumulative $6.73675  hard cap $3.00  cum stop $19.75
+
+== composition api-deepseek-4.1-flash ==
+  depth 1: 24 traces, 0 invalid
+    typo_survival  24/24  p=1.000  wilson[0.862, 1.000]
+    disagreement_survival  15/24  p=0.625  wilson[0.427, 0.788]
+    truth_survival  15/24  p=0.625  wilson[0.427, 0.788]
+  depth 2: 24 traces, 0 invalid
+    typo_survival  24/24  p=1.000  wilson[0.862, 1.000]
+    disagreement_survival  17/24  p=0.708  wilson[0.508, 0.851]
+    truth_survival  17/24  p=0.708  wilson[0.508, 0.851]
+  depth 4: 24 traces, 0 invalid
+    typo_survival  24/24  p=1.000  wilson[0.862, 1.000]
+    disagreement_survival  16/24  p=0.667  wilson[0.467, 0.820]
+    truth_survival  16/24  p=0.667  wilson[0.467, 0.820]
+  simple law (typo_survival) miss=False
+    depth 2 obs=1.000 pred=1.000 miss=False ok
+    depth 4 obs=1.000 pred=1.000 miss=False ok
+  backup saturating s_inf=1.000 a=0.000  pred_d4=1.000  hits=True
+  family_claim=ceiling_at_depth_1  ceiling_at_depth_1=True  (a pass here means not refuted, not law confirmed; report CI widths above)
+  simple law (disagreement_survival) miss=True
+    depth 2 obs=0.708 pred=0.391 miss=True outside_bootstrap_pi
+    depth 4 obs=0.667 pred=0.153 miss=True outside_bootstrap_pi,ratio_gt_2
+  backup saturating family: no valid fit
+  family_claim=neither_hits  ceiling_at_depth_1=False  (a pass here means not refuted, not law confirmed; report CI widths above)
+  phenomenon dead (both >0.9 at d4): False  {'typo': 1.0, 'disagreement': 0.6666666666666666}
+  hop-wise conditional transmission (descriptive, not a primary):
+    typo_survival  j=1 24/24 p=1.000; j=2 24/24 p=1.000; j=3 24/24 p=1.000; j=4 24/24 p=1.000
+    disagreement_survival  j=1 17/24 p=0.708; j=2 17/17 p=1.000; j=3 17/17 p=1.000; j=4 16/17 p=0.941
+
+== composition api-glm-5.3-flash ==
+  depth 1: 24 traces, 0 invalid
+    typo_survival  24/24  p=1.000  wilson[0.862, 1.000]
+    disagreement_survival  22/24  p=0.917  wilson[0.742, 0.977]
+    truth_survival  22/24  p=0.917  wilson[0.742, 0.977]
+  depth 2: 24 traces, 0 invalid
+    typo_survival  24/24  p=1.000  wilson[0.862, 1.000]
+    disagreement_survival  23/24  p=0.958  wilson[0.798, 0.993]
+    truth_survival  23/24  p=0.958  wilson[0.798, 0.993]
+  depth 4: 24 traces, 0 invalid
+    typo_survival  24/24  p=1.000  wilson[0.862, 1.000]
+    disagreement_survival  23/24  p=0.958  wilson[0.798, 0.993]
+    truth_survival  23/24  p=0.958  wilson[0.798, 0.993]
+  simple law (typo_survival) miss=False
+    depth 2 obs=1.000 pred=1.000 miss=False ok
+    depth 4 obs=1.000 pred=1.000 miss=False ok
+  backup saturating s_inf=1.000 a=0.000  pred_d4=1.000  hits=True
+  family_claim=ceiling_at_depth_1  ceiling_at_depth_1=True  (a pass here means not refuted, not law confirmed; report CI widths above)
+  simple law (disagreement_survival) miss=False
+    depth 2 obs=0.958 pred=0.840 miss=False ok
+    depth 4 obs=0.958 pred=0.706 miss=False ok
+  backup saturating family: no valid fit
+  family_claim=neither_hits  ceiling_at_depth_1=False  (a pass here means not refuted, not law confirmed; report CI widths above)
+  phenomenon dead (both >0.9 at d4): True  {'typo': 1.0, 'disagreement': 0.9583333333333334}
+  hop-wise conditional transmission (descriptive, not a primary):
+    typo_survival  j=1 24/24 p=1.000; j=2 24/24 p=1.000; j=3 24/24 p=1.000; j=4 24/24 p=1.000
+    disagreement_survival  j=1 23/24 p=0.958; j=2 23/23 p=1.000; j=3 23/23 p=1.000; j=4 23/23 p=1.000
+
+== composition kill ==
+simple law fails (both models miss s^k, excluding ceiling-at-depth-1): False
+ceiling at depth 1 on both models: False
+family claims (tie rule: both hit => not_discriminated, no law): {'typo_survival': 'ceiling_at_depth_1', 'disagreement_survival': 'neither_hits'}
+phenomenon dead (both models, both metrics, d4>0.9): False
+n=24 is a screen; a pass means not refuted. Report interval widths with every rate.
+
+== channel typo correlation ==
+  same_model_same_prompt n=40 p1=0.350 p2=0.100 both=0.050 indep=0.035 excess=0.015 identified=True near0=False
+    template trip excess=0.000 p_both=0.000 p_indep=0.000 n=20
+    template trip_long excess=0.000 p_both=0.100 p_indep=0.100 n=20
+  same_model_different_prompt n=10 p1=0.200 p2=0.000 both=0.000 indep=0.000 excess=0.000 identified=False near0=False
+    template trip excess=0.000 p_both=0.000 p_indep=0.000 n=6
+    template trip_long excess=0.000 p_both=0.000 p_indep=0.000 n=4
+  cross_model n=40 p1=0.350 p2=0.075 both=0.075 indep=0.026 excess=0.049 identified=True near0=False
+    template trip excess=0.000 p_both=0.000 p_indep=0.000 n=20
+    template trip_long excess=0.075 p_both=0.150 p_indep=0.075 n=20
+  verbatim_vs_ds_p1 n=40 p1=1.000 p2=0.350 both=0.350 indep=0.350 excess=0.000 identified=False near0=False
+    template trip excess=0.000 p_both=0.200 p_indep=0.200 n=20
+    template trip_long excess=0.000 p_both=0.500 p_indep=0.500 n=20
+  verbatim_vs_glm_p1 n=40 p1=1.000 p2=0.075 both=0.075 indep=0.075 excess=0.000 identified=False near0=False
+    template trip excess=0.000 p_both=0.000 p_indep=0.000 n=20
+    template trip_long excess=0.000 p_both=0.150 p_indep=0.150 n=20
+== channel clean false-alarm (named-id conflict only; omissions are secondary) ==
+  same_model_same_prompt n=24 fa_rate=0.000 kill=False  state_diff=0.000  any_id_diff=0.125  omit_c1=0.000 omit_c2=0.000
+  same_model_different_prompt n=9 fa_rate=0.000 kill=False  state_diff=0.000  any_id_diff=1.000  omit_c1=0.000 omit_c2=0.000
+  cross_model n=24 fa_rate=0.000 kill=False  state_diff=0.000  any_id_diff=0.417  omit_c1=0.000 omit_c2=0.000
+  verbatim_vs_ds_p1 n=24 fa_rate=0.000 kill=False  state_diff=0.000  any_id_diff=0.583  omit_c1=0.000 omit_c2=0.000
+  verbatim_vs_glm_p1 n=24 fa_rate=0.000 kill=False  state_diff=0.000  any_id_diff=0.917  omit_c1=0.000 omit_c2=0.000
+correlation kill: false_alarm=False  law_kill=False  reason=None
+
+Verbatim pairs are reported for diversity (P(visible disagreement) when the typo is in the source).
+The independence test is not identified when verbatim is deterministically typo; those pairs are not used for the correlation-law kill.
+Cost watch: projection_after_step1=0.48945 stopped_for_projection=False real_final_new=$0.59070 cumulative=$6.73675
