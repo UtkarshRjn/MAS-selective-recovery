@@ -66,6 +66,8 @@ Each handoff text is in one of four states for the target value:
 
 **L2** tests whether the loss of the true value depends on how much a handoff compresses its input. Plan: `pilot/plan_law_l2_draft.md`. Results: `pilot/law_l2_results.md`.
 
+**L3** swaps which value is true, to separate role from truth. Main result: a summarizer keeps the value that the plan names and drops the value in the evidence, whichever one is true. Plan: `pilot/plan_law_l3_draft.md`. Results: `pilot/law_l3_results.md`.
+
 Files:
 
 | File | What it does |
@@ -73,13 +75,13 @@ Files:
 | `pilot/harness.py` | Runs jobs: model calls, grading, parallel runs, resume, budget stop, paid-run checks |
 | `pilot/law_model.py` | The math: 4x4 state matrices, chains, merges, trees, the snowball number R |
 | `pilot/law_inputs.py` | L1 worlds, error types and handoff texts |
-| `pilot/l2_inputs.py` | L2 handoff texts padded to a set length |
-| `pilot/law_run.py`, `pilot/l2_run.py` | The L1 and L2 experiments: grid, fit, predictions, scores |
+| `pilot/l2_inputs.py`, `pilot/l3_inputs.py` | L2 and L3 handoff texts at a set length |
+| `pilot/law_run.py`, `pilot/l2_run.py`, `pilot/l3_run.py` | The L1, L2 and L3 experiments: grid, fit, predictions, scores |
 
 Offline checks, from `pilot/`:
 
 ```bash
-python3 -m unittest test_harness test_law test_l2
+python3 -m unittest test_harness test_law test_l2 test_l3
 ```
 
 ```bash
