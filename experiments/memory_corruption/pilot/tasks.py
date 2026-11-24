@@ -1,6 +1,6 @@
 """Pilot tasks for the memory-damage study (plan_v3). Mock worlds only: no real email, booking or filesystem.
 Task A: booking + email.  Task B: workspace cleanup with delete_file (no undo) + summary email.
-Memory is a CLAUDE.md-style file: a structure of sections -> lines, rendered to Markdown.
+Memory is a Markdown notes file: a structure of sections -> lines, rendered to Markdown.
 """
 import copy, fnmatch, os, random, re
 

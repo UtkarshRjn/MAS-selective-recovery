@@ -134,7 +134,7 @@ The PR is https://github.com/UtkarshRjn/MAS-selective-recovery/pull/30, branch `
 | `pilot/gates_v2.py` | Later gate variants scored offline. | no |
 | `pilot/damage.py`, `pilot/heldout.py`, `pilot/manip.py` | Damage generator, held out damage types, manipulation check from the first pilot. Still imported by the harness. | no |
 | `pilot/analyze.py` | Offline scoring of the first pilot traces. | no |
-| `pilot/filler/` | 4 small files from licensed public agent repos, used as filler memory text. | no |
+| `pilot/filler/` | 2 small files from licensed public agent repos (the only two the code reads), used as filler memory text. | no |
 | `pilot/sources.csv` | License and commit for each filler file. | no |
 | `pilot/*_prompt*.txt`, `pilot/oracle_*.txt` | Summarizer prompts (`summarizer_prompt.txt` is p1, 40 to 100 words, target 80), oracle summaries, and the oracle style. | yes (v3 measurement freeze) |
 | `pilot/verifier_prompt.txt` | Verifier prompt from an earlier design. | no |
