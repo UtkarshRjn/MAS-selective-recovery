@@ -10,13 +10,13 @@ import unittest
 from unittest import mock
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, HERE)
+import _core  # noqa: F401  (puts core/ on the import path)
 
 import perturb_gaps as PG
 import s0_source as S
 import s0_grade as G
 import s0_summarize as SM
-import run_s0_nov21 as R
+import run_summary_chain as R
 
 
 class TestJobCounts(unittest.TestCase):
@@ -207,9 +207,14 @@ class TestGoGate(unittest.TestCase):
         self.assertIn('No API calls', str(e.exception))
 
     def test_old_main_go_is_not_s0_go(self):
-        old = os.path.join(HERE, 'approvals', 'MAIN_GO.txt')
-        self.assertTrue(os.path.exists(old) and os.path.getsize(old) > 0)
-        self.assertNotEqual(os.path.abspath(old), os.path.abspath(R.GO_PATH))
+        # An older, non-empty MAIN_GO.txt next to the S0 go path must not authorize S0.
+        with tempfile.TemporaryDirectory() as td:
+            with open(os.path.join(td, 'MAIN_GO.txt'), 'w') as f:
+                f.write('approved for an older run\n')
+            with mock.patch.object(R, 'GO_PATH', os.path.join(td, 'MAIN_GO_s0.txt')):
+                with self.assertRaises(SystemExit) as e:
+                    R.require_s0_go()
+            self.assertIn('MAIN_GO_s0.txt', str(e.exception))
 
 
 class TestLockPredictions(unittest.TestCase):

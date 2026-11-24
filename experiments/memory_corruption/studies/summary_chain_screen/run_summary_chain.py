@@ -1,6 +1,6 @@
 """S0 first screen runner: composition law plus channel-correlation probe.
 
-Does not authorize spend by itself. A paid run must be launched via run_s0_cost_watch.py and requires approvals/MAIN_GO_s0.txt.
+Does not authorize spend by itself. A paid run must be launched via run_summary_chain_cost_watch.py and requires approvals/MAIN_GO_s0.txt.
 Old approvals/MAIN_GO.txt and MAIN_GO_v3.txt do not authorize this screen.
 Key is loaded only from /workspace/war_room/e1/.env by agent.LLM, never printed or copied.
 Push nothing to main. No frontier models.
@@ -16,18 +16,20 @@ import datetime
 from collections import defaultdict, Counter
 from concurrent.futures import ThreadPoolExecutor
 
+import _core  # noqa: F401  (puts core/ on the import path)
 import agent as A
+import paths as P
 import s0_source as S
 import s0_grade as G
 import s0_summarize as SM
 
-HERE = A.HERE
-OUT = os.path.join(HERE, 'traces_s0_nov21')
-PRED_PATH = os.path.join(HERE, 'freeze_s0_predictions.json')
-START_SPEND_PATH = os.path.join(HERE, 's0_nov21_start_spend.json')
-RESULTS_TXT = os.path.join(HERE, 's0_nov21_results.txt')
-RESULTS_JSON = os.path.join(HERE, 's0_nov21_results.json')
-GO_PATH = os.path.join(HERE, 'approvals', 'MAIN_GO_s0.txt')
+HERE = os.path.dirname(os.path.abspath(__file__))   # this study's folder
+OUT = os.path.join(HERE, 'traces')
+PRED_PATH = os.path.join(HERE, 'results', 'freeze_s0_predictions.json')
+START_SPEND_PATH = os.path.join(P.RUNTIME, 's0_nov21_start_spend.json')
+RESULTS_TXT = os.path.join(HERE, 'results', 's0_nov21_results.txt')
+RESULTS_JSON = os.path.join(HERE, 'results', 's0_nov21_results.json')
+GO_PATH = P.approval('MAIN_GO_s0.txt')
 
 MODELS = ('api-deepseek-4.1-flash', 'api-glm-5.3-flash')
 TEMPLATES = ('trip', 'trip_long')

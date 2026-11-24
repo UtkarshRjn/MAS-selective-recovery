@@ -6,15 +6,15 @@ import os
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, HERE)
+import _core  # noqa: F401  (puts core/ on the import path)
 
 import s0_source as S
 import s0_grade as G
-from dry_run_s0_nov21 import script_for
-import run_s0_nov21 as R
+from dry_run_summary_chain import script_for
+import run_summary_chain as R
 
-OUT = os.path.join(HERE, 's0_v4_fa_gap.txt')
-V3_TRACES = os.path.join(HERE, 'traces_confirm_gaps_v3_nov21')
+OUT = os.path.join(HERE, 'results', 's0_v4_fa_gap.txt')
+V3_TRACES = os.path.join(HERE, '..', 'conflict_asking', 'traces')
 PAD = ' word' * 40
 
 

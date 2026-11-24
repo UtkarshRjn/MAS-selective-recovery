@@ -8,10 +8,10 @@ if any(k.startswith('OPENAI') or k.endswith('API_KEY') or 'SECRET' in k for k, v
     # do not print values; just do not load or use a client
     pass
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import _core  # noqa: F401  (puts core/ on the import path)
 import perturb_gaps as PG
 import templates_v3 as TV
-import test_conflict_v3_nov21 as T
+import test_conflict_asking as T
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, 'dry_run_conflict_v3.txt')

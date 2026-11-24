@@ -5,14 +5,16 @@ import json
 import os
 import unittest
 
+import _core  # noqa: F401  (puts core/ on the import path)
 import agent as A
+import paths as P
 import grade_v3 as GV
 import perturb_gaps as PG
 import templates_v3 as TV
 import tasks as T
 
-HERE = A.HERE
-FREEZE = os.path.join(HERE, 'freeze_hashes_gaps_confirm_v3.json')
+HERE = os.path.dirname(os.path.abspath(__file__))
+FREEZE = os.path.join(HERE, 'docs', 'freeze_hashes_gaps_confirm_v3.json')
 
 PRIMARY = (
     ('P_conflict_sv', 'conflict', PG.ORDER_SUMMARY_THEN_VERBATIM),
@@ -223,11 +225,11 @@ class FreezeTests(unittest.TestCase):
             self.skipTest('v3 freeze written after the tests pass')
         frozen = json.load(open(FREEZE))
         for name, path in (
-            ('conflict_rule', 'conflict_rule.txt'),
-            ('conflict_summary_style', 'conflict_summary_style.txt'),
-            ('plan_gaps_confirm_nov21_v3', 'plan_gaps_confirm_nov21_v3.md'),
+            ('conflict_rule', P.prompt('conflict_rule.txt')),
+            ('conflict_summary_style', P.prompt('conflict_summary_style.txt')),
+            ('plan_gaps_confirm_nov21_v3', os.path.join(HERE, 'docs', 'plan_gaps_confirm_nov21_v3.md')),
         ):
-            digest = hashlib.sha256(open(os.path.join(HERE, path), 'rb').read()).hexdigest()
+            digest = hashlib.sha256(open(path, 'rb').read()).hexdigest()
             self.assertEqual(digest, frozen[name], name)
 
 

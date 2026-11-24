@@ -3,7 +3,7 @@
 Does not authorize spend by itself. Requires approvals/MAIN_GO_s0.txt.
 Older MAIN_GO.txt and MAIN_GO_v3.txt do not authorize this screen.
 Key is loaded only from /workspace/war_room/e1/.env by agent.LLM, never printed or copied.
-Do not launch run_s0_nov21.py directly for the paid grid.
+Do not launch run_summary_chain.py directly for the paid grid.
 """
 from __future__ import annotations
 
@@ -12,11 +12,12 @@ import os
 import sys
 import datetime
 
+import _core  # noqa: F401  (puts core/ on the import path)
 import agent as A
-import run_s0_nov21 as R
+import run_summary_chain as R
 
 PROJ_CAP = 2.80
-REPORT_PATH = os.path.join(R.HERE, 's0_cost_watch_report.json')
+REPORT_PATH = os.path.join(R.HERE, 'results', 's0_cost_watch_report.json')
 PLANNED_CALLS = R.expected_counts()['total_calls']  # 592
 
 

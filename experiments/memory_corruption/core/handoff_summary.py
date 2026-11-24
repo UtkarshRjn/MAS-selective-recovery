@@ -8,7 +8,9 @@ import json
 import re
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
+import paths as P
+
+HERE = Path(P.PROMPTS)
 
 PROMPT_NAIVE_PATH = HERE / 'summarizer_prompt.txt'
 PROMPT_STRUCTURED_PATH = HERE / 'summarizer_structured_prompt.txt'

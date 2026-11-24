@@ -10,25 +10,27 @@ from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 
+import _core  # noqa: F401  (puts core/ on the import path)
 import agent as A
+import paths as P
 import run_pilot as R
 import templates_v3 as TV
 import grade_v3 as GV
 import perturb_gaps as PG
 import stats_exact as SX
 
-HERE = A.HERE
-OUT = os.path.join(HERE, 'traces_confirm_gaps_v3_nov21')
+HERE = os.path.dirname(os.path.abspath(__file__))   # this study's folder
+OUT = os.path.join(HERE, 'traces')
 os.makedirs(OUT, exist_ok=True)
 MODELS = ('api-deepseek-4.1-flash', 'api-glm-5.3-flash')
 TEMPLATES = list(TV.TEMPLATES)
 SEEDS = (16, 17, 18, 19, 20, 21)  # fresh; exploratory screens used 0 and 1
 PASS_CAP = 4.37188
 CUM_STOP = 19.75
-START_SPEND_PATH = os.path.join(HERE, 'confirm_v3_nov21_start_spend.json')
-RESULTS_TXT = os.path.join(HERE, 'confirm_gaps_v3_nov21_results.txt')
-RESULTS_JSON = os.path.join(HERE, 'confirm_gaps_v3_nov21_results.json')
-AUDIT_PATH = os.path.join(HERE, 'confirm_gaps_v3_nov21_hand_audit.json')
+START_SPEND_PATH = os.path.join(P.RUNTIME, 'confirm_v3_nov21_start_spend.json')
+RESULTS_TXT = os.path.join(HERE, 'results', 'confirm_gaps_v3_nov21_results.txt')
+RESULTS_JSON = os.path.join(HERE, 'results', 'confirm_gaps_v3_nov21_results.json')
+AUDIT_PATH = os.path.join(HERE, 'results', 'confirm_gaps_v3_nov21_hand_audit.json')
 
 # name, form, order, tag
 PRIMARY_ARMS = (

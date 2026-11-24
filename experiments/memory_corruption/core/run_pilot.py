@@ -1,12 +1,13 @@
 """Pilot / workshop-tier runner. Hard stop is load_hard_stop() (env PILOT_STOP_AT, else run_config.json hard_stop_usd=19.75).
-A hard stop above $1 requires approvals/MAIN_GO.txt. Logs spend per cell to cell_spend.jsonl.
+A hard stop above $1 requires runtime/approvals/MAIN_GO.txt. Logs spend per cell to cell_spend.jsonl.
 Do not run the workshop tier until Bijin confirms the cap and MAIN_GO.txt is written."""
 import json, os, random, sys, threading, time, datetime
 from concurrent.futures import ThreadPoolExecutor
 import agent as A, heldout as H, damage as D, tasks as T
+import paths as P
 
 MODELS = ['api-deepseek-4.1-flash', 'api-glm-5.3-flash']
-OUT = os.path.join(A.HERE, os.environ.get('PILOT_TRACES', 'traces')); os.makedirs(OUT, exist_ok=True)
+OUT = os.path.join(P.RUNTIME, os.environ.get('PILOT_TRACES', 'traces_pilot')); os.makedirs(OUT, exist_ok=True)
 
 def workshop_grid():
     """Kept cells for the Amendment 6 workshop grid (C0, C2, F1-F4, T1, T2, U1)."""
@@ -223,16 +224,16 @@ def path(j):
     if rule: name += '__RULE'
     return os.path.join(OUT, name + '.json')
 
-MAIN_GO = os.path.join(A.HERE, 'approvals', 'MAIN_GO.txt')
-SMOKE_A8_GO = os.path.join(A.HERE, 'approvals', 'SMOKE_A8_GO.txt')
-SMOKE_A9_GO = os.path.join(A.HERE, 'approvals', 'SMOKE_A9_GO.txt')
-SCREEN_NOV21_GO = os.path.join(A.HERE, 'approvals', 'SCREEN_NOV21_GO.txt')
-RESCREEN_NOV21_GO = os.path.join(A.HERE, 'approvals', 'RESCREEN_NOV21_GO.txt')
-V3_SANITY_GO = os.path.join(A.HERE, 'approvals', 'V3_SANITY_GO.txt')
-V3_EXPLORE_GO = os.path.join(A.HERE, 'approvals', 'V3_EXPLORE_GO.txt')
-GAPS_NOV21_GO = os.path.join(A.HERE, 'approvals', 'GAPS_NOV21_GO.txt')
-GAPS_VERIFY_NOV21_GO = os.path.join(A.HERE, 'approvals', 'GAPS_VERIFY_NOV21_GO.txt')
-GAPS_WORLDFIX_NOV21_GO = os.path.join(A.HERE, 'approvals', 'GAPS_WORLDFIX_NOV21_GO.txt')
+MAIN_GO = P.approval('MAIN_GO.txt')
+SMOKE_A8_GO = P.approval('SMOKE_A8_GO.txt')
+SMOKE_A9_GO = P.approval('SMOKE_A9_GO.txt')
+SCREEN_NOV21_GO = P.approval('SCREEN_NOV21_GO.txt')
+RESCREEN_NOV21_GO = P.approval('RESCREEN_NOV21_GO.txt')
+V3_SANITY_GO = P.approval('V3_SANITY_GO.txt')
+V3_EXPLORE_GO = P.approval('V3_EXPLORE_GO.txt')
+GAPS_NOV21_GO = P.approval('GAPS_NOV21_GO.txt')
+GAPS_VERIFY_NOV21_GO = P.approval('GAPS_VERIFY_NOV21_GO.txt')
+GAPS_WORLDFIX_NOV21_GO = P.approval('GAPS_WORLDFIX_NOV21_GO.txt')
 V3_MAX_JOBS = 80
 GAPS_MAX_JOBS = 120
 GAPS_VERIFY_MAX_JOBS = 120
@@ -248,7 +249,7 @@ def _smoke_go_present():
     return False
 
 def require_go(stop_at=None, n_jobs=None, env=None):
-    """Refuse a run whose hard stop is above the $1 pilot cap unless approvals/MAIN_GO.txt is present and non-empty.
+    """Refuse a run whose hard stop is above the $1 pilot cap unless runtime/approvals/MAIN_GO.txt is present and non-empty.
     Smoke is the one exception: PILOT_SMOKE_ONLY=1, a non-empty SMOKE_A8_GO.txt or SMOKE_A9_GO.txt, and at most 180 jobs.
     That pair does not authorize the main grid."""
     env = os.environ if env is None else env
@@ -259,7 +260,7 @@ def require_go(stop_at=None, n_jobs=None, env=None):
     if gapsfix:
         if not (GAPS_WORLDFIX_NOV21_GO and os.path.exists(GAPS_WORLDFIX_NOV21_GO) and os.path.getsize(GAPS_WORLDFIX_NOV21_GO) > 0):
             raise SystemExit(
-                'Refusing to start: PILOT_GAPS_FIX is set but approvals/GAPS_WORLDFIX_NOV21_GO.txt is missing or empty. No API calls made.'
+                'Refusing to start: PILOT_GAPS_FIX is set but runtime/approvals/GAPS_WORLDFIX_NOV21_GO.txt is missing or empty. No API calls made.'
             )
         if n_jobs is not None and int(n_jobs) > GAPS_VERIFY_MAX_JOBS:
             raise SystemExit(
@@ -270,7 +271,7 @@ def require_go(stop_at=None, n_jobs=None, env=None):
     if gapsv:
         if not (GAPS_VERIFY_NOV21_GO and os.path.exists(GAPS_VERIFY_NOV21_GO) and os.path.getsize(GAPS_VERIFY_NOV21_GO) > 0):
             raise SystemExit(
-                'Refusing to start: PILOT_GAPS_VERIFY is set but approvals/GAPS_VERIFY_NOV21_GO.txt is missing or empty. No API calls made.'
+                'Refusing to start: PILOT_GAPS_VERIFY is set but runtime/approvals/GAPS_VERIFY_NOV21_GO.txt is missing or empty. No API calls made.'
             )
         if n_jobs is not None and int(n_jobs) > GAPS_VERIFY_MAX_JOBS:
             raise SystemExit(
@@ -281,7 +282,7 @@ def require_go(stop_at=None, n_jobs=None, env=None):
     if gaps:
         if not (GAPS_NOV21_GO and os.path.exists(GAPS_NOV21_GO) and os.path.getsize(GAPS_NOV21_GO) > 0):
             raise SystemExit(
-                'Refusing to start: PILOT_GAPS is set but approvals/GAPS_NOV21_GO.txt is missing or empty. No API calls made.'
+                'Refusing to start: PILOT_GAPS is set but runtime/approvals/GAPS_NOV21_GO.txt is missing or empty. No API calls made.'
             )
         if n_jobs is not None and int(n_jobs) > GAPS_MAX_JOBS:
             raise SystemExit(
@@ -298,7 +299,7 @@ def require_go(stop_at=None, n_jobs=None, env=None):
                 ok = True
         if not ok:
             raise SystemExit(
-                'Refusing to start: PILOT_V3 is set but approvals/V3_SANITY_GO.txt or V3_EXPLORE_GO.txt is missing or empty. No API calls made.'
+                'Refusing to start: PILOT_V3 is set but runtime/approvals/V3_SANITY_GO.txt or V3_EXPLORE_GO.txt is missing or empty. No API calls made.'
             )
         if n_jobs is not None and int(n_jobs) > V3_MAX_JOBS:
             raise SystemExit(
@@ -309,7 +310,7 @@ def require_go(stop_at=None, n_jobs=None, env=None):
     if rescreen:
         if not (RESCREEN_NOV21_GO and os.path.exists(RESCREEN_NOV21_GO) and os.path.getsize(RESCREEN_NOV21_GO) > 0):
             raise SystemExit(
-                'Refusing to start: PILOT_RESCREEN is set but approvals/RESCREEN_NOV21_GO.txt is missing or empty. No API calls made.'
+                'Refusing to start: PILOT_RESCREEN is set but runtime/approvals/RESCREEN_NOV21_GO.txt is missing or empty. No API calls made.'
             )
         if n_jobs is not None and int(n_jobs) > RESCREEN_MAX_JOBS:
             raise SystemExit(
@@ -320,7 +321,7 @@ def require_go(stop_at=None, n_jobs=None, env=None):
     if screen:
         if not (SCREEN_NOV21_GO and os.path.exists(SCREEN_NOV21_GO) and os.path.getsize(SCREEN_NOV21_GO) > 0):
             raise SystemExit(
-                'Refusing to start: PILOT_SCREEN is set but approvals/SCREEN_NOV21_GO.txt is missing or empty. No API calls made.'
+                'Refusing to start: PILOT_SCREEN is set but runtime/approvals/SCREEN_NOV21_GO.txt is missing or empty. No API calls made.'
             )
         if n_jobs is not None and int(n_jobs) > SCREEN_MAX_JOBS:
             raise SystemExit(
@@ -331,7 +332,7 @@ def require_go(stop_at=None, n_jobs=None, env=None):
     if smoke:
         if not _smoke_go_present():
             raise SystemExit(
-                'Refusing to start: PILOT_SMOKE_ONLY is set but approvals/SMOKE_A8_GO.txt or SMOKE_A9_GO.txt is missing or empty. No API calls made.'
+                'Refusing to start: PILOT_SMOKE_ONLY is set but runtime/approvals/SMOKE_A8_GO.txt or SMOKE_A9_GO.txt is missing or empty. No API calls made.'
             )
         if n_jobs is not None and int(n_jobs) > SMOKE_A8_MAX_JOBS:
             raise SystemExit(
@@ -340,7 +341,7 @@ def require_go(stop_at=None, n_jobs=None, env=None):
         return
     if not os.path.exists(MAIN_GO) or os.path.getsize(MAIN_GO) == 0:
         raise SystemExit(
-            'Refusing to start: hard stop is $%.2f and approvals/MAIN_GO.txt is missing or empty. No API calls made.' % stop_at
+            'Refusing to start: hard stop is $%.2f and runtime/approvals/MAIN_GO.txt is missing or empty. No API calls made.' % stop_at
         )
 
 def main(limit=None, workers=None):

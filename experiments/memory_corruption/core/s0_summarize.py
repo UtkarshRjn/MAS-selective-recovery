@@ -11,10 +11,10 @@ import time
 import agent as A
 import handoff_summary as HS
 import s0_grade as G
+import paths as P
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-PROMPT_P1_PATH = os.path.join(HERE, 'summarizer_prompt.txt')
-PROMPT_P2_PATH = os.path.join(HERE, 'summarizer_prompt_s0_alt.txt')
+PROMPT_P1_PATH = P.prompt('summarizer_prompt.txt')
+PROMPT_P2_PATH = P.prompt('summarizer_prompt_s0_alt.txt')
 SYSTEM = 'You compress a plan for another agent. Reply with plain text only, never JSON.'
 MAX_TOKENS = 4000
 COMPOSE_TEMPERATURE = 0.0

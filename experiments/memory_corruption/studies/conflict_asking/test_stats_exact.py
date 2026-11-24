@@ -2,6 +2,7 @@
 import importlib.util
 import unittest
 
+import _core  # noqa: F401  (puts core/ on the import path)
 import stats_exact as SX
 
 HAVE_NUMERIC = all(importlib.util.find_spec(m) for m in ('numpy', 'scipy'))
@@ -108,7 +109,7 @@ class TestRunnerLogit(unittest.TestCase):
         return rows
 
     def test_all_ask_grid_reports_nothing_significant(self):
-        import run_confirm_v3_nov21 as RC
+        import run_conflict_asking as RC
         fit = RC.fit_mnlogit(self._rows({c: (0, 0, 36) for c in SX.DESIGN_CELLS}), n_boot=50)
         for eq in ('follow_verbatim_vs_ask', 'follow_summary_vs_ask'):
             for v in fit[eq].values():

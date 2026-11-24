@@ -5,12 +5,12 @@ import os
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, HERE)
+import _core  # noqa: F401  (puts core/ on the import path)
 
 import s0_source as S
 import s0_grade as G
 import s0_summarize as SM
-import run_s0_nov21 as R
+import run_summary_chain as R
 
 OUT = os.path.join(HERE, 'dry_run_s0_nov21.txt')
 

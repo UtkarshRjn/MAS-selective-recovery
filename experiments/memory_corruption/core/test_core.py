@@ -7,6 +7,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import agent as A
+import paths as P
 import grade_v3 as GV
 import handoff_summary as HS
 import templates_v3 as TV
@@ -210,7 +211,7 @@ class TestPrepareV3(unittest.TestCase):
         self.assertIn('H475', h)
 
     def test_prompts_frozen(self):
-        here = os.path.dirname(__file__)
+        here = os.path.dirname(os.path.abspath(__file__))
         freeze = json.load(open(os.path.join(here, 'freeze_hashes_v3.json')))
         for fname, key in [
             ('summarizer_prompt.txt', 'summarizer_prompt_80'),
@@ -219,7 +220,7 @@ class TestPrepareV3(unittest.TestCase):
             ('summarizer_structured_prompt.txt', 'summarizer_structured_prompt'),
             ('oracle_faithful_style.txt', 'oracle_faithful_style'),
         ]:
-            h = hashlib.sha256(open(os.path.join(here, fname), 'rb').read()).hexdigest()
+            h = hashlib.sha256(open(P.prompt(fname), 'rb').read()).hexdigest()
             self.assertEqual(h, freeze[key], key)
 
 

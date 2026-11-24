@@ -10,8 +10,8 @@ import re
 
 import grade_v3 as GV
 import templates_v3 as TV
+import paths as P
 
-HERE = os.path.dirname(os.path.abspath(__file__))
 
 FORMS = ('complete', 'dropped', 'substituted', 'decoy', 'conflict', 'conflict_rule',
          'reversed_conflict', 'reversed_conflict_rule')
@@ -33,7 +33,7 @@ TARGET_SLOT = {
 
 
 def load_frozen(name):
-    path = os.path.join(HERE, name)
+    path = P.prompt(name)
     with open(path) as f:
         return f.read().strip()
 
@@ -485,7 +485,7 @@ VERIFY_TOOLS = {
     'B': ('get_account_contact', 'lookup_tool_contact.txt'),
 }
 
-SUBSTITUTION_LIST_PATH = os.path.join(HERE, 'substitution_list_gaps_verify.json')
+SUBSTITUTION_LIST_PATH = P.SUBSTITUTION_LIST
 
 
 def edit_distance(a, b):
