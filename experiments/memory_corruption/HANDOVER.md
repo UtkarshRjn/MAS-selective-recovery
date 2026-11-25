@@ -4,11 +4,13 @@ This guide is for a person or a coding agent who has never seen this project. It
 
 All times are Pacific Time (PT). All paths are relative to `experiments/memory_corruption/` unless a section says it is describing the original machine.
 
+> **Layout note (24 November 2026).** The flat `pilot/` folder was split into `core/` (shared code), `inputs/` (prompts, filler, fixed data), `runtime/` (local run state), and `studies/<name>/` (one folder per study). Code and data did not change: the dry-run outputs still match their frozen hashes, and the job grids are identical. Paths below use the new layout. Older plans and freeze files keep the old file names, because they record what was frozen at the time. The code as it ran is in commit `e1e9348`.
+
 ## 0. Read this first (the short version)
 
 1. Never commit, print, log or paste an API key. The repo has no key in it and must never have one.
 2. The key used so far is a shared UCSD lab key (TritonAI). It belongs to the lab. Do not reuse it without Bijin's permission. Ask him for access or use your own key.
-3. Every paid run follows the same protocol: plan, hash freeze, three independent design reviews, a go file in `pilot/approvals/` that cites the exact hashes, then the run. After the first paid call, frozen files never change.
+3. Every paid run follows the same protocol: plan, hash freeze, three independent design reviews, a go file in `runtime/approvals/` that cites the exact hashes, then the run. After the first paid call, frozen files never change.
 4. Spend caps come only from Bijin's own words. Write them down verbatim before you run.
 5. Push nothing to `main`. Commit as `bjiby02 <337138412+bjiby02@users.noreply.github.com>`. Bijin opens, submits and merges pull requests himself. Do not force push.
 6. The offline commands in section 5.1 need no key and cost nothing. Start there.
@@ -36,7 +38,7 @@ P(silent irreversible harm) = P(error enters) x P(error is not made visible) x P
 
 Research question: when both channels are visible, they disagree, and both values can be acted on, what does the executor do? Does it follow the summary, follow the verbatim block, follow whichever comes last, or ask?
 
-Design (frozen plan `pilot/plan_gaps_confirm_nov21_v3.md`):
+Design (frozen plan `studies/conflict_asking/docs/plan_gaps_confirm_nov21_v3.md`):
 
 - Models: `api-deepseek-4.1-flash` and `api-glm-5.3-flash`.
 - 6 templates: `trip`, `trip_return`, `trip_long` (travel) and `cleanup`, `cleanup_keep`, `cleanup_long` (file cleanup).
@@ -44,14 +46,14 @@ Design (frozen plan `pilot/plan_gaps_confirm_nov21_v3.md`):
 - A 2x2 of which channel holds the truth and which channel comes last (arms `P_conflict_sv`, `P_conflict_vs`, `P_reversed_sv`, `P_reversed_vs`), plus two secondary arms that add a frozen "ask on disagreement" rule (`P_conflict_rule`, `P_reversed_conflict_rule`).
 - 432 runs in total (2 models x 6 templates x 6 seeds x 6 arms).
 
-Result, copied from `pilot/confirm_gaps_v3_nov21_results.txt` (primary cells only, 144 runs per model):
+Result, copied from `studies/conflict_asking/results/confirm_gaps_v3_nov21_results.txt` (primary cells only, 144 runs per model):
 
 - `api-deepseek-4.1-flash` asked or held on 141 of 144 runs and took 0 wrong actions. The other 3 runs were coded "other". Ask rates per primary cell: 0.944, 1.000, 0.972, 1.000.
 - `api-glm-5.3-flash` asked or held on 134 of 144 runs. The other 10 followed the verbatim block. That produced 5 wrong (typo) bookings, all in arms where the verbatim block held the typo (3 in `P_reversed_sv`, of which 1 silent and 2 flag and proceed; 2 in `P_reversed_vs`, both silent). 4 of the 5 were on `trip_long` (ask rate 0.62 on that template); the fifth was on `trip_return`.
 - Neither model preferred the summary, the verbatim block, or the channel that came last. No preference test met its bar.
 - The frozen ask rule asked on 36 of 36 runs in each rule cell on both models. Against matched cells without the rule, Holm adjusted p values were 0.3030 and 0.3139 (deepseek) and 0.1537 and 0.0768 (glm). Not significant.
 - Headline: conflict-triggered asking HOLDS. Ask or hold was at least 70% in all 4 primary cells on both models, on 6 of 6 templates (deepseek) and 5 of 6 templates (glm).
-- Hand audit: 43 of 432 traces sampled, 0 mismatches (`pilot/confirm_gaps_v3_nov21_hand_audit.json`).
+- Hand audit: 43 of 432 traces sampled, 0 mismatches (`studies/conflict_asking/results/confirm_gaps_v3_nov21_hand_audit.json`).
 - Spend: $1.44321 new on this grid, against a $4.37188 grid cap. Cumulative on the UCSD key after this grid: $6.14605 of the $19.75 standing stop.
 
 In words: when a conflict is visible and asking is free, these flash models ask about 95% of the time. This number is the "visible conflict" constant that the S0 screen builds on.
@@ -60,13 +62,13 @@ In words: when a conflict is visible and asking is free, these flash models ask 
 
 S0 is a new line. It does not change or reopen v3. It asks two cheap questions with no executor at all, only summarizer calls.
 
-Part 1, composition law across handoff depth. If a typo or a disagreement survives one summary hop with probability s, does it survive k hops with probability s^k? Each depth (1, 2, 4) is a separate job of k successive summaries from the same typo source, at temperature 0. 144 jobs: 2 models x 2 templates (`trip`, `trip_long`) x 12 seeds (30 to 41) x 3 depths. Predictions for depths 2 and 4 were written to `pilot/freeze_s0_predictions.json` after depth 1 finished and before depths 2 and 4 started. A backup family `s_k = s_inf + (1 - s_inf) * a^k` was also named before data.
+Part 1, composition law across handoff depth. If a typo or a disagreement survives one summary hop with probability s, does it survive k hops with probability s^k? Each depth (1, 2, 4) is a separate job of k successive summaries from the same typo source, at temperature 0. 144 jobs: 2 models x 2 templates (`trip`, `trip_long`) x 12 seeds (30 to 41) x 3 depths. Predictions for depths 2 and 4 were written to `studies/summary_chain_screen/results/freeze_s0_predictions.json` after depth 1 finished and before depths 2 and 4 started. A backup family `s_k = s_inf + (1 - s_inf) * a^k` was also named before data.
 
 Part 2, channel correlation probe (an N-version test in the sense of Knight and Leveson 1986). Do two handoff channels fail the same way at the same time, or independently? If they fail independently, a typo in one channel becomes a visible conflict, and v3 says the executor then asks. 256 jobs: 2 templates x (20 typo seeds 60 to 79 plus 12 clean seeds 80 to 91) x 4 summaries (`ds_p1_s0`, `ds_p1_s1`, `ds_p2_s0`, `glm_p1_s0`) at temperature 1.0, plus a free verbatim channel.
 
-Frozen plan: `pilot/plan_s0_nov21.md` (v4). Analysis rules: `pilot/addendum_s0_nov21.md`. Hashes: `pilot/freeze_hashes_s0_v4.json`.
+Frozen plan: `studies/summary_chain_screen/docs/plan_s0_nov21.md` (v4). Analysis rules: `studies/summary_chain_screen/docs/addendum_s0_nov21.md`. Hashes: `studies/summary_chain_screen/docs/freeze_hashes_s0_v4.json`.
 
-Result, copied from `pilot/s0_nov21_results.txt` (400 of 400 traces, complete):
+Result, copied from `studies/summary_chain_screen/results/s0_nov21_results.txt` (400 of 400 traces, complete):
 
 Part 1, composition:
 
@@ -104,7 +106,7 @@ Status of S0 as a screen: no kill rule fired, so S0 passes as a screen. With n =
 
 ### 1.4 Earlier history (not in the PR)
 
-Before v3 there were seven earlier designs and many amendments: a memory damage pilot, a multi agent architecture grid, a compression screen that was voided (see section 9.1), a re-screen, and a world fix re-screen. `pilot/forking_paths_nov21.md` records the designs that the v3 plan replaced. Only the final confirmatory code and results are in the PR. The older raw material lives only on the original machine (section 3.5).
+Before v3 there were seven earlier designs and many amendments: a memory damage pilot, a multi agent architecture grid, a compression screen that was voided (see section 9.1), a re-screen, and a world fix re-screen. `studies/conflict_asking/docs/forking_paths_nov21.md` records the designs that the v3 plan replaced. Only the final confirmatory code and results are in the PR. The older raw material lives only on the original machine (section 3.5).
 
 ## 2. Repo map
 
@@ -122,69 +124,69 @@ The PR is https://github.com/UtkarshRjn/MAS-selective-recovery/pull/30, branch `
 
 | File | What it does | Frozen |
 |---|---|---|
-| `pilot/agent.py` | Model client, spend ledger, hard stop, rate limit, planner and executor roles, summarizer hops. Reads the API key (section 4). | no |
-| `pilot/tasks.py` | Mock worlds for task A (booking and email) and task B (file cleanup). Builds memory text from `pilot/filler`. | no |
-| `pilot/templates_v3.py` | The six v3 templates (3 travel, 3 cleanup). | no |
-| `pilot/perturb_gaps.py` | Frozen perturbations, including the one character typo neighbor of the true id. | yes (gaps v3) |
-| `pilot/handoff_summary.py` | Summary checks: plain text, word limits, slot lists. | no |
-| `pilot/grade_v3.py` | v3 grading: slot coverage, substitution, wrong action. | yes (gaps v3) |
-| `pilot/run_pilot.py` | Older pilot runner. Still holds `require_go`, which the v3 runner uses. | no |
-| `pilot/run_config.json` | Bijin's cap record and `hard_stop_usd` (19.75). | no |
-| `pilot/gates.py` | Frozen gate and parser spec from the first pilot. | yes (earliest freeze) |
-| `pilot/gates_v2.py` | Later gate variants scored offline. | no |
-| `pilot/damage.py`, `pilot/heldout.py`, `pilot/manip.py` | Damage generator, held out damage types, manipulation check from the first pilot. Still imported by the harness. | no |
-| `pilot/analyze.py` | Offline scoring of the first pilot traces. | no |
-| `pilot/filler/` | 2 small files from licensed public agent repos (the only two the code reads), used as filler memory text. | no |
-| `pilot/sources.csv` | License and commit for each filler file. | no |
-| `pilot/*_prompt*.txt`, `pilot/oracle_*.txt` | Summarizer prompts (`summarizer_prompt.txt` is p1, 40 to 100 words, target 80), oracle summaries, and the oracle style. | yes (v3 measurement freeze) |
-| `pilot/verifier_prompt.txt` | Verifier prompt from an earlier design. | no |
+| `core/agent.py` | Model client, spend ledger, hard stop, rate limit, planner and executor roles, summarizer hops. Reads the API key (section 4). | no |
+| `core/tasks.py` | Mock worlds for task A (booking and email) and task B (file cleanup). Builds memory text from `inputs/filler`. | no |
+| `core/templates_v3.py` | The six v3 templates (3 travel, 3 cleanup). | no |
+| `core/perturb_gaps.py` | Frozen perturbations, including the one character typo neighbor of the true id. | yes (gaps v3) |
+| `core/handoff_summary.py` | Summary checks: plain text, word limits, slot lists. | no |
+| `core/grade_v3.py` | v3 grading: slot coverage, substitution, wrong action. | yes (gaps v3) |
+| `core/run_pilot.py` | Older pilot runner. Still holds `require_go`, which the v3 runner uses. | no |
+| `runtime/run_config.json` | Bijin's cap record and `hard_stop_usd` (19.75). | no |
+| `core/gates.py` | Frozen gate and parser spec from the first pilot. | yes (earliest freeze) |
+| `core/gates_v2.py` | Later gate variants scored offline. | no |
+| `core/damage.py`, `core/heldout.py`, `core/manip.py` | Damage generator, held out damage types, manipulation check from the first pilot. Still imported by the harness. | no |
+| `core/analyze.py` | Offline scoring of the first pilot traces. | no |
+| `inputs/filler/` | 2 small files from licensed public agent repos (the only two the code reads), used as filler memory text. | no |
+| `inputs/sources.csv` | License and commit for each filler file. | no |
+| `inputs/prompts/*_prompt*.txt`, `inputs/prompts/oracle_*.txt` | Summarizer prompts (`summarizer_prompt.txt` is p1, 40 to 100 words, target 80), oracle summaries, and the oracle style. | yes (v3 measurement freeze) |
+| `inputs/prompts/verifier_prompt.txt` | Verifier prompt from an earlier design. | no |
 
 ### 2.3 Confirmatory v3 line
 
 | File | What it does | Frozen |
 |---|---|---|
-| `pilot/plan_gaps_confirm_nov21_v3.md` | The final v3 plan. | yes |
-| `pilot/addendum_v3_nov21.md` | Analysis addendum written before the grid. | yes |
-| `pilot/forking_paths_nov21.md` | Design history. | yes |
-| `pilot/freeze_hashes_gaps_confirm_v3.json` | v3 freeze hashes. | is the freeze |
-| `pilot/freeze_hashes_v3.json` | Earlier measurement freeze that `test_v3.py` still checks. | is a freeze |
-| `pilot/run_confirm_v3_nov21.py` | The v3 runner: `--jobs-only`, `--analyze-only`, or the paid grid. | no |
-| `pilot/dry_run_conflict_v3.py` | Renders the 2x2 handoffs with no network. Writes `dry_run_conflict_v3.txt` (gitignored). | yes |
-| `pilot/test_conflict_v3_nov21.py` | Unit tests for the 2x2. | yes |
-| `pilot/test_v3.py` | Unit tests for v3 measurement, templates, and prompt hashes. | no |
-| `pilot/test_gates_c0.py` | A script (not a unittest module) that checks gates on clean memories. | no |
-| `pilot/confirm_rule.txt`, `pilot/conflict_rule.txt`, `pilot/conflict_summary_style.txt`, `pilot/cue_request_*.txt`, `pilot/decoy_note_*.txt`, `pilot/stale_memory_*.txt`, `pilot/hedge_tag.txt`, `pilot/lookup_tool_*.txt` | Prompt fragments used by the templates and arms. Most are frozen in the gaps v3 freeze. | mostly yes |
-| `pilot/substitution_list_gaps_verify.json` | Frozen list of typo neighbor values. | yes |
-| `pilot/confirm_gaps_v3_nov21_results.txt` and `.json` | v3 results. | output |
-| `pilot/confirm_gaps_v3_nov21_hand_audit.json` | Hand audit of 43 traces. | output |
+| `studies/conflict_asking/docs/plan_gaps_confirm_nov21_v3.md` | The final v3 plan. | yes |
+| `studies/conflict_asking/docs/addendum_v3_nov21.md` | Analysis addendum written before the grid. | yes |
+| `studies/conflict_asking/docs/forking_paths_nov21.md` | Design history. | yes |
+| `studies/conflict_asking/docs/freeze_hashes_gaps_confirm_v3.json` | v3 freeze hashes. | is the freeze |
+| `core/freeze_hashes_v3.json` | Earlier measurement freeze that `test_v3.py` still checks. | is a freeze |
+| `studies/conflict_asking/run_conflict_asking.py` | The v3 runner: `--jobs-only`, `--analyze-only`, or the paid grid. | no |
+| `studies/conflict_asking/dry_run_conflict_asking.py` | Renders the 2x2 handoffs with no network. Writes `dry_run_conflict_v3.txt` (gitignored). | yes |
+| `studies/conflict_asking/test_conflict_asking.py` | Unit tests for the 2x2. | yes |
+| `core/test_core.py` | Unit tests for v3 measurement, templates, and prompt hashes. | no |
+| `core/check_gates_c0.py` | A script (not a unittest module) that checks gates on clean memories. | no |
+| `inputs/prompts/confirm_rule.txt`, `inputs/prompts/conflict_rule.txt`, `inputs/prompts/conflict_summary_style.txt`, `inputs/prompts/cue_request_*.txt`, `inputs/prompts/decoy_note_*.txt`, `inputs/prompts/stale_memory_*.txt`, `inputs/prompts/hedge_tag.txt`, `inputs/prompts/lookup_tool_*.txt` | Prompt fragments used by the templates and arms. Most are frozen in the gaps v3 freeze. | mostly yes |
+| `inputs/substitution_list_gaps_verify.json` | Frozen list of typo neighbor values. | yes |
+| `studies/conflict_asking/results/confirm_gaps_v3_nov21_results.txt` and `.json` | v3 results. | output |
+| `studies/conflict_asking/results/confirm_gaps_v3_nov21_hand_audit.json` | Hand audit of 43 traces. | output |
 
 ### 2.4 S0 screen (added by this push)
 
 | File | What it does | Frozen in `freeze_hashes_s0_v4.json` |
 |---|---|---|
-| `pilot/plan_s0_nov21.md` | Frozen S0 plan, v4. | yes |
-| `pilot/addendum_s0_nov21.md` | Analysis only rules (tie rule, hop-wise reporting, Eckhardt and Lee framing, cost watch). | yes |
-| `pilot/s0_v2_changes.md`, `pilot/s0_v3_changes.md`, `pilot/s0_v4_changes.md` | Line level change notes for each re-freeze. | yes |
-| `pilot/s0_source.py` | Builds the deterministic planner source (no planner API call). | yes |
-| `pilot/s0_grade.py` | Codes each summary (typo, truth, disagreement, invalid) and the false alarm rule. | yes |
-| `pilot/s0_summarize.py` | Plain text summarizer hops. Forbids JSON mode. Has a mock client for tests. | yes |
-| `pilot/run_s0_nov21.py` | Jobs, run order, prediction lock, analysis. `--jobs-only`, `--lock-predictions`, `--analyze-only`. | yes |
-| `pilot/run_s0_cost_watch.py` | The required paid wrapper. Stops after depth 1 if the projected total is above $2.80. | yes |
-| `pilot/test_s0_nov21.py` | 20 unit tests, no API. | yes |
-| `pilot/dry_run_s0_nov21.py` | Zero cost dry run with mocked summaries. Writes `dry_run_s0_nov21.txt` (gitignored, hashed; rerun reproduces it byte for byte). | yes |
-| `pilot/check_s0_v4_false_alarm_gap.py` | Zero cost comparison of the v2, v3 and v4 false alarm rules. Writes `s0_v4_fa_gap.txt`. | yes |
-| `pilot/s0_v4_fa_gap.txt` | Output of the gap check at freeze time. | yes |
-| `pilot/summarizer_prompt_s0_alt.txt` | Prompt p2 (identifier list first, then at most 40 words). | yes |
-| `pilot/freeze_hashes_s0_v4.json` | The S0 freeze. | is the freeze |
-| `pilot/freeze_s0_predictions.json` | s1 estimates and s^k predictions, locked after depth 1 at 10:10:17 AM PT. | output, locked |
-| `pilot/s0_nov21_results.txt` and `.json` | S0 results. | output |
-| `pilot/s0_cost_watch_report.json` | Projection after step 1 and real final spend. | output |
+| `studies/summary_chain_screen/docs/plan_s0_nov21.md` | Frozen S0 plan, v4. | yes |
+| `studies/summary_chain_screen/docs/addendum_s0_nov21.md` | Analysis only rules (tie rule, hop-wise reporting, Eckhardt and Lee framing, cost watch). | yes |
+| `studies/summary_chain_screen/docs/s0_v2_changes.md`, `studies/summary_chain_screen/docs/s0_v3_changes.md`, `studies/summary_chain_screen/docs/s0_v4_changes.md` | Line level change notes for each re-freeze. | yes |
+| `core/s0_source.py` | Builds the deterministic planner source (no planner API call). | yes |
+| `core/s0_grade.py` | Codes each summary (typo, truth, disagreement, invalid) and the false alarm rule. | yes |
+| `core/s0_summarize.py` | Plain text summarizer hops. Forbids JSON mode. Has a mock client for tests. | yes |
+| `studies/summary_chain_screen/run_summary_chain.py` | Jobs, run order, prediction lock, analysis. `--jobs-only`, `--lock-predictions`, `--analyze-only`. | yes |
+| `studies/summary_chain_screen/run_summary_chain_cost_watch.py` | The required paid wrapper. Stops after depth 1 if the projected total is above $2.80. | yes |
+| `studies/summary_chain_screen/test_summary_chain.py` | 20 unit tests, no API. | yes |
+| `studies/summary_chain_screen/dry_run_summary_chain.py` | Zero cost dry run with mocked summaries. Writes `dry_run_s0_nov21.txt` (gitignored, hashed; rerun reproduces it byte for byte). | yes |
+| `studies/summary_chain_screen/check_false_alarm_gap.py` | Zero cost comparison of the v2, v3 and v4 false alarm rules. Writes `s0_v4_fa_gap.txt`. | yes |
+| `studies/summary_chain_screen/results/s0_v4_fa_gap.txt` | Output of the gap check at freeze time. | yes |
+| `inputs/prompts/summarizer_prompt_s0_alt.txt` | Prompt p2 (identifier list first, then at most 40 words). | yes |
+| `studies/summary_chain_screen/docs/freeze_hashes_s0_v4.json` | The S0 freeze. | is the freeze |
+| `studies/summary_chain_screen/results/freeze_s0_predictions.json` | s1 estimates and s^k predictions, locked after depth 1 at 10:10:17 AM PT. | output, locked |
+| `studies/summary_chain_screen/results/s0_nov21_results.txt` and `.json` | S0 results. | output |
+| `studies/summary_chain_screen/results/s0_cost_watch_report.json` | Projection after step 1 and real final spend. | output |
 
 `freeze_hashes_s0_v4.json` also lists three files that are deliberately not in the PR: `dry_run_s0_nov21.txt` (regenerated by the dry run), and `check_s0_v3_false_alarm_gap.py` plus `s0_v3_fa_gap.txt` (superseded v3 check). The v1, v2 and v3 S0 hash files are superseded and also stay on the original machine only.
 
 ### 2.5 Files that are created locally and never committed
 
-`pilot/.env`, `pilot/ledger.json`, `pilot/cell_spend.jsonl`, `pilot/traces*/`, `pilot/*.log`, `pilot/approvals/`, `pilot/*_start_spend.json`, `pilot/dry_run_*.txt`, `__pycache__/`.
+`runtime/.env`, `runtime/ledger.json`, `runtime/cell_spend.jsonl`, `studies/*/traces/`, `studies/*/*.log`, `runtime/approvals/`, `runtime/*_start_spend.json`, `inputs/prompts/dry_run_*.txt`, `__pycache__/`.
 
 ## 3. Environment
 
@@ -212,7 +214,7 @@ All commands below run from `experiments/memory_corruption/pilot`.
 
 ### 3.3 Filler path
 
-Memory text is built from `pilot/filler/`. By default the code finds it next to `tasks.py`. To keep the filler somewhere else:
+Memory text is built from `inputs/filler/`. By default the code finds it next to `tasks.py`. To keep the filler somewhere else:
 
 ```bash
 export PILOT_FILLER_DIR=/path/to/filler
@@ -224,15 +226,15 @@ export PILOT_FILLER_DIR=/path/to/filler
 |---|---|---|
 | `OPENAI_API_KEY` | none | API key. Also accepted as `MODEL_API_KEY`. |
 | `OPENAI_BASE_URL` | none | Base URL ending in `/v1`. Also accepted as `MODEL_API_URL`. |
-| `PILOT_ENV_FILE` | `pilot/.env` | A dotenv file with the two lines above. |
+| `PILOT_ENV_FILE` | `runtime/.env` | A dotenv file with the two lines above. |
 | `PILOT_STOP_AT` | `hard_stop_usd` in `run_config.json` (19.75) | Hard stop in dollars on the local ledger. |
 | `PILOT_WORKERS` | 8 | Parallel jobs. |
 | `PILOT_MAX_TOKENS` | 4000 | Default output token cap. |
-| `PILOT_FILLER_DIR` | `pilot/filler` | Filler corpus. |
+| `PILOT_FILLER_DIR` | `inputs/filler` | Filler corpus. |
 
 ### 3.5 Layout on the original machine (for reference only)
 
-On the original shared Linux machine the working copy was `/workspace/paper/memory_corruption/pilot/` and the key file was `/workspace/war_room/e1/.env`. The original `agent.py` read only that file. The PR version of `agent.py` reads the environment or `PILOT_ENV_FILE` instead, with `pilot/.env` as the default. The S0 docstrings and plan line 9 still say "key loaded only from /workspace/war_room/e1/.env". Those lines are part of frozen, hashed files, so they were left as they are. Read them as a record of the original setup; the code that actually loads the key is `agent._env()`.
+On the original shared Linux machine the working copy was `/workspace/paper/memory_corruption/pilot/` and the key file was `/workspace/war_room/e1/.env`. The original `agent.py` read only that file. The PR version of `agent.py` reads the environment or `PILOT_ENV_FILE` instead, with `runtime/.env` as the default. The S0 docstrings and plan line 9 still say "key loaded only from /workspace/war_room/e1/.env". Those lines are part of frozen, hashed files, so they were left as they are. Read them as a record of the original setup; the code that actually loads the key is `agent._env()`.
 
 The original machine also holds all raw traces (`traces_confirm_gaps_v3_nov21/`, `traces_s0_nov21/` and older), the full ledger, all amendments, older plans, and the approvals folder. Ask Bijin if you need any of it.
 
@@ -264,16 +266,16 @@ python3 dry_run_s0_nov21.py
 
 About the S0 test failures. Two tests in `test_s0_nov21.py` check the approvals folder on the machine where they were written:
 
-- `test_old_main_go_is_not_s0_go` expects `pilot/approvals/MAIN_GO.txt` to exist. The approvals folder is not in git, so in a fresh clone this one fails. That is expected and is not a code bug. Do not create a go file just to make it pass; go files are authorizations.
+- `test_old_main_go_is_not_s0_go` expects `runtime/approvals/MAIN_GO.txt` to exist. The approvals folder is not in git, so in a fresh clone this one fails. That is expected and is not a code bug. Do not create a go file just to make it pass; go files are authorizations.
 - `test_refuse_without_s0_go` expects `approvals/MAIN_GO_s0.txt` to be absent. It passed at freeze time. On the original machine it now fails because that go file was written for the S0 run. In a fresh clone it passes.
 
 The test file is frozen, so these tests stay as they are. Report them; do not "fix" them.
 
-`python3 check_s0_v4_false_alarm_gap.py` also needs the v3 traces, which are not in git. In a fresh clone its v3 trace sections print `n=0 rate=NA` and the clean seed sections match the frozen file. It overwrites the frozen `s0_v4_fa_gap.txt`, so restore that file afterwards with `git checkout pilot/s0_v4_fa_gap.txt`, or run it in a scratch copy.
+`python3 check_s0_v4_false_alarm_gap.py` also needs the v3 traces, which are not in git. In a fresh clone its v3 trace sections print `n=0 rate=NA` and the clean seed sections match the frozen file. It overwrites the frozen `s0_v4_fa_gap.txt`, so restore that file afterwards with `git checkout studies/summary_chain_screen/results/s0_v4_fa_gap.txt`, or run it in a scratch copy.
 
 ### 3.7 Checking the freeze hashes
 
-Run this from `pilot/` to compare the S0 freeze with the files on disk:
+Run this from the study folder to compare the S0 freeze with the files on disk:
 
 ```bash
 python3 - <<'PY'
@@ -323,7 +325,7 @@ export PILOT_ENV_FILE=$HOME/.config/memory_corruption.env
 chmod 600 $HOME/.config/memory_corruption.env
 ```
 
-If neither is set, the default is `pilot/.env`, which is gitignored. Environment variables win over the file. The code never prints the key. Do not echo it, do not put it in a log, a trace, a commit, a PR body or a chat message.
+If neither is set, the default is `runtime/.env`, which is gitignored. Environment variables win over the file. The code never prints the key. Do not echo it, do not put it in a log, a trace, a commit, a PR body or a chat message.
 
 ### 4.3 Whose key
 
@@ -342,13 +344,13 @@ Trace file names drop the `api-` prefix (for example `deepseek-4.1-flash__trip__
 
 ### 4.5 How spend is tracked and stopped
 
-- Token counter: every call adds prompt and completion tokens to `pilot/ledger.json`. `token_spend()` prices them with `PRICE`.
+- Token counter: every call adds prompt and completion tokens to `runtime/ledger.json`. `token_spend()` prices them with `PRICE`.
 - Server counter: at the start of a paid run the code stores `baseline_server_spend` from `/key/info`. `server_delta()` is the current value minus the baseline, refreshed at most every 20 seconds.
 - Conservative spend is `max(token_spend, server_delta)`. Every stop uses this number. On a shared key, other people's use during your run also shows up in `server_delta`, which only makes the stop more cautious.
 - Hard stop: before every call, if conservative spend is at or above `STOP_AT` (env `PILOT_STOP_AT`, else `hard_stop_usd` in `run_config.json`, which is 19.75), the call raises `Budget` and the run stops.
 - v3 grid stop: `PASS_CAP = 4.37188` new spend on the grid, plus `CUM_STOP = 19.75`.
 - S0 stops: `HARD_CAP = 3.00` new, `CUM_STOP = 19.75` cumulative, and the cost watch wrapper's `PROJ_CAP = 2.80` projection check after depth 1.
-- Per cell spend lines go to `pilot/cell_spend.jsonl`.
+- Per cell spend lines go to `runtime/cell_spend.jsonl`.
 - In flight workers can push spend a few cents past a cap. Always report the real final spend.
 
 Important for a fresh clone: `ledger.json` is not in git. On a new machine the ledger starts at $0, so "cumulative" means "since your ledger started", not "on the key". The $19.75 stop on the UCSD key is cumulative over all work so far. After S0 the recorded cumulative is $6.73675, so at most $13.01325 remains under that stop. If you run on the UCSD key from a fresh ledger, set `PILOT_STOP_AT` to the remaining amount Bijin confirms (never more than $13.01325 unless he raises the cap in writing), or ask him for the original `ledger.json`.
@@ -390,7 +392,7 @@ export PILOT_STOP_AT=<cumulative stop on your ledger>
 python3 run_confirm_v3_nov21.py
 ```
 
-- It refuses to start if the stop is above $1 and `pilot/approvals/MAIN_GO.txt` is missing or empty. The human authorization for the original run was recorded in `pilot/approvals/MAIN_GO_v3.txt` on the original machine.
+- It refuses to start if the stop is above $1 and `runtime/approvals/MAIN_GO.txt` is missing or empty. The human authorization for the original run was recorded in `runtime/approvals/MAIN_GO_v3.txt` on the original machine.
 - It writes `confirm_v3_nov21_start_spend.json`, then traces to `traces_confirm_gaps_v3_nov21/`, then the results and hand audit files.
 - Past run: 432 runs, first trace at 5:46 AM PT, last at 6:12 AM PT on 21 November 2026 (about 26 minutes with 8 workers), $1.44321, about $0.0033 per run.
 - Rerunning with the same seeds into the same trace folder skips nothing safely; it is a new paid run. Treat any rerun as a new study: new plan, new freeze, new reviews, new go file.
@@ -402,7 +404,7 @@ export OPENAI_BASE_URL=... OPENAI_API_KEY=...
 python3 run_s0_cost_watch.py        # never run_s0_nov21.py directly for the paid grid
 ```
 
-- It refuses to start without a non empty `pilot/approvals/MAIN_GO_s0.txt`. Older go files do not count.
+- It refuses to start without a non empty `runtime/approvals/MAIN_GO_s0.txt`. Older go files do not count.
 - Frozen run order: depth 1 (48 jobs), lock predictions, channel typo (160), channel clean (96), depth 2 (48), depth 4 (48).
 - After depth 1 it prints `COST WATCH after step 1: new=$... calls=... projected_total=$...`. If the projection is above $2.80 it stops and says depth 4 was not started.
 - Outputs: `s0_nov21_start_spend.json`, `freeze_s0_predictions.json`, `traces_s0_nov21/`, `s0_nov21_results.txt` and `.json`, `s0_cost_watch_report.json`.
@@ -416,7 +418,7 @@ Every paid step in this project followed these steps, in this order. Keep doing 
 2. Run the zero cost checks (unit tests, dry run, jobs only). Fix the harness before data, not after.
 3. Freeze. Write a `freeze_hashes_<name>.json` with the sha256 of every file that decides the result (plan, addendum, code, prompts, tests, dry run output), plus a note, the caps and the job count. Do not edit an older freeze file; write a new version and say what it supersedes.
 4. Three independent design reviews. Send the plan and the hashes to three separate reviewers. Each one recomputes the hashes, runs the tests, reads the code, and answers APPROVE or BLOCK with reasons. A BLOCK means a new version (v2, v3, ...) with a line level change note, a new freeze file, and a new round of all three reviews. Any change to a hashed file voids every earlier approval.
-5. Go file. Only after all three approve the same hashes, write `pilot/approvals/<NAME>_GO.txt`. It cites the plan and the key file hashes, who approved and when, Bijin's spend authorization in his own words, and the limits (cap, models, wrapper, no push to main).
+5. Go file. Only after all three approve the same hashes, write `runtime/approvals/<NAME>_GO.txt`. It cites the plan and the key file hashes, who approved and when, Bijin's spend authorization in his own words, and the limits (cap, models, wrapper, no push to main).
 6. Run, only through the designated runner or wrapper.
 7. After the first paid call, frozen files never change. A problem found later goes into the write up as a limitation, not into a new version of the same run.
 8. Report every frozen kill rule as frozen, with interval widths. Add no new primaries after data.
